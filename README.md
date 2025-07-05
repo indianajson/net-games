@@ -278,6 +278,24 @@ The `selections` table defines each position the cursor can occupy. The `v`, `h`
 > - `player_id` (string): The ID of the player
 </details>
 
+## Vertical (v) and Horizontal (h) Offset Information
+
+When a function asks you for a vertical or horizontal offset, it is asking for a position relative to the camera. 
+
+![onb-ui-guide](https://github.com/user-attachments/assets/3459e10b-8658-4c8b-a43c-376a42c7a920)
+
+Per the graphic above, the following positions would require the associated values:
+```
+position = h,v
+middle = 0,0
+bottom left = -120,-80
+bottom middle = 0,-80
+bottom right = 120,-80
+top left = -120,80
+top middle = 0,80
+top right = 120,80
+```
+
 ## Z-Index Information
 
 For any of the functions that tell you the Z variable is relative to UI this is different than the normal Z index related to the map. For these functions, if you provide Z = 0, it actually sets the Z to 100 (to keep it above all map elements). By putting in Z = -1 the Z becomes 99 (so it is still above the map but below any UI elements at Z = 0). By putting in Z = 1 the Z becomes 101 putting it above the elements which have Z = 0. 
