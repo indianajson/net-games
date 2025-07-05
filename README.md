@@ -42,7 +42,7 @@ games.start_framework()
 <details><summary><h3>Player Functions</h3></summary>
 
 #### `activate_framework(player_id)`
-> **Description**: Initializes the framework for a player by creating a "stunt double" bot and setting up camera tracking.  
+> **Description**: Initializes the framework for a player (required before using any other function).  
 > **Parameters**:
 > - `player_id` (string): The ID of the player to activate the framework for
 
@@ -52,7 +52,7 @@ games.start_framework()
 > - `player_id` (string): The ID of the player to deactivate the framework for
 
 #### `freeze_player(player_id)`
-> **Description**: Freezes the player's movement while preserving input access, teleporting them to a stasis location.  
+> **Description**: Freezes the player's movement while preserving input access.  
 > **Parameters**:
 > - `player_id` (string): The ID of the player to freeze  
 
@@ -132,7 +132,7 @@ games.start_framework()
 > - `loop` (boolean): Whether to loop the animation
 
 #### `move_ui_element(name, player_id, horizontalOffset, verticalOffset, Z)`
-> **Description**: Moves an existing UI element to new screen position.  
+> **Description**: Moves a UI element to new screen position.  
 > **Parameters**:
 > - `name` (string): Identifier of the element to move
 > - `player_id` (string): The ID of the player
@@ -150,11 +150,24 @@ games.start_framework()
 <summary><h3>Cursor Functions</h3></summary>
 
 #### `spawn_cursor(cursor_id, player_id, options)`
-> **Description**: Creates a selectable cursor UI.  
+> **Description**: Creates a multi-choice cursor based on `options`.  
 > **Parameters**:
 > - `cursor_id` (string): Unique identifier
 > - `player_id` (string): The ID of the player
 > - `options` (table): Configuration including texture, animation, and selections  
+
+The options table should include a movement direction and selections table 
+`movement = "horizontal", 
+selections = {
+   { v=0,h=-0,z=0,name='',texture="",animation="",state=""  },
+   { v=0,h=0,z=0,name='',texture="",animation="",state=""  },
+   { v=0,h=0,z=0,name='',texture="",animation="",state="" }
+}`
+
+The `movement` parameter can be `horizontal`, `vertical`, or `shoulder`. If `horizontal` the cursor moves when Left or Right is pressed. If vertical the cursor moves if Up or Down. If shoulder the cursor moves when Left Shoulder is pressed.
+
+The `selections` table defines each position the cursor can occupy. The `v`, `h`, and `z` parameters specify location (relative to screen); the `z` is relative to the UI not the player. See the section at the bottom of the documentation labeled `Z-Index Information`. The `name` is how you will identify the selection. The `cursor_hover` and `cursor_selection` will emit the name so you can react based on the player's selection. The `texture` (image file path), `animation` (.animation file path), and `state` (animation state) allows you to control the cursor appearance for every position.
+
 
 #### `remove_cursor(cursor_id, player_id)`
 > **Description**: Removes a cursor UI.  
@@ -264,3 +277,7 @@ games.start_framework()
 > **Event Data**:
 > - `player_id` (string): The ID of the player
 </details>
+
+## Z-Index Information
+
+For any of the functions that tell you the Z variable is relative to UI this is different than the normal Z index related to the map. For these functions, if you provide Z = 0, it actually sets the Z to 100 (to keep it above all map elements). By putting in Z = -1 the Z becomes 99 (so it is still above the map but below any UI elements at Z = 0). By putting in Z = 1 the Z becomes 101 putting it above the elements which have Z = 0. 
