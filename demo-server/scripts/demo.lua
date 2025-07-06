@@ -26,8 +26,6 @@ games.Game:on("button_press", function(event)
 
     --print("Player ".. event.player_id .." pressed: "..event.button)
     if event.button == "LS" then
-        print("ran")
-        print(active)
         if active[event.player_id] == false then
             games.activate_framework(event.player_id)
             games.add_ui_element("points",event.player_id,"/server/assets/demo/order_points.png","/server/assets/demo/order_points.animation","8POINT",40,60,0)

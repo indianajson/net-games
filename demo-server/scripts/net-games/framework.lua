@@ -2091,7 +2091,6 @@ Net:on("tick", function(event)
                 local ui = parts[1]
                 local gap = tonumber(parts[2])
                 if gap == tick_gap2 then
-                    print("triggered")
                     animation_state = ui_elements[player_id][ui]["state"]
                     local position = Net.get_bot_position(player_id.."-ui-"..ui) 
                     local keyframes = {{properties={{property="Animation",value=animation_state}},duration=0}}
