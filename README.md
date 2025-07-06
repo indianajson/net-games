@@ -51,6 +51,19 @@ games.start_framework()
 > **Parameters**:
 > - `player_id` (string): The ID of the player to deactivate the framework for
 
+#### `set_player_avatar(player_id,texture,animation)`
+> **Description**: Changes the player's stunt double to a new avatar.  
+> **Parameters**:
+> - `player_id` (string): The ID of the player to reset avatar for
+> - `texture` (string): Path to texture, should start with `/server/assets/`
+> - `animation` (string): Path to animation, should start with  `/server/assets/`
+
+#### `reset_player_avatar(player_id)`
+> **Description**: Changes the player's stunt double back to player's default avatar.  
+> **Parameters**:
+> - `player_id` (string): The ID of the player to reset avatar for
+
+
 #### `freeze_player(player_id)`
 > **Description**: Freezes the player's movement while preserving input access.  
 > **Parameters**:
