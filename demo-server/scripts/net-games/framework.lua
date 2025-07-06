@@ -135,7 +135,7 @@ local function table_has_value (tab, val)
     return false
 end
 
---purpose: excludes bot for everyone except player_id
+--purpose: excludes bot for everyone except provided player_id
 local function exclude_except_for(player_id,bot_id)
     for i,p_id in next,online_players do 
         if p_id == player_id then
@@ -182,11 +182,11 @@ function frame.activate_framework(player_id)
     avatar_cache[player_id]["texture"] = avatar.texture_path
     avatar_cache[player_id]["animation"] = avatar.animation_path
     -- create stunt double
-    Net.create_bot(player_id.."-double", { area_id=area_id, warp_in=false, texture_path=avatar.texture_path, animation_path=avatar.animation_path, x=position.x+0.001, y=position.y+0.001, z=position.z, direction=direction, solid=false})
+    Net.create_bot(player_id.."-double", { area_id=area_id, warp_in=false, texture_path=avatar.texture_path, animation_path=avatar.animation_path, x=position.x+0.001+.5, y=position.y+0.001+.5, z=position.z+1, direction=direction, solid=false})
     -- hide player
     Net.set_player_avatar(player_id, empty_texture, empty_animation)
     -- create camera holder
-    Net.create_bot(player_id.."-camera", { area_id=area_id, warp_in=false, texture_path=empty_texture, animation_path=empty_animation, x=position.x, y=position.y, z=position.z, direction=direction, solid=false})
+    Net.create_bot(player_id.."-camera", { area_id=area_id, warp_in=false, texture_path=empty_texture, animation_path=empty_animation, x=position.x+.5, y=position.y+.5, z=position.z+1, direction=direction, solid=false})
     -- track camera to "camera" bot
     Net.track_with_player_camera(player_id, player_id.."-camera")
     framework_active[player_id] = true
@@ -200,14 +200,14 @@ function frame.deactivate_framework(player_id)
         Net.lock_player_input(player_id)
         local position = Net.get_bot_position(player_id.."-double") 
         local direction = Net.get_bot_direction(player_id.."-double")
-        Net.teleport_player(player_id, false, position.x+0.001, position.y+0.001, position.z, direction)
+        Net.teleport_player(player_id, false, position.x+0.001-.5, position.y+0.001-.5, position.z-1, direction)
         --this updates last player position to stasis so a movement isn't triggered on teleport
         if not last_position_cache[player_id] then 
             last_position_cache[player_id] = {}
         end
-        last_position_cache[player_id]["x"] = tonumber(position.x+0.001)
-        last_position_cache[player_id]["y"] = tonumber(position.y+0.001)
-        last_position_cache[player_id]["z"] = tonumber(position.z)
+        last_position_cache[player_id]["x"] = tonumber(position.x+0.001-.5)
+        last_position_cache[player_id]["y"] = tonumber(position.y+0.001-.5)
+        last_position_cache[player_id]["z"] = tonumber(position.z-1)
 
         Net.set_player_avatar(player_id, avatar_cache[player_id]["texture"], avatar_cache[player_id]["animation"])
         Net.remove_bot(player_id.."-double")
@@ -253,6 +253,7 @@ function frame.freeze_player(player_id)
             last_position_cache[player_id]["z"] = tonumber(stasis_cache[area_id]["z"])
             --enable movement in stasis
             Net.unlock_player_input(player_id)
+            print("in-stasis")
         end 
     end 
     end)
@@ -277,14 +278,14 @@ function frame.unfreeze_player(player_id)
             Net.lock_player_input(player_id)
             local position = Net.get_bot_position(player_id.."-double") 
             local direction = Net.get_bot_direction(player_id.."-double")
-            Net.teleport_player(player_id, false, position.x+0.001, position.y+0.001, position.z, direction)
+            Net.teleport_player(player_id, false, position.x+0.001-.5, position.y+0.001-.5, position.z-1, direction)
             --this updates last player position to stasis so a movement isn't triggered on teleport
             if not last_position_cache[player_id] then 
                 last_position_cache[player_id] = {}
             end
-            last_position_cache[player_id]["x"] = tonumber(position.x+0.001)
-            last_position_cache[player_id]["y"] = tonumber(position.y+0.001)
-            last_position_cache[player_id]["z"] = tonumber(position.z)
+            last_position_cache[player_id]["x"] = tonumber(position.x+0.001-.5)
+            last_position_cache[player_id]["y"] = tonumber(position.y+0.001-.5)
+            last_position_cache[player_id]["z"] = tonumber(position.z-1)
             frozen[player_id] = false 
             Net.unlock_player_input(player_id)
         else 
@@ -298,7 +299,7 @@ end
 --purpose: moves a frozen player from current location to specific cordinates without animation.
 function frame.move_frozen_player(player_id,X,Y,Z)
     local area_id = Net.get_bot_area(player_id.."-double") 
-    Net.transfer_bot(player_id.."-double", area_id, false, X, Y, Z)
+    Net.transfer_bot(player_id.."-double", area_id, false, X+.5, Y+.5, Z+1)
 end
 
 --purpose: moves a frozen player from current location to specific cordinates with walking animation. 
@@ -306,8 +307,8 @@ function frame.walk_frozen_player(player_id,X,Y,Z,duration,wait)
     return async(function ()
         local position = Net.get_bot_position(player_id.."-double") 
         local keyframes = {{properties={{property="X",ease="Linear",value=position.x},{property="Y",ease="Linear",value=position.y},{property="Z",ease="Linear",value=position.z}},duration=0}}
-        keyframes[#keyframes+1] = {properties={{property="X",ease="Linear",value=X},{property="Y",ease="Linear",value=Y},{property="Z",ease="Linear",value=Z}},duration=duration}
-        Net.move_bot(player_id.."-double",X,Y,Z)
+        keyframes[#keyframes+1] = {properties={{property="X",ease="Linear",value=X+.5},{property="Y",ease="Linear",value=Y+.5},{property="Z",ease="Linear",value=Z+1}},duration=duration}
+        Net.move_bot(player_id.."-double",X+.5,Y+.5,Z+1)
         Net.animate_bot_properties(player_id.."-double", keyframes)
         if wait ~= true then 
             await(Async.sleep(duration+.5))
@@ -347,7 +348,7 @@ function frame.set_camera_position(player_id,X,Y,Z)
 
     --can we simple transfer bots with the camera tracking them and then use the UI xoffset and yoffsets?
     local area_id = Net.get_bot_area(player_id.."-camera") 
-    Net.transfer_bot(player_id.."-camera", area_id, false, X, Y, Z)
+    Net.transfer_bot(player_id.."-camera", area_id, false, X+.5, Y+.5, Z+1)
 
     if ui_elements[player_id] ~= nil then for name,element in next,ui_elements[player_id] do
         local newx = X + element["xoffset"]
@@ -465,7 +466,7 @@ function frame.add_ui_element(name,player_id,texture,animation,animation_state,h
     local x = cam_position.x + xoffset
     local y = cam_position.y + yoffset
     local z = 100 + Z
-    Net.create_bot(player_id.."-ui-"..name, { area_id=area_id, warp_in=false, texture_path=texture, animation_path=animation, animation=animation_state,x=x, y=y, z=z, solid=false})
+    Net.create_bot(player_id.."-ui-"..name, { area_id=area_id, warp_in=false, texture_path=texture, animation_path=animation, animation=animation_state,x=x-.5, y=y-.5, z=z, solid=false})
     exclude_except_for(player_id,player_id.."-ui-"..name)
 
     --ADD: we need to exclude bot for all players except player_id
@@ -514,7 +515,7 @@ function frame.move_ui_element(name,player_id,horizontalOffset,verticalOffset,Z)
     local z = 100 + Z
     ui_elements[player_id][name]["xoffset"] = xoffset
     ui_elements[player_id][name]["yoffset"] = yoffset
-    Net.transfer_bot(player_id.."-ui-"..name, area_id, false, x, y, z)
+    Net.transfer_bot(player_id.."-ui-"..name, area_id, false, x-.5, y-.5, z-1)
 end
 
 --purpose: removes UI element from screen
@@ -530,7 +531,11 @@ end
 function frame.spawn_cursor(cursor_id,player_id,options) 
     return async(function ()
     --player is forcibly frozen
-    await(freeze_player(player_id))
+    if frozen[player_id] == nil then 
+        await(frame.freeze_player(player_id))
+    elseif frozen[player_id] == false then
+        await(frame.freeze_player(player_id))
+    end 
     --setup variables from provided options
     local texture = options["texture"]
     local animation = options["animation"]
@@ -557,7 +562,7 @@ function frame.spawn_cursor(cursor_id,player_id,options)
     local position = Net.get_bot_position(player_id.."-camera")
     --create bot and set initial cursor arrow in position cursor_cache[player_id]["selections"][1]
     local selection = cursor_cache[player_id]["selections"][1]
-    Net.create_bot(player_id.."-cursor-"..cursor_id, { area_id=area_id, warp_in=false, texture_path=selection["texture"], animation_path=selection["animation"],animation=selection["state"], x=position.x+selection["xoffset"], y=position.y+selection["yoffset"], z=tonumber(selection["z"]+100), solid=false})
+    Net.create_bot(player_id.."-cursor-"..cursor_id, { area_id=area_id, warp_in=false, texture_path=selection["texture"], animation_path=selection["animation"],animation=selection["state"], x=position.x+selection["xoffset"]-.5, y=position.y+selection["yoffset"]-.5, z=tonumber(selection["z"]+100), solid=false})
     exclude_except_for(player_id,player_id.."-cursor-"..cursor_id)
     --this tracks the index of the current selection
     cursor_cache[player_id]["current"] = 1
@@ -571,7 +576,7 @@ end
 function frame.remove_cursor(cursor_id,player_id)
     cursor_cache[player_id] = {}
     Net.remove_bot(player_id.."-cursor-"..cursor_id)
-    unfreeze_player(player_id)
+    frame.unfreeze_player(player_id)
 end
 
 --purpose: logic to check if cursor is active and emit corresponding events
@@ -581,7 +586,7 @@ frame.Game:on("button_press", function(event)
         if cursor_cache[event.player_id]["locked"] == false then
             local cursor = cursor_cache[event.player_id]
             local direction = cursor["movement"]
-            
+            print(event.button)
             --if directional button emit move
             if ((event.button == "D" or event.button == "U") and direction=="vertical") or
             ((event.button == "L" or event.button == "R") and direction=="horizontal") or
@@ -602,6 +607,7 @@ end)
 --purpose: handles cursor movement logic
 --usage: for framework only, use the Game:on("cursor_hover") to respond to cursor movements.
 frame.Game:on("cursor_move", function(event)
+    print("move")
     local last_selection = cursor_cache[event.player_id]["current"]
     if event.button == "L" or event.button == "LS" or event.button == "U" then
         if last_selection == 1 then
@@ -1257,7 +1263,7 @@ function frame.write_text(text_id,player_id,font,color,text,verticalOffset,horiz
         if color == "black" then
             extra = "_dark"
         end 
-        Net.create_bot(player_id.."-text-"..text_id.."-"..tostring(i), { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts"..extra.."_compressed.png", animation_path="/server/assets/net-games/fonts"..extra.."_compressed.animation",animation=letter["name"], x=position.x+data["xoffset"], y=position.y+data["yoffset"], z=tonumber(text_cache[player_id][text_id]["z"]+100), solid=false})
+        Net.create_bot(player_id.."-text-"..text_id.."-"..tostring(i), { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts"..extra.."_compressed.png", animation_path="/server/assets/net-games/fonts"..extra.."_compressed.animation",animation=letter["name"], x=position.x+data["xoffset"]-.5, y=position.y+data["yoffset"]-.5, z=tonumber(text_cache[player_id][text_id]["z"]+100), solid=false})
         exclude_except_for(player_id,player_id.."-text-"..text_id.."-"..tostring(i))
         i=i+1
 
@@ -1320,35 +1326,35 @@ function frame.spawn_countdown(player_id,horizontalOffset,verticalOffset,Z,durat
     countdown_cache[player_id]["m1_yoffset"] = yoffset
     countdown_cache[player_id]["m1_xoffset"] = xoffset
 
-    Net.create_bot(player_id.."-countdown-m1", { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts_compressed.png", animation_path="/server/assets/net-games/fonts_compressed.animation",animation=font..countdown_cache[player_id]["m1"], x=position.x+xoffset, y=position.y+yoffset, z=tonumber(Z+100), solid=false})
+    Net.create_bot(player_id.."-countdown-m1", { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts_compressed.png", animation_path="/server/assets/net-games/fonts_compressed.animation",animation=font..countdown_cache[player_id]["m1"], x=position.x+xoffset-.5, y=position.y+yoffset-.5, z=tonumber(Z+100), solid=false})
     exclude_except_for(player_id,player_id.."-countdown-m1")
     xoffset,yoffset = convertOffsets(horizontalOffset+width,verticalOffset,tonumber(Z))
     xoffset,yoffset = fixOffsets(xoffset,yoffset)
     countdown_cache[player_id]["m2_yoffset"] = yoffset
     countdown_cache[player_id]["m2_xoffset"] = xoffset
 
-    Net.create_bot(player_id.."-countdown-m2", { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts_compressed.png", animation_path="/server/assets/net-games/fonts_compressed.animation",animation=font..countdown_cache[player_id]["m2"], x=position.x+xoffset, y=position.y+yoffset, z=tonumber(Z+100), solid=false})
+    Net.create_bot(player_id.."-countdown-m2", { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts_compressed.png", animation_path="/server/assets/net-games/fonts_compressed.animation",animation=font..countdown_cache[player_id]["m2"], x=position.x+xoffset-.5, y=position.y+yoffset-.5, z=tonumber(Z+100), solid=false})
     exclude_except_for(player_id,player_id.."-countdown-m2")
     xoffset,yoffset = convertOffsets(horizontalOffset+width*2,verticalOffset,tonumber(Z))
     xoffset,yoffset = fixOffsets(xoffset,yoffset)
     countdown_cache[player_id]["d_yoffset"] = yoffset
     countdown_cache[player_id]["d_xoffset"] = xoffset
 
-    Net.create_bot(player_id.."-countdown-d", { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts_compressed.png", animation_path="/server/assets/net-games/fonts_compressed.animation",animation=font..":", x=position.x+xoffset, y=position.y+yoffset, z=tonumber(Z+100), solid=false})
+    Net.create_bot(player_id.."-countdown-d", { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts_compressed.png", animation_path="/server/assets/net-games/fonts_compressed.animation",animation=font..":", x=position.x+xoffset-.5, y=position.y+yoffset-.5, z=tonumber(Z+100), solid=false})
     exclude_except_for(player_id,player_id.."-countdown-d")
     xoffset,yoffset = convertOffsets(horizontalOffset+width*3,verticalOffset,tonumber(Z))
     xoffset,yoffset = fixOffsets(xoffset,yoffset)
     countdown_cache[player_id]["s1_yoffset"] = yoffset
     countdown_cache[player_id]["s1_xoffset"] = xoffset
 
-    Net.create_bot(player_id.."-countdown-s1", { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts_compressed.png", animation_path="/server/assets/net-games/fonts_compressed.animation",animation=font..countdown_cache[player_id]["s1"], x=position.x+xoffset, y=position.y+yoffset, z=tonumber(Z+100), solid=false})
+    Net.create_bot(player_id.."-countdown-s1", { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts_compressed.png", animation_path="/server/assets/net-games/fonts_compressed.animation",animation=font..countdown_cache[player_id]["s1"], x=position.x+xoffset-.5, y=position.y+yoffset-.5, z=tonumber(Z+100), solid=false})
     exclude_except_for(player_id,player_id.."-countdown-s1")
     xoffset,yoffset = convertOffsets(horizontalOffset+width*4,verticalOffset,tonumber(Z))
     xoffset,yoffset = fixOffsets(xoffset,yoffset)
     countdown_cache[player_id]["s2_yoffset"] = yoffset
     countdown_cache[player_id]["s2_xoffset"] = xoffset
 
-    Net.create_bot(player_id.."-countdown-s2", { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts_compressed.png", animation_path="/server/assets/net-games/fonts_compressed.animation",animation=font..countdown_cache[player_id]["s2"], x=position.x+xoffset, y=position.y+yoffset, z=tonumber(Z+100), solid=false})
+    Net.create_bot(player_id.."-countdown-s2", { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts_compressed.png", animation_path="/server/assets/net-games/fonts_compressed.animation",animation=font..countdown_cache[player_id]["s2"], x=position.x+xoffset-.5, y=position.y+yoffset-.5, z=tonumber(Z+100), solid=false})
     exclude_except_for(player_id,player_id.."-countdown-s2")
 end
 
@@ -1547,35 +1553,35 @@ function frame.spawn_timer(player_id,horizontalOffset,verticalOffset,Z)
     timer_cache[player_id]["m1_yoffset"] = yoffset
     timer_cache[player_id]["m1_xoffset"] = xoffset
 
-    Net.create_bot(player_id.."-timer-m1", { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts_compressed.png", animation_path="/server/assets/net-games/fonts_compressed.animation",animation=font..timer_cache[player_id]["m1"], x=position.x+xoffset, y=position.y+yoffset, z=tonumber(Z+100), solid=false})
+    Net.create_bot(player_id.."-timer-m1", { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts_compressed.png", animation_path="/server/assets/net-games/fonts_compressed.animation",animation=font..timer_cache[player_id]["m1"], x=position.x+xoffset-.5, y=position.y+yoffset-.5, z=tonumber(Z+100), solid=false})
     exclude_except_for(player_id,player_id.."-timer-m1")
     xoffset,yoffset = convertOffsets(horizontalOffset+width,verticalOffset,tonumber(Z))
     xoffset,yoffset = fixOffsets(xoffset,yoffset)
     timer_cache[player_id]["m2_yoffset"] = yoffset
     timer_cache[player_id]["m2_xoffset"] = xoffset
 
-    Net.create_bot(player_id.."-timer-m2", { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts_compressed.png", animation_path="/server/assets/net-games/fonts_compressed.animation",animation=font..timer_cache[player_id]["m2"], x=position.x+xoffset, y=position.y+yoffset, z=tonumber(Z+100), solid=false})
+    Net.create_bot(player_id.."-timer-m2", { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts_compressed.png", animation_path="/server/assets/net-games/fonts_compressed.animation",animation=font..timer_cache[player_id]["m2"], x=position.x+xoffset-.5, y=position.y+yoffset-.5, z=tonumber(Z+100), solid=false})
     exclude_except_for(player_id,player_id.."-timer-m2")
     xoffset,yoffset = convertOffsets(horizontalOffset+width*2,verticalOffset,tonumber(Z))
     xoffset,yoffset = fixOffsets(xoffset,yoffset)
     timer_cache[player_id]["d_yoffset"] = yoffset
     timer_cache[player_id]["d_xoffset"] = xoffset
 
-    Net.create_bot(player_id.."-timer-d", { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts_compressed.png", animation_path="/server/assets/net-games/fonts_compressed.animation",animation=font..":", x=position.x+xoffset, y=position.y+yoffset, z=tonumber(Z+100), solid=false})
+    Net.create_bot(player_id.."-timer-d", { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts_compressed.png", animation_path="/server/assets/net-games/fonts_compressed.animation",animation=font..":", x=position.x+xoffset-.5, y=position.y+yoffset-.5, z=tonumber(Z+100), solid=false})
     exclude_except_for(player_id,player_id.."-timer-d")
     xoffset,yoffset = convertOffsets(horizontalOffset+width*3,verticalOffset,tonumber(Z))
     xoffset,yoffset = fixOffsets(xoffset,yoffset)
     timer_cache[player_id]["s1_yoffset"] = yoffset
     timer_cache[player_id]["s1_xoffset"] = xoffset
 
-    Net.create_bot(player_id.."-timer-s1", { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts_compressed.png", animation_path="/server/assets/net-games/fonts_compressed.animation",animation=font..timer_cache[player_id]["s1"], x=position.x+xoffset, y=position.y+yoffset, z=tonumber(Z+100), solid=false})
+    Net.create_bot(player_id.."-timer-s1", { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts_compressed.png", animation_path="/server/assets/net-games/fonts_compressed.animation",animation=font..timer_cache[player_id]["s1"], x=position.x+xoffset-.5, y=position.y+yoffset-.5, z=tonumber(Z+100), solid=false})
     exclude_except_for(player_id,player_id.."-timer-s1")
     xoffset,yoffset = convertOffsets(horizontalOffset+width*4,verticalOffset,tonumber(Z))
     xoffset,yoffset = fixOffsets(xoffset,yoffset)
     timer_cache[player_id]["s2_yoffset"] = yoffset
     timer_cache[player_id]["s2_xoffset"] = xoffset
 
-    Net.create_bot(player_id.."-timer-s2", { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts_compressed.png", animation_path="/server/assets/net-games/fonts_compressed.animation",animation=font..timer_cache[player_id]["s2"], x=position.x+xoffset, y=position.y+yoffset, z=tonumber(Z+100), solid=false})
+    Net.create_bot(player_id.."-timer-s2", { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts_compressed.png", animation_path="/server/assets/net-games/fonts_compressed.animation",animation=font..timer_cache[player_id]["s2"], x=position.x+xoffset-.5, y=position.y+yoffset-.5, z=tonumber(Z+100), solid=false})
     exclude_except_for(player_id,player_id.."-timer-s2")
 end
 
@@ -1768,8 +1774,8 @@ local function process_movement(player_id, x, y, z)
             local stunt_position = Net.get_bot_position(player_id.."-double") 
             local animation = tostring(string.upper(speed.."_"..direction))
             local keyframes = {{properties={{property="Animation",value=animation},{property="X",ease="Linear",value=stunt_position.x},{property="Y",ease="Linear",value=stunt_position.y},{property="Z",ease="Linear",value=stunt_position.z}},duration=0}}
-            keyframes[#keyframes+1] = {properties={{property="Animation",value=animation},{property="X",ease="Linear",value=x},{property="Y",ease="Linear",value=y},{property="Z",ease="Linear",value=z}},duration=.1}
-            Net.move_bot(player_id.."-double",z,y,z)
+            keyframes[#keyframes+1] = {properties={{property="Animation",value=animation},{property="X",ease="Linear",value=x+.5},{property="Y",ease="Linear",value=y+.5},{property="Z",ease="Linear",value=z+1}},duration=.1}
+            Net.move_bot(player_id.."-double",z,z,z+1)
             Net.animate_bot_properties(player_id.."-double", keyframes)
             
             --update UI
@@ -1828,12 +1834,12 @@ local function process_movement(player_id, x, y, z)
             local camera_position = Net.get_bot_position(player_id.."-camera") 
             local animation = tostring(string.upper(speed.."_"..direction))
             local keyframes = {{properties={{property="Animation",value=animation},{property="X",ease="Linear",value=stunt_position.x},{property="Y",ease="Linear",value=stunt_position.y},{property="Z",ease="Linear",value=stunt_position.z}},duration=0}}
-            keyframes[#keyframes+1] = {properties={{property="Animation",value=animation},{property="X",ease="Linear",value=x},{property="Y",ease="Linear",value=y},{property="Z",ease="Linear",value=z}},duration=.1}
-            Net.move_bot(player_id.."-double",z,y,z)
+            keyframes[#keyframes+1] = {properties={{property="Animation",value=animation},{property="X",ease="Linear",value=x+.5},{property="Y",ease="Linear",value=y+.5},{property="Z",ease="Linear",value=z+1}},duration=.1}
+            Net.move_bot(player_id.."-double",z,z,z+1)
             Net.animate_bot_properties(player_id.."-double", keyframes)
             local keyframes = {{properties={{property="X",ease="Linear",value=stunt_position.x},{property="Y",ease="Linear",value=stunt_position.y},{property="Z",ease="Linear",value=stunt_position.z}},duration=0}}
-            keyframes[#keyframes+1] = {properties={{property="X",ease="Linear",value=x},{property="Y",ease="Linear",value=y},{property="Z",ease="Linear",value=z}},duration=.1}
-            Net.move_bot(player_id.."-camera",x,y,z)
+            keyframes[#keyframes+1] = {properties={{property="X",ease="Linear",value=x+.5},{property="Y",ease="Linear",value=y+.5},{property="Z",ease="Linear",value=z+1}},duration=.1}
+            Net.move_bot(player_id.."-camera",z,z,z+1)
             Net.animate_bot_properties(player_id.."-camera", keyframes)
 
             --move all active UI elements to track with camera
@@ -1961,8 +1967,10 @@ Net:on("player_join", function(event)
         end
     end
     if next(ui_elements) ~= nil then
-        for player_id,ui in next,timer_cache do
-            Net.exclude_actor_for_player(event.player_id, player_id.."-ui-"..ui["name"])
+        for player_id,ui in next,ui_elements do
+            for name,element in next,ui do
+                Net.exclude_actor_for_player(event.player_id, player_id.."-ui-"..element["name"])
+            end 
         end
     end
     if next(text_cache) ~= nil then
@@ -1986,6 +1994,7 @@ Net:on("player_join", function(event)
 end)
 
 Net:on("actor_interaction", function(event)
+    print(Net.get_bot_position(event.actor_id))
     --emits event on A and L Shoulder press.
     process_button_press(event.player_id,event.button)
 end)
@@ -1999,6 +2008,7 @@ Net:on("player_disconnect", function(event)
 
     --clear all caches on disconnect
     frozen[event.player_id] = nil
+    framework_active[event.player_id] = nil
     player_stopped[event.player_id] = nil
     if cursor_cache[event.player_id] ~= nil then
         cursor_cache[event.player_id] = {}
@@ -2017,33 +2027,38 @@ Net:on("player_disconnect", function(event)
     end 
 
     --remove UIs
-    if ui_elements[player_id] ~= nil then for name,element in next,ui_elements[player_id] do
-        Net.remove_bot(player_id.."-ui-"..element["name"])
-    end
+    if ui_elements[event.player_id] ~= nil then 
+        for name,element in next,ui_elements[event.player_id] do
+            Net.remove_bot(event.player_id.."-ui-"..element["name"])
+        end
+        ui_elements[event.player_id] = nil
     end
 
     --remove text
-    if text_cache[player_id] ~= nil then for i,label in next,text_cache[player_id] do
+    if text_cache[event.player_id] ~= nil then for i,label in next,text_cache[event.player_id] do
         for i,letter in next,label["letters"] do 
-            Net.remove_bot(player_id.."-text-"..label["name"].."-"..tostring(i))
+            Net.remove_bot(event.player_id.."-text-"..label["name"].."-"..tostring(i))
         end
     end 
+        text_cache[event.player_id] = nil
     end
 
     --remove countdowns
-    if countdown_cache[player_id] ~= nil then 
+    if countdown_cache[event.player_id] ~= nil then 
         local clockpositions = {"m1","m2","d","s1","s2"}
         for i,clockposition in next,clockpositions do 
-            Net.remove_bot(player_id.."-countdown-"..clockposition)
+            Net.remove_bot(event.player_id.."-countdown-"..clockposition)
         end
+        countdown_cache[event.player_id] = nil
     end
 
     --remove timers
-    if timer_cache[player_id] ~= nil then 
+    if timer_cache[event.player_id] ~= nil then 
         local clockpositions = {"m1","m2","d","s1","s2"}
         for i,clockposition in next,clockpositions do 
-            Net.remove_bot(player_id.."-timer-"..clockposition)
+            Net.remove_bot(event.player_id.."-timer-"..clockposition)
         end
+        timer_cache[event.player_id] = nil
     end
 
 
@@ -2074,7 +2089,8 @@ Net:on("tick", function(event)
                 local parts = splitter(ui,"|")
                 local ui = parts[1]
                 local gap = tonumber(parts[2])
-                if gap == tick_gap then
+                if gap == tick_gap2 then
+                    print("triggered")
                     animation_state = ui_elements[player_id][ui]["state"]
                     local position = Net.get_bot_position(player_id.."-ui-"..ui) 
                     local keyframes = {{properties={{property="Animation",value=animation_state}},duration=0}}

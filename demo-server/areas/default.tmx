@@ -7,7 +7,7 @@
   <property name="Background Vel Y" value=".1"/>
   <property name="Name" value="                  "/>
   <property name="Song" value="/server/assets/demo/space.ogg"/>
-  <property name="Stasis" value="27,21,0"/>
+  <property name="Stasis" value="26,21,0"/>
  </properties>
  <tileset firstgid="1" source="../assets/demo/coffee.tsx"/>
  <tileset firstgid="5" source="../assets/demo/warp.tsx"/>
