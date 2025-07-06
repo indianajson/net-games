@@ -258,6 +258,16 @@ function frame.freeze_player(player_id)
     end)
 end
 
+--purpose: set the stunt double's avatar to another texture/animation
+function frame.set_player_avatar(player_id,texture,animation)
+    Net.set_bot_avatar(player_id.."-double", texture, animation)
+end 
+
+--purpose: changes stunt double back to player's default avatar
+function frame.reset_player_avatar(player_id)
+    Net.set_bot_avatar(player_id.."-double", avatar_cache[player_id]["texture"], avatar_cache[player_id]["animation"])
+end 
+
 --purpose: releases player from freeze at the end of mini-game or non-standard UI interactions 
 --usage: call to end a mini-games or non-standard UI interactions
 --status: RE-TEST
