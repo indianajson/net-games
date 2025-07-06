@@ -2010,10 +2010,11 @@ Net:on("player_disconnect", function(event)
     frozen[event.player_id] = nil
     framework_active[event.player_id] = nil
     player_stopped[event.player_id] = nil
+    --ADD: loop for cursor to clear bots
     if cursor_cache[event.player_id] ~= nil then
         cursor_cache[event.player_id] = {}
     end
-    avatar_cache.player_id = {}
+    avatar_cache[event.player_id] = {}
     if Net.is_bot(event.player_id.."-double") then
             Net.remove_bot(event.player_id.."-double")
     end 

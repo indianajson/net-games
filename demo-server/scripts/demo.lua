@@ -13,16 +13,22 @@ games.start_framework()
 
 --the rest is demo code for the demo server
 local points = 8
-local active = false 
+local active = {} 
+
+Net:on("player_join", function(event)
+    active[event.player_id] = false
+end)
 
 Net:on("player_disconnect", function(event)
-active = false
+    active[event.player_id] = false
 end)
 games.Game:on("button_press", function(event)
 
     --print("Player ".. event.player_id .." pressed: "..event.button)
     if event.button == "LS" then
-        if active == false then
+        print("ran")
+        print(active)
+        if active[event.player_id] == false then
             games.activate_framework(event.player_id)
             games.add_ui_element("points",event.player_id,"/server/assets/demo/order_points.png","/server/assets/demo/order_points.animation","8POINT",40,60,0)
             local green_cursor_texture = "/server/assets/net-games/text_cursor.png"
@@ -39,7 +45,7 @@ games.Game:on("button_press", function(event)
             games.start_countdown(event.player_id)
             games.spawn_timer(event.player_id,0,20,0)
             games.start_timer(event.player_id)
-            active = true
+            active[event.player_id] = true
         else
             if points > 0 then
                 points = points - 1 
