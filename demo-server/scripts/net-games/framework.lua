@@ -5,7 +5,7 @@
 * ---------------------------------------------------------- *
 ]]--
 
--- re-test all functions
+-- tick doesn't handle empty caches properly once all players are gone.
 -- camera slide
 -- error handling is weak
 
@@ -2033,6 +2033,7 @@ Net:on("player_disconnect", function(event)
             Net.remove_bot(event.player_id.."-ui-"..element["name"])
         end
         ui_elements[event.player_id] = nil
+        ui_update[event.player_id] = nil
     end
 
     --remove text
@@ -2051,6 +2052,7 @@ Net:on("player_disconnect", function(event)
             Net.remove_bot(event.player_id.."-countdown-"..clockposition)
         end
         countdown_cache[event.player_id] = nil
+        countdown_update[event.player_id] = nil
     end
 
     --remove timers
@@ -2060,6 +2062,7 @@ Net:on("player_disconnect", function(event)
             Net.remove_bot(event.player_id.."-timer-"..clockposition)
         end
         timer_cache[event.player_id] = nil
+        timer_update[event.player_id] = nil
     end
 
 
