@@ -1,0 +1,8 @@
+!frame_rate 60
+!image_path "C:/Users/aaron/Desktop/net-games-main/demo-server/assets/tourney/mini-mugs.png"
+
+anim INACTIVE
+frame dur=5f x=0 y=0 w=22 h=30 originx=0 originy=0
+
+anim ACTIVE
+frame dur=5f x=22 y=0 w=22 h=30 originx=0 originy=0
