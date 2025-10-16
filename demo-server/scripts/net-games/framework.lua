@@ -2379,7 +2379,7 @@ end)
 
 Net:on("player_area_transfer", function(event)
     --UNTESTED
-    if framework_active[player_id] ~= false then 
+        if framework_active[player_id] == true then
         local area_id = Net.get_player_area(event.player_id) 
         local position = Net.get_player_position(event.player_id) 
         Net.transfer_bot(event.player_id.."-camera", area_id, false, position.x, position.y, position.z)

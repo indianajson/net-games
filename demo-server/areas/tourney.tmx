@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.11.2" orientation="isometric" renderorder="right-down" width="40" height="40" tilewidth="64" tileheight="32" infinite="0" nextlayerid="14" nextobjectid="76">
+<map version="1.10" tiledversion="1.11.2" orientation="isometric" renderorder="right-down" width="40" height="40" tilewidth="64" tileheight="32" infinite="0" nextlayerid="14" nextobjectid="81">
  <properties>
   <property name="Background Animation" value="/server/assets/demo/clockman.animation"/>
   <property name="Background Texture" value="/server/assets/demo/clockman.png"/>
   <property name="Background Vel X" value="0.20"/>
   <property name="Background Vel Y" value=".1"/>
-  <property name="Name" value="Simon Says"/>
+  <property name="Name" value="Tourney"/>
   <property name="Song" value="/server/assets/demo/space.ogg"/>
-  <property name="Stasis" value="26,21,0"/>
  </properties>
  <tileset firstgid="1" source="../assets/demo/coffee.tsx"/>
  <tileset firstgid="5" source="../assets/demo/warp.tsx"/>
  <tileset firstgid="11" source="../assets/demo/Custom_Central_Tiles.tsx"/>
+ <tileset firstgid="19" source="../assets/tourney/ow-tourney-board.tsx"/>
  <layer id="4" name="Tile Layer 0" width="40" height="40">
   <data encoding="csv">
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -62,15 +62,9 @@
     <property name="Direction" value="Up Right"/>
    </properties>
   </object>
-  <object id="74" name="defaultsimon" type="Simon Says" x="788" y="628">
-   <properties>
-    <property name="Limit" value="10"/>
-    <property name="Time" value="30"/>
-   </properties>
+  <object id="76" name="Player Spawn" x="784" y="688">
    <point/>
   </object>
-  <object id="75" name="Player Spawn" x="784" y="688">
-   <point/>
-  </object>
+  <object id="80" gid="19" x="771" y="643" width="64" height="57"/>
  </objectgroup>
 </map>
