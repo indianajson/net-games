@@ -1,8 +1,29 @@
-!frame_rate 60
-!image_path "C:/Users/aaron/Desktop/net-games-main/demo-server/assets/tourney/mini-mugs.png"
+animation state="ACTIVE"
+frame duration="0.0833333" x="22" y="0" w="22" h="30" originx="0" originy="0"
 
-anim INACTIVE
-frame dur=5f x=0 y=0 w=22 h=30 originx=0 originy=0
+animation state="INACTIVE"
+frame duration="0.0833333" x="0" y="0" w="22" h="30" originx="0" originy="0"  
 
-anim ACTIVE
-frame dur=5f x=22 y=0 w=22 h=30 originx=0 originy=0
+animation state="IDLE_DR"
+
+animation state="IDLE_DL"
+
+animation state="IDLE_UR"
+
+animation state="IDLE_UL"
+
+animation state="WALK_DR"
+
+animation state="WALK_DL"
+
+animation state="WALK_UR"
+
+animation state="WALK_UL"
+
+animation state="RUN_DR"
+
+animation state="RUN_DL"
+
+animation state="RUN_UR"
+
+animation state="RUN_UL"
