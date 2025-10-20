@@ -37,7 +37,7 @@ local function join_or_create_party(player_id)
     end
     print("Active tournament exists")
     for i, party in next, active_tournaments do
-        if #(party.participants) < 8 then
+        if #(party.participants) < 8 and not TableUtils.Contains(party.participants, player_id) then
             active_tournaments[i].participants[player_id] = {player_id = player_id, player_mugshot = Net.get_player_mugshot(player_id)}
             print("Added player with player_id : ".. player_id.." to tournament party")
             print(active_tournaments)
