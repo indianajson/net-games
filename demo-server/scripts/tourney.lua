@@ -63,16 +63,13 @@ end
 
 gather_boards()
 
-
 local function test_add_mugshot(player_id)
     games.add_ui_element("MUG_FRAME1", player_id, "/server/assets/tourney/mini-mug-frame.png",
         "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", -112, -48, 2)
 
     games.add_ui_element("MUG_1", player_id, online_players[player_id]["player_mugshot"]["texture_path"],
         "/server/assets/tourney/mug.anim",
-        "UI", 0, 0, 1, .5, .75)
-
-    -- -110, -50, 1
+        "UI", -112, -48, 1, .55, .6)
 end
 
 -- REQUIRED: player_id: string,
@@ -84,7 +81,8 @@ local function start_tourney(pid)
         local original_map_name = Net.get_area_custom_property(player_area, "Name")
         Net.set_area_custom_property(player_area, "Name", "            ")
         games.activate_framework(player_id)
-        --Net.fade_player_camera(player_id, {r=0,g=0,b=0,a=255}, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
+        games.freeze_player(player_id)
+        Net.fade_player_camera(player_id, {r=0,g=0,b=0,a=255}, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
         await(Async.sleep(.75))
         games.freeze_player(player_id)
         games.add_ui_element("BOARD BG", player_id, "/server/assets/tourney/orange-bg.png",
@@ -98,8 +96,7 @@ local function start_tourney(pid)
 
         games.add_ui_element("MUG FRAME2", player_id, "/server/assets/tourney/mini-mug-frame.png",
             "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", -86, -48, 2)
-        games.add_ui_element("MUG_2", player_id, npc_paths.Bass.mug_texture, npc_paths.Bass.mug_animation, "UI", -84,
-            -50, 1)
+        games.add_ui_element("MUG_2", player_id, npc_paths.Bass.mug_texture, npc_paths.Bass.mug_animation, "UI", -86, -48, 1, .55, .6)
 
 
         games.add_ui_element("MUG FRAME3", player_id, "/server/assets/tourney/mini-mug-frame.png",
@@ -116,7 +113,7 @@ local function start_tourney(pid)
             "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", 90, -48, 2)
 
 
-        --Net.fade_player_camera(player_id, {r=0,g=0,b=0,a=0}, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
+        Net.fade_player_camera(player_id, {r=0,g=0,b=0,a=0}, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
         await(Async.sleep(3))
     end)
 end

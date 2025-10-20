@@ -1,6 +1,6 @@
 image path=""
 animation state="UI"
-frame duration="10" x="0" y="0" w="40" h="48" originx="1" originy="1"
+frame duration="10" x="0" y="0" w="40" h="48" originx="0" originy="0"
 
 animation state="IDLE_DL"
 
