@@ -72,19 +72,20 @@ function test_add_mugshot(player_id)
     games.add_ui_element("MUG_FRAME1", player_id, "/server/assets/tourney/mini-mug-frame.png",
         "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", -112, -48, 2)
 
-    games.add_ui_element("MUG_1", player_id, online_players[player_id].player_mugshot.texture_path,
+    games.add_ui_element("MUG_1", player_id, online_players[player_id]["player_mugshot"]["texture_path"],
         "/server/assets/tourney/mug.anim",
         "MUG", 0, 0, 1)
 
-    Net.animate_bot_properties(player_id .. "_ui_" .. "MUG_1",
+    Net.animate_bot_properties(tostring(player_id) .. "_ui_" .. "MUG_1",
         { properties = { ScaleX = 0.5 }, duration = 0 })
     -- -110, -50, 1
 end
 
 -- REQUIRED: player_id: string,
 -- OPTIONAL: single_player: bool,
-local function start_tourney(player_id, single_player)
+local function start_tourney(pid, single_player)
     return async(function()
+        local player_id = pid
         local player_area = Net.get_player_area(player_id)
         local original_map_name = Net.get_area_custom_property(player_area, "Name")
         Net.set_area_custom_property(player_area, "Name", "            ")
@@ -101,7 +102,6 @@ local function start_tourney(player_id, single_player)
             "/server/assets/tourney/title-banner.anim", "RED", -120, 80, 0)
 
         test_add_mugshot(player_id)
-
 
         games.add_ui_element("MUG FRAME2", player_id, "/server/assets/tourney/mini-mug-frame.png",
             "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", -86, -48, 2)
