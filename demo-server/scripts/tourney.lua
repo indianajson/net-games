@@ -64,33 +64,26 @@ end
 gather_boards()
 
 
-local function initialize_tourney()
-end
-
-
-function test_add_mugshot(player_id)
+local function test_add_mugshot(player_id)
     games.add_ui_element("MUG_FRAME1", player_id, "/server/assets/tourney/mini-mug-frame.png",
         "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", -112, -48, 2)
 
     games.add_ui_element("MUG_1", player_id, online_players[player_id]["player_mugshot"]["texture_path"],
         "/server/assets/tourney/mug.anim",
-        "MUG", 0, 0, 1)
+        "UI", 0, 0, 1, .5, .75)
 
-    Net.animate_bot_properties(tostring(player_id) .. "_ui_" .. "MUG_1",
-        { properties = { ScaleX = 0.5 }, duration = 0 })
     -- -110, -50, 1
 end
 
 -- REQUIRED: player_id: string,
 -- OPTIONAL: single_player: bool,
-local function start_tourney(pid, single_player)
+local function start_tourney(pid)
     return async(function()
         local player_id = pid
         local player_area = Net.get_player_area(player_id)
         local original_map_name = Net.get_area_custom_property(player_area, "Name")
         Net.set_area_custom_property(player_area, "Name", "            ")
         games.activate_framework(player_id)
-        Net.lock_player_input(player_id)
         --Net.fade_player_camera(player_id, {r=0,g=0,b=0,a=255}, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
         await(Async.sleep(.75))
         games.freeze_player(player_id)
@@ -105,7 +98,7 @@ local function start_tourney(pid, single_player)
 
         games.add_ui_element("MUG FRAME2", player_id, "/server/assets/tourney/mini-mug-frame.png",
             "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", -86, -48, 2)
-        games.add_ui_element("MUG_2", player_id, npc_paths.Bass.mug_texture, npc_paths.Bass.mug_animation, "MUG", -84,
+        games.add_ui_element("MUG_2", player_id, npc_paths.Bass.mug_texture, npc_paths.Bass.mug_animation, "UI", -84,
             -50, 1)
 
 
@@ -125,25 +118,24 @@ local function start_tourney(pid, single_player)
 
         --Net.fade_player_camera(player_id, {r=0,g=0,b=0,a=0}, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
         await(Async.sleep(3))
-        Net.unlock_player_input(player_id)
     end)
 end
 
-
-local function determine_player_or_mob()
-
-end
 
 Net:on("object_interaction", function(event)
     local player_area = Net.get_player_area(event.player_id)
     local object = Net.get_object_by_id(player_area, event.object_id)
     if object.type == "Tournament Board" then
         print("Type match")
-        start_tourney(event.player_id, true)
+        Net.lock_player_input(event.player_id)
+        start_tourney(event.player_id)
+        Net.unlock_player_input(event.player_id)
     end
     if object.class == "Tournament Board" then
         print("Object match")
-        start_tourney(event.player_id, true)
+        Net.lock_player_input(event.player_id)
+        start_tourney(event.player_id)
+        Net.unlock_player_input(event.player_id)
     end
 end)
 
