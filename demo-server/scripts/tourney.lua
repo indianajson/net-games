@@ -20,6 +20,33 @@ local npc_paths = {
     }
 }
 
+
+local function start_party(player_id)
+    local party = {host = player_id, participants = {
+        [player_id] = {player_id = player_id, player_mugshot = Net.get_player_mugshot(player_id)}
+    }}
+    table.insert(active_tournaments, party)
+end
+
+local function join_or_create_party(player_id)
+    if (#active_tournaments < 1) then
+        print("No active parties.")
+        start_party(player_id)
+        print("Starting tournament. This is all active tournaments :" .. tostring(active_tournaments))
+        return
+    end
+    print("Active tournament exists")
+    for i, party in next, active_tournaments do
+        if #(party.participants) < 8 then
+            active_tournaments[i].participants[player_id] = {player_id = player_id, player_mugshot = Net.get_player_mugshot(player_id)}
+            print("Added player with player_id : ".. player_id.." to tournament party")
+            print(active_tournaments)
+            break
+        end
+    end
+end
+
+
 -- top down positions, this is including interprolation positions as well as resting locations
 local bottom_tier = {
     position1 = {
@@ -119,6 +146,7 @@ local function start_tourney(pid, single_player)
         local single_player = single_player
         local original_map_name = Net.get_area_custom_property(player_area, "Name")
         Net.set_area_custom_property(player_area, "Name", "            ")
+
         games.activate_framework(player_id)
         games.freeze_player(player_id)
         Net.lock_player_input(player_id)
@@ -164,20 +192,18 @@ end
 Net:on("object_interaction", function(event)
     local player_area = Net.get_player_area(event.player_id)
     local object = Net.get_object_by_id(player_area, event.object_id)
-    if object.type == "Tournament Board" then
-        print("Type match")
-        start_tourney(event.player_id)
+    if object.type ~= "Tournament Board" and object.class ~= "Tournament Board" then
+        print("No match found, No work to do.")
+    return
     end
-    if object.class == "Tournament Board" then
         print("Object match")
-        start_tourney(event.player_id)
-    end
+        join_or_create_party(event.player_id)
+        --start_tourney(event.player_id)
 end)
 
 Net:on("player_connect", function(event)
     online_players[event.player_id]= {player_id = event.player_id, player_mugshot = Net.get_player_mugshot(event.player_id)}
     Net.provide_asset_for_player(event.player_id, "/server/assets/tourney/mug.anim")
-    print(online_players)
 end)
 
 Net:on("player_disconnect", function(event)
@@ -185,3 +211,4 @@ Net:on("player_disconnect", function(event)
     print("Removed player with player_id: " .. event.player_id .. "from online_players")
     print("current online players lists: " .. tostring(online_players))
 end)
+
