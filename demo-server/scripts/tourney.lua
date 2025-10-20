@@ -13,7 +13,7 @@ local active_tournaments = {}
 local mob_path = "/server/assets/tourney/npc-navis/"
 
 local npc_paths = {
-    Bass = {
+    [1] = {
         encounter = "/server/assets/tourney/npc-navis/bass/bass1.zip",
         mug_texture = "/server/assets/tourney/npc-navis/bass/mug.png",
         mug_animation = "/server/assets/tourney/mug.anim",
@@ -21,25 +21,48 @@ local npc_paths = {
 }
 
 -- top down positions, this is including interprolation positions as well as resting locations
-local mug_movement_map = {
-    position23 = {
-        mugshot_frame_pos = {
+local bottom_tier = {
+    position1 = {
             x = -112,
             y = -48,
-            z = 1
-        },
-        mugshot_position = {
-
-        },
     },
-    position24 = {
-        mugshot_frame_pos = {
+    position2 = {
             x = -86,
             y = -48,
-            z = 1
-        }
+    },
+    position3 = {
+            x = -56,
+            y = -48,
+    },
+    position4 = {
+            x = -30,
+            y = -48,
+    },
+    position5 = {
+            x = -8,
+            y = -48,
+    },
+    position6 = {
+            x = 34,
+            y = -48,
+    },
+    position7 = {
+            x = 64,
+            y = -48,
+    },
+    position8 = {
+            x = 90,
+            y = -48,
     },
 }
+
+local function start_battle(player1_id, player2_id, encounter)
+    if (player2_id == nil) then
+        Net.initiate_encounter(player1_id, encounter)
+    else 
+        Net.initalize_pvp(player1_id, player2_id)
+    end
+end
 
 --Shorthand for async
 function async(p)
@@ -63,28 +86,46 @@ end
 
 gather_boards()
 
-local function test_add_mugshot(player_id)
-    games.add_ui_element("MUG_FRAME1", player_id, "/server/assets/tourney/mini-mug-frame.png",
-        "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", -112, -48, 2)
+local function add_participant_mugshot(player_id, participant_number, mug_texture_path, x, y)
+    games.add_ui_element("MUG_FRAME_"..participant_number, player_id, "/server/assets/tourney/mini-mug-frame.png",
+        "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", x, y, 2)
 
-    games.add_ui_element("MUG_1", player_id, online_players[player_id]["player_mugshot"]["texture_path"],
+    games.add_ui_element("MUG_"..participant_number, player_id, mug_texture_path,
         "/server/assets/tourney/mug.anim",
-        "UI", -112, -48, 1, .55, .6)
+        "UI", x, y, 1, .50, .50)
 end
+
+local function initialize_tournament_board(participants)
+    local final_participants = {}
+    if (#participants < 8) then
+        local need_to_fill = 8 - #participants
+        while(need_to_fill > 0) do
+            local random_value = math.random(1, #npc_paths)
+            table.insert(final_participants, npc_paths[random_value])
+        print(final_participants)
+        need_to_fill = need_to_fill - 1
+        end
+    end
+end
+
+initialize_tournament_board(online_players)
 
 -- REQUIRED: player_id: string,
 -- OPTIONAL: single_player: bool,
-local function start_tourney(pid)
+local function start_tourney(pid, single_player)
     return async(function()
         local player_id = pid
         local player_area = Net.get_player_area(player_id)
+        local single_player = single_player
         local original_map_name = Net.get_area_custom_property(player_area, "Name")
         Net.set_area_custom_property(player_area, "Name", "            ")
         games.activate_framework(player_id)
         games.freeze_player(player_id)
+        Net.lock_player_input(player_id)
         Net.fade_player_camera(player_id, {r=0,g=0,b=0,a=255}, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
         await(Async.sleep(.75))
         games.freeze_player(player_id)
+
         games.add_ui_element("BOARD BG", player_id, "/server/assets/tourney/orange-bg.png",
             "/server/assets/tourney/bg.animation", "BG", -120, 80, -1)
         games.add_ui_element("TOURNEY TREE", player_id, "/server/assets/tourney/tourney-tree.png",
@@ -92,11 +133,11 @@ local function start_tourney(pid)
         games.add_ui_element("TITLE BANNER", player_id, "/server/assets/tourney/title-banner.png",
             "/server/assets/tourney/title-banner.anim", "RED", -120, 80, 0)
 
-        test_add_mugshot(player_id)
+        add_participant_mugshot(pid, 1, online_players[pid].player_mugshot.texture_path, bottom_tier.position1.x,bottom_tier.position1.y)
 
         games.add_ui_element("MUG FRAME2", player_id, "/server/assets/tourney/mini-mug-frame.png",
             "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", -86, -48, 2)
-        games.add_ui_element("MUG_2", player_id, npc_paths.Bass.mug_texture, npc_paths.Bass.mug_animation, "UI", -86, -48, 1, .55, .6)
+        games.add_ui_element("MUG_2", player_id, npc_paths[1].mug_texture, npc_paths[1].mug_animation, "UI", -86, -48, 1, .5, .5)
 
 
         games.add_ui_element("MUG FRAME3", player_id, "/server/assets/tourney/mini-mug-frame.png",
@@ -114,6 +155,7 @@ local function start_tourney(pid)
 
 
         Net.fade_player_camera(player_id, {r=0,g=0,b=0,a=0}, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
+        start_battle(player_id, nil, npc_paths[1].encounter)
         await(Async.sleep(3))
     end)
 end
@@ -124,22 +166,16 @@ Net:on("object_interaction", function(event)
     local object = Net.get_object_by_id(player_area, event.object_id)
     if object.type == "Tournament Board" then
         print("Type match")
-        Net.lock_player_input(event.player_id)
         start_tourney(event.player_id)
-        Net.unlock_player_input(event.player_id)
     end
     if object.class == "Tournament Board" then
         print("Object match")
-        Net.lock_player_input(event.player_id)
         start_tourney(event.player_id)
-        Net.unlock_player_input(event.player_id)
     end
 end)
 
 Net:on("player_connect", function(event)
-    online_players[event.player_id] = {
-        player_mugshot = Net.get_player_mugshot(event.player_id)
-    }
+    online_players[event.player_id]= {player_id = event.player_id, player_mugshot = Net.get_player_mugshot(event.player_id)}
     Net.provide_asset_for_player(event.player_id, "/server/assets/tourney/mug.anim")
     print(online_players)
 end)
