@@ -14,9 +14,11 @@ local mob_path = "/server/assets/tourney/npc-navis/"
 
 local npc_paths = {
     [1] = {
-        encounter = "/server/assets/tourney/npc-navis/bass/bass1.zip",
-        mug_texture = "/server/assets/tourney/npc-navis/bass/mug.png",
-        mug_animation = "/server/assets/tourney/mug.anim",
+        player_id = "/server/assets/tourney/npc-navis/bass/bass1.zip",
+        player_mugshot = {
+            mug_texture = "/server/assets/tourney/npc-navis/bass/mug.png",
+            mug_animation = "/server/assets/tourney/mug.anim",
+        },
     }
 }
 
@@ -83,9 +85,9 @@ local bottom_tier = {
     },
 }
 
-local function start_battle(player1_id, player2_id, encounter)
-    if (player2_id == nil) then
-        Net.initiate_encounter(player1_id, encounter)
+local function start_battle(player1_id, player2_id)
+    if string.find(player2_id, ".zip") then
+        Net.initiate_encounter(player1_id, player2_id)
     else 
         Net.initalize_pvp(player1_id, player2_id)
     end
@@ -165,7 +167,7 @@ local function start_tourney(pid, single_player)
 
         games.add_ui_element("MUG FRAME2", player_id, "/server/assets/tourney/mini-mug-frame.png",
             "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", -86, -48, 2)
-        games.add_ui_element("MUG_2", player_id, npc_paths[1].mug_texture, npc_paths[1].mug_animation, "UI", -86, -48, 1, .5, .5)
+        games.add_ui_element("MUG_2", player_id, npc_paths[1].player_mugshot.mug_texture, npc_paths[1].player_mugshot.mug_animation, "UI", -86, -48, 1, .5, .5)
 
 
         games.add_ui_element("MUG FRAME3", player_id, "/server/assets/tourney/mini-mug-frame.png",
@@ -183,7 +185,7 @@ local function start_tourney(pid, single_player)
 
 
         Net.fade_player_camera(player_id, {r=0,g=0,b=0,a=0}, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
-        start_battle(player_id, nil, npc_paths[1].encounter)
+        start_battle(player_id, npc_paths[1].player_id)
         await(Async.sleep(3))
     end)
 end
@@ -198,7 +200,7 @@ Net:on("object_interaction", function(event)
     end
         print("Object match")
         join_or_create_party(event.player_id)
-        --start_tourney(event.player_id)
+        start_tourney(event.player_id)
 end)
 
 Net:on("player_connect", function(event)
