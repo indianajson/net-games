@@ -7,6 +7,9 @@ local TableUtils = require("scripts/table-utils")
 local games = require("scripts/net-games/framework")
 local Constants = require("scripts/net-game-tourney/constants")
 local npc_paths = require("scripts/net-game-tourney/npc-paths")
+local mug_pos = require("scripts/net-game-tourney/mug-pos")
+local ui_data = require("scripts/net-game-tourney/ui-data")
+
 games.start_framework()
 
 local tourney_boards = {}
