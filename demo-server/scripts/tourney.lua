@@ -76,7 +76,7 @@ end
 
 
 local function start_party(player_id)
-    local party = {host = player_id, participants = {
+    local party = {participants = {
         [player_id] = {player_id = player_id, player_mugshot = Net.get_player_mugshot(player_id)}
     }}
     table.insert(active_tournaments, party)
