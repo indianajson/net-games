@@ -5,6 +5,7 @@
 --   - Current thinking grab a copy of each unique "elbow" and setup the animation on each and we can set which one to start animating/change to solid color on next re-open of the tourney board.
 local TableUtils = require("scripts/table-utils")
 local games = require("scripts/net-games/framework")
+local Constants = require("scripts/net-game-tourney/constants")
 games.start_framework()
 
 local tourney_boards = {}
@@ -237,8 +238,8 @@ local function start_tourney(pid)
         Net.fade_player_camera(player_id, {r=0,g=0,b=0,a=255}, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
         await(Async.sleep(.75))
 
-        games.add_ui_element("BOARD BG", player_id, "/server/assets/tourney/bgs/orange-bg.png",
-            "/server/assets/tourney/bgs/bg.animation", "BG", -120, 80, -1)
+        games.add_ui_element("BOARD BG", player_id, Constants.bracket_background_path.yellow_bn45,
+            Constants.bracket_background_anim_path, "BG", -120, 80, -1)
         games.add_ui_element("TOURNEY TREE", player_id, "/server/assets/tourney/tourney-tree.png",
             "/server/assets/tourney/tourney-tree.anim", "BLANK_TREE", -120, 80, 0)
         games.add_ui_element("TITLE BANNER", player_id, "/server/assets/tourney/title-banner.png",
