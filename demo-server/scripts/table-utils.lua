@@ -23,4 +23,35 @@ function TableUtils.GetAllTiledObjOfXType(area_id, type)
     return results
 end
 
+function TableUtils.SelectRandomItemsFromTableClamped(tbl, limit)
+    -- Check if inputs are valid
+    if not tbl or limit <= 0 then return {} end
+
+    -- Ensure we don't exceed table length
+    local new_count = math.min(limit, #tbl)
+
+    -- Create a copy of the original table
+    local tempTable = {}
+    for i = 1, #tbl do
+        tempTable[i] = tbl[i]
+    end
+
+    -- Create result table
+    local result = {}
+
+    -- Select random items
+    for i = 1, new_count do
+        -- Get random index from remaining items
+        local randomIndex = math.random(#tempTable)
+
+        -- Add selected item to result
+        table.insert(result, tempTable[randomIndex])
+
+        -- Remove selected item from temporary table
+        table.remove(tempTable, randomIndex)
+    end
+
+    return result
+end
+
 return TableUtils

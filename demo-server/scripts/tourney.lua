@@ -97,6 +97,7 @@ local function join_or_create_party(player_id)
             print(active_tournaments)
             break
         end
+        start_party(player_id)
     end
 end
 
@@ -189,17 +190,15 @@ local function initialize_tournament_participants(participants, backfill)
     end
 
     final_participants = cleaned_up
-    local copy = npc_paths
     if should_backfill then
-        if (#final_participants < 8) then
-            local need_to_fill = 8 - #final_participants
-            while(need_to_fill > 0 and #copy > 0) do
-                local random_value = math.random(1, #copy)
-                table.insert(final_participants, copy[random_value])
-                table.remove(copy, random_value)
-            print(final_participants)
-            need_to_fill = need_to_fill - 1
+        if (#final_participants < 8) then  
+            local need_to_fill = 8 - #final_participants 
+            local random_npc_filler = TableUtils.SelectRandomItemsFromTableClamped(npc_paths, need_to_fill)
+            print(random_npc_filler) 
+            for i, filler_npc in next, random_npc_filler do
+                table.insert(final_participants, filler_npc)    
             end
+            print(final_participants)
         end
     end
     return final_participants
