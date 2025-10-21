@@ -9,7 +9,8 @@ local CONSTANTS = {
         silver_bn45 = "/server/assets/tourney/bgs/silver-checkered-bg.png",        
         yellow_bn45 = "/server/assets/tourney/bgs/yellow-checkered-bg.png",
     },
-    bracket_background_anim_path = "/server/assets/tourney/bgs/bg.anim"
+    bracket_background_anim_path = "/server/assets/tourney/bgs/bg.anim",
+    default_mug_anim = "/server/assets/tourney/mug.anim",
 }
 
 return CONSTANTS
