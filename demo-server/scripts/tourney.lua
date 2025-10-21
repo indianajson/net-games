@@ -9,6 +9,7 @@ games.start_framework()
 
 local tourney_boards = {}
 local online_players = {}
+local available_players = {}
 local active_tournaments = {}
 local mob_path = "/server/assets/tourney/npc-navis/"
 
@@ -19,8 +20,59 @@ local npc_paths = {
             mug_texture = "/server/assets/tourney/npc-navis/bass/mug.png",
             mug_animation = "/server/assets/tourney/mug.anim",
         },
+    },
+    [2] = {
+        player_id = "/server/assets/tourney/npc-navis/blastman/blastman1.zip",
+        player_mugshot = {
+            mug_texture = "/server/assets/tourney/npc-navis/blastman/mug.png",
+            mug_animation = "/server/assets/tourney/mug.anim",
+        },
+    },
+    [3] = {
+        player_id = "/server/assets/tourney/npc-navis/burnerman/burnerman1.zip",
+        player_mugshot = {
+            mug_texture = "/server/assets/tourney/npc-navis/burnerman/mug.png",
+            mug_animation = "/server/assets/tourney/mug.anim",
+        },
+    },
+    [4] = {
+        player_id = "/server/assets/tourney/npc-navis/circusman/circusman.zip",
+        player_mugshot = {
+            mug_texture = "/server/assets/tourney/npc-navis/circusman/mug.png",
+            mug_animation = "/server/assets/tourney/mug.anim",
+        },
+    },
+    [5] = {
+        player_id = "/server/assets/tourney/npc-navis/elementman/elementman1.zip",
+        player_mugshot = {
+            mug_texture = "/server/assets/tourney/npc-navis/elementman/mug.png",
+            mug_animation = "/server/assets/tourney/mug.anim",
+        },
+    },
+    [6] = {
+        player_id = "/server/assets/tourney/npc-navis/hatman/hatman.zip",
+        player_mugshot = {
+            mug_texture = "/server/assets/tourney/npc-navis/hatman/mug.png",
+            mug_animation = "/server/assets/tourney/mug.anim",
+        },
+    },
+    [7] = {
+        player_id = "/server/assets/tourney/npc-navis/iceman/iceman.zip",
+        player_mugshot = {
+            mug_texture = "/server/assets/tourney/npc-navis/iceman/mug.png",
+            mug_animation = "/server/assets/tourney/mug.anim",
+        },
     }
 }
+
+local function find_in_table(t, v1)
+    for i, v2 in pairs(t) do
+        if v1 == v2 then
+            return i
+        end
+    end
+    return nil
+end
 
 
 local function start_party(player_id)
@@ -124,20 +176,34 @@ local function add_participant_mugshot(player_id, participant_number, mug_textur
         "UI", x, y, 1, .50, .50)
 end
 
-local function initialize_tournament_board(participants)
+local function initialize_tournament_participants(participants, backfill)
+    local cleaned_up = {}
     local final_participants = {}
-    if (#participants < 8) then
-        local need_to_fill = 8 - #participants
-        while(need_to_fill > 0) do
-            local random_value = math.random(1, #npc_paths)
-            table.insert(final_participants, npc_paths[random_value])
-        print(final_participants)
-        need_to_fill = need_to_fill - 1
+    local should_backfill = true
+    for i, p in next, participants do
+        table.insert(cleaned_up, p)
+    end
+
+    if backfill then
+        should_backfill = backfill
+    end
+
+    final_participants = cleaned_up
+    local copy = npc_paths
+    if should_backfill then
+        if (#final_participants < 8) then
+            local need_to_fill = 8 - #final_participants
+            while(need_to_fill > 0 and #copy > 0) do
+                local random_value = math.random(1, #copy)
+                table.insert(final_participants, copy[random_value])
+                table.remove(copy, random_value)
+            print(final_participants)
+            need_to_fill = need_to_fill - 1
+            end
         end
     end
+    return final_participants
 end
-
-initialize_tournament_board(online_players)
 
 -- REQUIRED: player_id: string,
 -- OPTIONAL: single_player: bool,
@@ -200,11 +266,14 @@ Net:on("object_interaction", function(event)
     end
         print("Object match")
         join_or_create_party(event.player_id)
-        start_tourney(event.player_id)
+        local tournament = {}
+        tournament = initialize_tournament_participants(active_tournaments[1].participants)
+        active_tournaments[1].participants = tournament
+        --start_tourney(event.player_id)
 end)
 
 Net:on("player_connect", function(event)
-    online_players[event.player_id]= {player_id = event.player_id, player_mugshot = Net.get_player_mugshot(event.player_id)}
+    online_players[event.player_id]= {player_id = event.player_id, mugshot_texture = Net.get_player_mugshot(event.player_id)}
     Net.provide_asset_for_player(event.player_id, "/server/assets/tourney/mug.anim")
 end)
 
