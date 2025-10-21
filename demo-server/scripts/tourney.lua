@@ -12,55 +12,61 @@ local online_players = {}
 local available_players = {}
 local active_tournaments = {}
 local mob_path = "/server/assets/tourney/npc-navis/"
+local default_mug_anim = "/server/assets/tourney/mug.anim"
+
+local frames_to_remove = {
+    "MUG_FRAME_"..1, "MUG_FRAME_"..2, "MUG_FRAME_"..3, "MUG_FRAME_"..4, "MUG_FRAME_"..5, "MUG_FRAME_"..6, "MUG_FRAME_"..7, "MUG_FRAME_"..8,
+    "MUG_"..1, "MUG_"..2, "MUG_"..3, "MUG_"..4, "MUG_"..5, "MUG_"..6, "MUG_"..7, "MUG_"..8, "BOARD BG", "TOURNEY TREE", "TITLE BANNER"
+}
 
 local npc_paths = {
     [1] = {
         player_id = "/server/assets/tourney/npc-navis/bass/bass1.zip",
         player_mugshot = {
             mug_texture = "/server/assets/tourney/npc-navis/bass/mug.png",
-            mug_animation = "/server/assets/tourney/mug.anim",
+            mug_animation = default_mug_anim,
         },
     },
     [2] = {
         player_id = "/server/assets/tourney/npc-navis/blastman/blastman1.zip",
         player_mugshot = {
             mug_texture = "/server/assets/tourney/npc-navis/blastman/mug.png",
-            mug_animation = "/server/assets/tourney/mug.anim",
+            mug_animation = default_mug_anim,
         },
     },
     [3] = {
         player_id = "/server/assets/tourney/npc-navis/burnerman/burnerman1.zip",
         player_mugshot = {
             mug_texture = "/server/assets/tourney/npc-navis/burnerman/mug.png",
-            mug_animation = "/server/assets/tourney/mug.anim",
+            mug_animation = default_mug_anim,
         },
     },
     [4] = {
         player_id = "/server/assets/tourney/npc-navis/circusman/circusman.zip",
         player_mugshot = {
             mug_texture = "/server/assets/tourney/npc-navis/circusman/mug.png",
-            mug_animation = "/server/assets/tourney/mug.anim",
+            mug_animation = default_mug_anim,
         },
     },
     [5] = {
         player_id = "/server/assets/tourney/npc-navis/elementman/elementman1.zip",
         player_mugshot = {
             mug_texture = "/server/assets/tourney/npc-navis/elementman/mug.png",
-            mug_animation = "/server/assets/tourney/mug.anim",
+            mug_animation = default_mug_anim,
         },
     },
     [6] = {
         player_id = "/server/assets/tourney/npc-navis/hatman/hatman.zip",
         player_mugshot = {
             mug_texture = "/server/assets/tourney/npc-navis/hatman/mug.png",
-            mug_animation = "/server/assets/tourney/mug.anim",
+            mug_animation = default_mug_anim,
         },
     },
     [7] = {
         player_id = "/server/assets/tourney/npc-navis/iceman/iceman.zip",
         player_mugshot = {
             mug_texture = "/server/assets/tourney/npc-navis/iceman/mug.png",
-            mug_animation = "/server/assets/tourney/mug.anim",
+            mug_animation = default_mug_anim,
         },
     }
 }
@@ -76,8 +82,9 @@ end
 
 
 local function start_party(player_id)
+    local player_mugshot = Net.get_player_mugshot(player_id)
     local party = {participants = {
-        [player_id] = {player_id = player_id, player_mugshot = Net.get_player_mugshot(player_id)}
+        [player_id] = {player_id = player_id, player_mugshot = {mug_texture = player_mugshot.texture_path, mug_animation = default_mug_anim }}
     }}
     table.insert(active_tournaments, party)
 end
@@ -104,35 +111,35 @@ end
 
 -- top down positions, this is including interprolation positions as well as resting locations
 local bottom_tier = {
-    position1 = {
+    [1] = {
             x = -112,
             y = -48,
     },
-    position2 = {
+    [2] = {
             x = -86,
             y = -48,
     },
-    position3 = {
+    [3] = {
             x = -56,
             y = -48,
     },
-    position4 = {
+    [4] = {
             x = -30,
             y = -48,
     },
-    position5 = {
-            x = -8,
+    [5] = {
+            x = 8,
             y = -48,
     },
-    position6 = {
+    [6] = {
             x = 34,
             y = -48,
     },
-    position7 = {
+    [7] = {
             x = 64,
             y = -48,
     },
-    position8 = {
+    [8] = {
             x = 90,
             y = -48,
     },
@@ -206,20 +213,23 @@ end
 
 -- REQUIRED: player_id: string,
 -- OPTIONAL: single_player: bool,
-local function start_tourney(pid, single_player)
+local function start_tourney(pid)
     return async(function()
         local player_id = pid
         local player_area = Net.get_player_area(player_id)
-        local single_player = single_player
+
         local original_map_name = Net.get_area_custom_property(player_area, "Name")
         Net.set_area_custom_property(player_area, "Name", "            ")
+
+        local original_map_song = Net.get_area_custom_property(player_area, "Song")
+        Net.set_area_custom_property(player_area, "Song", "/server/assets/tourney/music/bbn4_tournament_announcement.ogg")
+
 
         games.activate_framework(player_id)
         games.freeze_player(player_id)
         Net.lock_player_input(player_id)
         Net.fade_player_camera(player_id, {r=0,g=0,b=0,a=255}, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
         await(Async.sleep(.75))
-        games.freeze_player(player_id)
 
         games.add_ui_element("BOARD BG", player_id, "/server/assets/tourney/orange-bg.png",
             "/server/assets/tourney/bg.animation", "BG", -120, 80, -1)
@@ -228,30 +238,26 @@ local function start_tourney(pid, single_player)
         games.add_ui_element("TITLE BANNER", player_id, "/server/assets/tourney/title-banner.png",
             "/server/assets/tourney/title-banner.anim", "RED", -120, 80, 0)
 
-        add_participant_mugshot(pid, 1, online_players[pid].player_mugshot.texture_path, bottom_tier.position1.x,bottom_tier.position1.y)
-
-        games.add_ui_element("MUG FRAME2", player_id, "/server/assets/tourney/mini-mug-frame.png",
-            "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", -86, -48, 2)
-        games.add_ui_element("MUG_2", player_id, npc_paths[1].player_mugshot.mug_texture, npc_paths[1].player_mugshot.mug_animation, "UI", -86, -48, 1, .5, .5)
-
-
-        games.add_ui_element("MUG FRAME3", player_id, "/server/assets/tourney/mini-mug-frame.png",
-            "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", -56, -48, 2)
-        games.add_ui_element("MUG FRAME4", player_id, "/server/assets/tourney/mini-mug-frame.png",
-            "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", -30, -48, 2)
-        games.add_ui_element("MUG FRAME5", player_id, "/server/assets/tourney/mini-mug-frame.png",
-            "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", 8, -48, 2)
-        games.add_ui_element("MUG FRAME6", player_id, "/server/assets/tourney/mini-mug-frame.png",
-            "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", 34, -48, 2)
-        games.add_ui_element("MUG FRAME7", player_id, "/server/assets/tourney/mini-mug-frame.png",
-            "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", 64, -48, 2)
-        games.add_ui_element("MUG FRAME8", player_id, "/server/assets/tourney/mini-mug-frame.png",
-            "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", 90, -48, 2)
-
+        for i, p in next, active_tournaments[1].participants do
+            print(p)
+            add_participant_mugshot(pid, i, p["player_mugshot"]["mug_texture"], bottom_tier[i].x,bottom_tier[i].y)
+        end
 
         Net.fade_player_camera(player_id, {r=0,g=0,b=0,a=0}, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
-        start_battle(player_id, npc_paths[1].player_id)
-        await(Async.sleep(3))
+        --start_battle(player_id, npc_paths[1].player_id)
+        await(Async.sleep(10))
+        Net.fade_player_camera(player_id, {r=0,g=0,b=0,a=255}, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
+        await(Async.sleep(0.5))
+        for i, element in next, frames_to_remove do
+            games.remove_ui_element(element, player_id)
+        end
+        Net.set_area_custom_property(player_area, "Name", original_map_name)
+        Net.set_area_custom_property(player_area, "Song", original_map_song)
+        await(Async.sleep(0.1))
+        Net.fade_player_camera(player_id, {r=0,g=0,b=0,a=0}, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
+        games.unfreeze_player(player_id)
+        Net.unlock_player_input(player_id)
+        games.deactivate_framework(player_id)
     end)
 end
 
@@ -268,12 +274,13 @@ Net:on("object_interaction", function(event)
         local tournament = {}
         tournament = initialize_tournament_participants(active_tournaments[1].participants)
         active_tournaments[1].participants = tournament
-        --start_tourney(event.player_id)
+        start_tourney(event.player_id)
 end)
 
 Net:on("player_connect", function(event)
-    online_players[event.player_id]= {player_id = event.player_id, mugshot_texture = Net.get_player_mugshot(event.player_id)}
+    local player_mug = Net.get_player_mugshot(event.player_id)
     Net.provide_asset_for_player(event.player_id, "/server/assets/tourney/mug.anim")
+    online_players[event.player_id]= {player_id = event.player_id, mugshot_texture = {mugshot_texture = player_mug.texture_path, mug_animation = "/server/assets/tourney/mug.anim"}}
 end)
 
 Net:on("player_disconnect", function(event)
