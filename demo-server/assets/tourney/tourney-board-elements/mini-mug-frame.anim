@@ -1,0 +1,29 @@
+animation state="ACTIVE"
+frame duration="0.0833333" x="22" y="0" w="22" h="26" originx="0" originy="0"
+
+animation state="INACTIVE"
+frame duration="0.0833333" x="0" y="0" w="22" h="26" originx="0" originy="0"  
+
+animation state="IDLE_DR"
+
+animation state="IDLE_DL"
+
+animation state="IDLE_UR"
+
+animation state="IDLE_UL"
+
+animation state="WALK_DR"
+
+animation state="WALK_DL"
+
+animation state="WALK_UR"
+
+animation state="WALK_UL"
+
+animation state="RUN_DR"
+
+animation state="RUN_DL"
+
+animation state="RUN_UR"
+
+animation state="RUN_UL"

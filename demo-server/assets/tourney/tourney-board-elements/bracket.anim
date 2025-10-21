@@ -1,0 +1,45 @@
+imagePath=""
+
+animation state="UI"
+frame duration="0" x="0" y="0" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+point label="Crown1" x="55" y="32"
+point label="Crown2" x="167" y="32"
+point label="R1V1P1" x="9" y="128"
+point label="R1V1P2" x="33" y="128"
+point label="R1V2P1" x="65" y="128"
+point label="R1V2P2" x="89" y="128"
+point label="R1V3P1" x="129" y="128"
+point label="R1V3P2" x="153" y="128"
+point label="R1V4P1" x="185" y="128"
+point label="R1V4P2" x="209" y="128"
+point label="R2V1P1" x="21" y="78"
+point label="R2V1P2" x="77" y="78"
+point label="R2V2P1" x="141" y="78"
+point label="R2V2P2" x="197" y="78"
+point label="R3V1P1" x="49" y="54"
+point label="R3V1P2" x="169" y="54"
+point label="WINNER" x="109" y="34"
+
+animation state="IDLE_DR"
+
+animation state="IDLE_DL"
+
+animation state="IDLE_UR"
+
+animation state="IDLE_UL"
+
+animation state="WALK_DR"
+
+animation state="WALK_DL"
+
+animation state="WALK_UR"
+
+animation state="WALK_UL"
+
+animation state="RUN_DR"
+
+animation state="RUN_DL"
+
+animation state="RUN_UR"
+
+animation state="RUN_UL"

@@ -1,3 +1,4 @@
+
 local CONSTANTS = {
     bracket_background_path = {
         blue_bn4 = "/server/assets/tourney/bgs/blue-bg.png",

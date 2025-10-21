@@ -11,7 +11,6 @@ games.start_framework()
 
 local tourney_boards = {}
 local online_players = {}
-local available_players = {}
 local active_tournaments = {}
 local mob_path = "/server/assets/tourney/npc-navis/"
 local default_mug_anim = "/server/assets/tourney/mug.anim"
@@ -36,6 +35,26 @@ local function find_in_table(t, v1)
     return nil
 end
 
+-- returns a table in pairs for participants.
+-- index 1, 2, 3, 4 ... match ups
+--
+-- player1_id first participant in pair,
+-- player2_id second participant in pair.
+local function setup_matches(tbl)
+    local result = {}
+    local n = #tbl
+    
+    -- Loop through odd-numbered indices
+    for i = 1, n - 1, 2 do
+        -- Create a table for each pair
+        result[(i + 1)/2] = {
+            player1_id = tbl[i],
+            player2_id = tbl[i + 1]
+        }
+    end
+    
+    return result
+end
 
 local function start_party(player_id)
     local player_mugshot = Net.get_player_mugshot(player_id)
@@ -170,8 +189,15 @@ local function initialize_tournament_participants(participants, backfill)
     return final_participants
 end
 
--- REQUIRED: player_id: string,
--- OPTIONAL: single_player: bool,
+local function cleanup_ui(player_id, player_area, original_map_name, original_map_song)
+        for i, element in next, frames_to_remove do
+            games.remove_ui_element(element, player_id)
+        end
+        Net.set_area_custom_property(player_area, "Name", original_map_name)
+        Net.set_area_custom_property(player_area, "Song", original_map_song)
+end
+
+-- REQUIRED: pid: string,
 local function start_tourney(pid)
     return async(function()
         local player_id = pid
@@ -211,11 +237,8 @@ local function start_tourney(pid)
         await(Async.sleep(10))
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
         await(Async.sleep(0.5))
-        for i, element in next, frames_to_remove do
-            games.remove_ui_element(element, player_id)
-        end
-        Net.set_area_custom_property(player_area, "Name", original_map_name)
-        Net.set_area_custom_property(player_area, "Song", original_map_song)
+        cleanup_ui(player_id, player_area, original_map_name, original_map_song)
+
         await(Async.sleep(0.1))
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
         -- Net.toggle_player_hud(player_id)

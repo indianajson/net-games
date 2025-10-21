@@ -1,0 +1,67 @@
+imagePath="D:/ONB/Teblat Wonterk Server/resources/mods/assets/bg-grid.png"
+
+animation state="UI"
+frame duration="0" x="0" y="0" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="0" y="160" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="0" y="320" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="0" y="480" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="0" y="640" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="0" y="800" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="0" y="960" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="0" y="1120" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="240" y="0" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="240" y="160" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="240" y="320" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="240" y="480" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="240" y="640" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="240" y="800" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="240" y="960" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="240" y="1120" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="480" y="0" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="480" y="160" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="480" y="320" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="480" y="480" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="480" y="640" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="480" y="800" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="480" y="960" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="480" y="1120" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="720" y="0" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="720" y="160" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="720" y="320" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="720" y="480" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="720" y="640" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="720" y="800" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="720" y="960" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="720" y="1120" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="960" y="0" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="960" y="160" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="960" y="320" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="960" y="480" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="960" y="640" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="960" y="800" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.017" x="960" y="960" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.033" x="960" y="1120" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"
+
+animation state="IDLE_DR"
+
+animation state="IDLE_DL"
+
+animation state="IDLE_UR"
+
+animation state="IDLE_UL"
+
+animation state="WALK_DR"
+
+animation state="WALK_DL"
+
+animation state="WALK_UR"
+
+animation state="WALK_UL"
+
+animation state="RUN_DR"
+
+animation state="RUN_DL"
+
+animation state="RUN_UR"
+
+animation state="RUN_UL"
