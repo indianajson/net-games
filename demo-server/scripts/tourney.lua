@@ -237,8 +237,8 @@ local function start_tourney(pid)
         Net.fade_player_camera(player_id, {r=0,g=0,b=0,a=255}, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
         await(Async.sleep(.75))
 
-        games.add_ui_element("BOARD BG", player_id, "/server/assets/tourney/orange-bg.png",
-            "/server/assets/tourney/bg.animation", "BG", -120, 80, -1)
+        games.add_ui_element("BOARD BG", player_id, "/server/assets/tourney/bgs/orange-bg.png",
+            "/server/assets/tourney/bgs/bg.animation", "BG", -120, 80, -1)
         games.add_ui_element("TOURNEY TREE", player_id, "/server/assets/tourney/tourney-tree.png",
             "/server/assets/tourney/tourney-tree.anim", "BLANK_TREE", -120, 80, 0)
         games.add_ui_element("TITLE BANNER", player_id, "/server/assets/tourney/title-banner.png",
