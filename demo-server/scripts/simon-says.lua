@@ -6,7 +6,6 @@
 ]]--
 
 --[[ REQUIRED VARIABLES AND DEFAULTS ]]--
-
 local games = require("scripts/net-games/framework")
 games.start_framework()
 
@@ -171,11 +170,11 @@ local function greet_simon(actor_id,player_id)
         await(Async.sleep(.75))
         games.activate_framework(player_id)
         games.freeze_player(player_id)
-        games.add_ui_element("board",player_id,"/server/assets/simon-says/board.png","/server/assets/simon-says/board.animation","UI",-117,60,-1)
+        games.add_ui_element("board",player_id,"/server/assets/simon-says/board.png","/server/assets/simon-says/board.animation","UI",3,20,-1)
         await(games.move_frozen_player(player_id,simon.x+.5,simon.y,simon.z))
         await(games.animate_frozen_player(player_id,"IDLE_UL"))
-        games.spawn_countdown(player_id,-96,46,0,simon.custom_properties["Time"])
-        games.write_text("simon_says_answers",player_id,"THICK","","00",-85,32,1)
+        games.spawn_countdown(player_id,24,34,0,simon.custom_properties["Time"])
+        games.write_text("simon_says_answers",player_id,"THICK","","00",35,67,1)
         Net.fade_player_camera(player_id, {r=0,g=0,b=0,a=0}, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
         await(Async.sleep(.75))
         Net.unlock_player_input(player_id)
@@ -225,7 +224,7 @@ Net:on("actor_interaction", function(event)
 end)
 
 --purpose: checks any button press from any player, if tbe player is playing Simon Says it then checks if their answer is correct. 
-games.Game:on("button_press", function(event)  
+Net:on("button_press", function(event)  
     return async(function ()  
     if simon_players[event.player_id] ~= nil then
     if simon_players[event.player_id]["active"] == true then 
@@ -236,9 +235,9 @@ games.Game:on("button_press", function(event)
             simon_players[event.player_id]["score"] = simon_players[event.player_id]["score"] + 1            
             await(games.erase_text("simon_says_answers",event.player_id))
             if simon_players[event.player_id]["score"] < 10 then
-                games.write_text("simon_says_answers",event.player_id,"THICK","","0"..tostring(simon_players[event.player_id]["score"]),-85,32,1)
+                games.write_text("simon_says_answers",event.player_id,"THICK","","0"..tostring(simon_players[event.player_id]["score"]),35,67,1)
             else
-                games.write_text("simon_says_answers",event.player_id,"THICK","",simon_players[event.player_id]["score"],-85,32,1)
+                games.write_text("simon_says_answers",event.player_id,"THICK","",simon_players[event.player_id]["score"],35,67,1)
             end 
             local area_id = Net.get_player_area(event.player_id)
             local actor_id = simon_players[event.player_id]["actor"]
@@ -313,7 +312,7 @@ games.Game:on("button_press", function(event)
 end)
 end)
 
-games.Game:on("countdown_ended", function(event)
+Net:on("countdown_ended", function(event)
     return async(function ()
     simon_players[event.player_id]["active"] = false
     --time limit reached, end game as loser

@@ -1,25 +1,32 @@
 --[[
 * ---------------------------------------------------------- *
-      Net Games (framework) by Indiana - Version 0.03
+      Net Games (framework) by Indiana - Version 0.04
 	     https://github.com/indianajson/net-games/   
 * ---------------------------------------------------------- *
 ]]--
 
+--[[
+
+ROAD MAP
+    - Add detach_camera() for liberation mission style pan-able camera
+    - Move originY on animations to keep double on same z for visuals 
+
+]]--
+
 local frame = {} 
-frame.Game = Net.EventEmitter.new()
 local movement_queue = {}
-local frozen = {}
+frozen = {}
 local last_position_cache = {}
-local stasis_cache = {}
-local cursor_cache = {}
-local text_cache = {}
-local countdown_cache = {}
-local timer_cache = {}
-local avatar_cache = {}
-local framework_active = {}
+stasis_cache = {}
+cursor_cache = {}
+text_cache = {}
+countdown_cache = {}
+timer_cache = {}
+avatar_cache = {}
+framework_active = {}
 local player_stopped = {}
-local ui_elements = {}
-local map_elements = {}
+ui_elements = {}
+map_elements = {}
 local ui_update = {}
 local countdown_update = {}
 local timer_update = {}
@@ -79,11 +86,51 @@ end
 
 
 --purpose: converts h/v offsets to x/y offsets for UIs
+--status: add code to shift offsets so that 0,0 is upper left (not center)
 local function convertOffsets(horizontalOffset,verticalOffset,Z)
+    -- 0,0 used to be centered under player's feet, but we're moving it to upper left with this specific offset
+    local horizontalOffset = horizontalOffset - 120
+    local verticalOffset = 80 - verticalOffset
     local xoffset = 50 + (Z/2) + ((2 * -verticalOffset + horizontalOffset) / 64)
     local yoffset = 50 + (Z/2) + ((2 * -verticalOffset - horizontalOffset) / 64)
     return xoffset,yoffset
 end 
+
+--purpose: change originY in animations for stunt double so we can put them far enough away to not be interacted with by the player despite being on the same Z
+function adjustOriginy(fileContent)
+    local result = {}
+    
+    for line in fileContent:gmatch("[^\r\n]+") do
+        
+        if line:find('originy="') then
+            print(line)
+            local startPos = line:find('originy="') + 9
+            local endPos = line:find('"', startPos)
+            
+            if startPos and endPos then
+                local numStr = line:sub(startPos, endPos - 1)
+                local num = tonumber(numStr)
+                
+                if num then
+                    local newLine = line:sub(1, startPos - 1) .. 
+                                   tostring(num + 40) .. 
+                                   line:sub(endPos)
+                    table.insert(result, newLine)
+                    print(newLine)
+                else
+                    table.insert(result, line)
+                end
+            else
+                table.insert(result, line)
+            end
+        else
+            table.insert(result, line)
+        end
+    end
+    
+    return table.concat(result, "\n")
+end
+
 
 --purpose: adjusts offsets for UIs so they do not jitter
 local function fixOffsets(a, b)
@@ -168,6 +215,7 @@ end
 --usage: must be activated for player before using any other framework function
 function frame.activate_framework(player_id)
     local position = Net.get_player_position(player_id)
+    local area_id = Net.get_player_area(player_id)
     local avatar = Net.get_player_avatar(player_id)
     local direction = Net.get_player_direction(player_id)
     local empty_texture = "/server/assets/net-games/empty.png"
@@ -175,8 +223,14 @@ function frame.activate_framework(player_id)
     -- cache the player's avatar
     avatar_cache[player_id]["texture"] = avatar.texture_path
     avatar_cache[player_id]["animation"] = avatar.animation_path
+    -- adjust originY in animation file
+    -- disabled as not currently working
+    --local fixedOrigin = adjustOriginy(Net.read_asset(avatar.animation_path))
+    local fixedOrigin = Net.read_asset(avatar.animation_path)
+    Net.update_asset(avatar.animation_path.."-fixed", fixedOrigin)
+    avatar_cache[player_id]["animation-fixed"] = avatar.animation_path.."-fixed"
     -- create stunt double
-    Net.create_bot(player_id.."-double", { area_id=area_id, warp_in=false, texture_path=avatar.texture_path, animation_path=avatar.animation_path, x=position.x+0.001+.5, y=position.y+0.001+.5, z=position.z+1, direction=direction, solid=true})
+    Net.create_bot(player_id.."-double", { area_id=area_id, warp_in=false, texture_path=avatar.texture_path, animation_path=avatar.animation_path.."-fixed", x=position.x+0.001+.5, y=position.y+0.001+.5, z=position.z+1, direction=direction, solid=true})
     -- hide player
     Net.set_player_avatar(player_id, empty_texture, empty_animation)
     -- create camera holder
@@ -189,7 +243,7 @@ end
 
 --purpose: removes the stunt double bot used by the framework. 
 --usage: run when you're done using the framework for that player (to save server resources) 
---status: Re-Test bot removal code
+--status: Re-test bot removal code
 function frame.deactivate_framework(player_id)
     return async(function ()
     if Net.is_bot(player_id.."-double") then
@@ -261,14 +315,13 @@ end
 
 --purpose: freezes players movement while preserving access to inputs 
 --usage: call to initiate stationary mini-game or UI interactions
---status: RE-TEST 
 function frame.freeze_player(player_id)
     return async(function ()
     if frozen[player_id] ~= nil then
         if frozen[player_id] ~= true then
             Net.lock_player_input(player_id)
             --get necessary data from player
-            local area_id = Net.get_player_area(player_id) 
+            local area_id = last_position_cache[player_id]["area"]
             if stasis_cache[area_id] == nil then
                 print("[games] "..area_id..".tmx didn't have a Stasis value. Freeze failed!")
                 return
@@ -304,12 +357,11 @@ end
 
 --purpose: changes stunt double back to player's default avatar
 function frame.reset_player_avatar(player_id)
-    Net.set_bot_avatar(player_id.."-double", avatar_cache[player_id]["texture"], avatar_cache[player_id]["animation"])
+    Net.set_bot_avatar(player_id.."-double", avatar_cache[player_id]["texture"], avatar_cache[player_id]["animation-fixed"])
 end 
 
 --purpose: releases player from freeze at the end of mini-game or non-standard UI interactions 
 --usage: call to end a mini-games or non-standard UI interactions
---status: RE-TEST
 function frame.unfreeze_player(player_id)
     if frozen[player_id] ~= nil then
         if Net.is_bot(player_id.."-double") and frozen[player_id] == true then
@@ -337,7 +389,7 @@ end
 --purpose: moves a frozen player from current location to specific cordinates without animation.
 function frame.move_frozen_player(player_id,X,Y,Z)
     return async(function ()
-    local area_id = Net.get_bot_area(player_id.."-double") 
+    local area_id = last_position_cache[player_id]["area"]
     Net.transfer_bot(player_id.."-double", area_id, false, X+.5, Y+.5, Z+1)
     end)
 end
@@ -389,14 +441,13 @@ function frame.set_camera_position(player_id,X,Y,Z)
     --move camera and UIs for player.
 
     --can we simple transfer bots with the camera tracking them and then use the UI xoffset and yoffsets?
-    local area_id = Net.get_bot_area(player_id.."-camera") 
+    local area_id = last_position_cache[player_id]["area"]
     Net.transfer_bot(player_id.."-camera", area_id, false, X+.5, Y+.5, Z+1)
 
     if ui_elements[player_id] ~= nil then for name,element in next,ui_elements[player_id] do
         local newx = X + element["xoffset"]
         local newy = Y + element["yoffset"]
         Net.transfer_bot(player_id.."-ui-"..element["name"], area_id, false, newx, newy, element["z"])
-
     end
     end
         --UNTESTED: not sure if elements below move properly 
@@ -438,7 +489,7 @@ end
 function frame.reset_camera_position(player_id)
     --move camera to stunt double
     track_player[player_id] = true
-    local area_id = Net.get_bot_area(player_id.."-camera") 
+    local area_id = last_position_cache[player_id]["area"]
     local position = Net.get_bot_position(player_id.."-double") 
     Net.transfer_bot(player_id.."-camera", area_id, false, position.x, position.y, position.z)
     --move UIs to stunt double
@@ -486,25 +537,105 @@ end
 
 
 --purpose: Linear slide camera to specific cordinates over duration. 
---status: NOT FUNCTIONAL
-function frame.slide_camera_position(player_id,X,Y,Z,duration)
+--status: TEST
+function frame.slide_camera(player_id,x,y,duration)
 --needs to move both camera and UIs using a linear animation
     track_player[player_id] = false
     --move camera and UIs for player.
 
-    --can we simple transfer bots with the camera tracking them and then use the UI xoffset and yoffsets?
-    local area_id = Net.get_bot_area(player_id.."-camera") 
-    --Net.transfer_bot(player_id.."-camera", area_id, false, X, Y, Z)
+    local area_id = last_position_cache[player_id]["area"]
 
+    --move camera 
+    local old_position = Net.get_bot_position(player_id.."-camera") 
+    local keyframes = {{properties={{property="X",ease="Linear",value=old_position.x},{property="Y",ease="Linear",value=old_position.y}},duration=0}}
+    keyframes[#keyframes+1] = {properties={{property="X",ease="Linear",value=x+.5},{property="Y",ease="Linear",value=y+.5}},duration=.1}
+    Net.move_bot(player_id.."-camera",x,y,old_position.z)
+    Net.animate_bot_properties(player_id.."-camera", keyframes)
+
+    --move all active UI elements to track with camera
     if ui_elements[player_id] ~= nil then for name,element in next,ui_elements[player_id] do
-        local newx = X + element["xoffset"]
-        local newy = Y + element["yoffset"]
-        --Net.transfer_bot(player_id.."-ui-"..element["name"], area_id, false, newx, newy, element["z"])
+        local old_position = Net.get_bot_position(player_id.."-ui-"..name)
+        local newx = x + element["xoffset"]
+        local newy = y + element["yoffset"]
+        local keyframes = {{properties={{property="Animation",value=element["state"]},{property="X",ease="Linear",value=old_position.x},{property="Y",ease="Linear",value=old_position.y}},duration=0}}
+        keyframes[#keyframes+1] = {properties={{property="Animation",value=element["state"]},{property="X",ease="Linear",value=newx},{property="Y",ease="Linear",value=newy}},duration=.1}
+        keyframes[#keyframes+1] = {properties={{property="Animation",value=element["state"]}},duration=0}
+        Net.move_bot(player_id.."-ui-"..element["name"],newx,newy,element["z"])
+        Net.animate_bot(player_id.."-ui-"..element["name"], element["state"], true)
+        Net.animate_bot_properties(player_id.."-ui-"..element["name"], keyframes)
+    end 
+    end 
+    --move all text elements to track with camera
+    if text_cache[player_id] ~= nil then for i,label in next,text_cache[player_id] do
+        for i,letter in next,label["letters"] do 
+            local newposition = Net.get_bot_position(player_id.."-text-"..label["name"].."-"..tostring(i))
+            local newx = x + letter["xoffset"]
+            local newy = y + letter["yoffset"]
+            local keyframes = {{properties={{property="Animation",value=letter["name"]},{property="X",ease="Linear",value=newposition.x},{property="Y",ease="Linear",value=newposition.y}},duration=0}}
+            keyframes[#keyframes+1] = {properties={{property="Animation",value=letter["name"]},{property="X",ease="Linear",value=newx},{property="Y",ease="Linear",value=newy}},duration=.1}
+            keyframes[#keyframes+1] = {properties={{property="Animation",value=letter["name"]}},duration=0}
+            Net.move_bot(player_id.."-text-"..label["name"].."-"..tostring(i),newx,newy,label["z"]+100)
+            Net.animate_bot(player_id.."-text-"..label["name"].."-"..tostring(i), letter["name"], true)
+            Net.animate_bot_properties(player_id.."-text-"..label["name"].."-"..tostring(i), keyframes)
+        end
+    end 
+    end
+    
+    --move all countdown elements to track with camera
+    if countdown_cache[player_id] ~= nil then 
+        local clockpositions = {"m1","m2","d","s1","s2"}
+        for i,clockposition in next,clockpositions do 
+            local newposition = Net.get_bot_position(player_id.."-countdown-"..tostring(clockposition))
+            local newx = x + countdown_cache[player_id][clockposition.."_xoffset"]
+            local newy = y + countdown_cache[player_id][clockposition.."_yoffset"]
+            local state = ""
+            if clockposition == "d" then 
+                state = "THICK_:"
+            else 
+                state = "THICK_"..countdown_cache[player_id][clockposition]
+            end 
+            local keyframes = {{properties={{property="Animation",value=state},{property="X",ease="Linear",value=newposition.x},{property="Y",ease="Linear",value=newposition.y}},duration=0}}
+            keyframes[#keyframes+1] = {properties={{property="Animation",value=state},{property="X",ease="Linear",value=newx},{property="Y",ease="Linear",value=newy}},duration=.1}
+            keyframes[#keyframes+1] = {properties={{property="Animation",value=state}},duration=0}
+            Net.move_bot(player_id.."-countdown-"..clockposition,newx,newy,countdown_cache[player_id]["z"]+100)
+            Net.animate_bot(player_id.."-countdown-"..clockposition, state, true)
+            Net.animate_bot_properties(player_id.."-countdown-"..clockposition, keyframes)
+        end
+    end
 
+    if timer_cache[player_id] ~= nil then 
+        local clockpositions = {"m1","m2","d","s1","s2"}
+        for i,clockposition in next,clockpositions do 
+            local newposition = Net.get_bot_position(player_id.."-timer-"..tostring(clockposition))
+            local newx = x + timer_cache[player_id][clockposition.."_xoffset"]
+            local newy = y + timer_cache[player_id][clockposition.."_yoffset"]
+            local state = ""
+            if clockposition == "d" then 
+                state = "THICK_:"
+            else 
+                state = "THICK_"..timer_cache[player_id][clockposition]
+            end 
+            local keyframes = {{properties={{property="Animation",value=state},{property="X",ease="Linear",value=newposition.x},{property="Y",ease="Linear",value=newposition.y}},duration=0}}
+            keyframes[#keyframes+1] = {properties={{property="Animation",value=state},{property="X",ease="Linear",value=newx},{property="Y",ease="Linear",value=newy}},duration=.1}
+            keyframes[#keyframes+1] = {properties={{property="Animation",value=state}},duration=0}
+            Net.move_bot(player_id.."-timer-"..clockposition,newx,newy,timer_cache[player_id]["z"]+100)
+            Net.animate_bot(player_id.."-timer-"..clockposition, state, true)
+            Net.animate_bot_properties(player_id.."-timer-"..clockposition, keyframes)
+        end
     end
-    end
+
+
+
 
 end
+--purpose: Allows player to pan camera with D-Pad without player's avatar following and allows moving out of bounds (like liberation mission camera)
+--status: WILL REQUIRE SPECIAL HANDLING FOR SMOOTH MOVEMENT
+function frame.detach_camera(player_id)
+    print("This function is not ready yet. Sorry.")
+    frame.freeze_player(player_id)
+    track_player[player_id] = false
+end
+
 
 -- MAP FUNCTIONS
 -- Functions to add, animate, and remove objects based on map position (for mini-game elements on map, especially those visible to other players)
@@ -517,6 +648,7 @@ function frame.add_map_element(name,player_id,texture,animation,animation_state,
        --See the /assets/net-games/text_cursor.animation if this doesn't make sense.
 
     --spawn map object
+    local area_id = last_position_cache[player_id]["area"]
     Net.create_bot(player_id.."-map-"..name, { area_id=area_id, warp_in=false, texture_path=texture, animation_path=animation, animation=animation_state,x=X, y=Y, z=Z, solid=false})
 
     if exclude == true then
@@ -548,7 +680,7 @@ function frame.change_map_element(name,player_id,animation_state,loop)
 end
 
 function frame.move_map_element(name,player_id,X,Y,Z)
-    local area_id = Net.get_bot_area(player_id.."-camera") 
+    local area_id = last_position_cache[player_id]["area"]
     Net.transfer_bot(player_id.."-map-"..name, area_id, false, X, Y, Z)
 end
 
@@ -565,7 +697,7 @@ end
 -- Functions to add, animate, and remove sprites based on camera's view (not map position)
 
 --purpose: places a UI element on screen... that's it. Yes, it's complicated. No, I won't explain it. Blame Jams!
-function frame.add_ui_element(name,player_id,texture,animation,animation_state,horizontalOffset,verticalOffset,Z, ScaleX, ScaleY)
+function frame.add_ui_element(name,player_id,texture,animation,animation_state,horizontalOffset,verticalOffset,Z,ScaleX, ScaleY)
     
     --SPRITE NOTES
        --Your .animation file must have all of the standard animation states, but no frame data for them,
@@ -577,16 +709,29 @@ function frame.add_ui_element(name,player_id,texture,animation,animation_state,h
        --and 1 is above the main UI, and -1 is below the main UI, for element stacking. 
        --verticalOffset and horizontalOffset are relative to center of camera (not map)
        --camera size = 240 wide x 160 tall thus:
-          --middle = 0,0
-          --bottom left = -120,-80
-          --bottom middle = 0,-80
-          --bottom right = 120,-80
-          --top left = -120,80
-          --top middle = 0,80
-          --top right = 120,80
+          --top left = 0,0
+          --top middle = 120,0
+          --top right = 240,0
+          --middle = 120,80
+          --bottom left = 0,160
+          --bottom middle = 120,160
+          --bottom right = 240,160
 
     --get position of camera 
     local cam_position = Net.get_bot_position(player_id.."-camera")
+    local area_id = last_position_cache[player_id]["area"]
+    local scaleX = 1.0
+    local scaleY = 1.0
+    if ScaleX ~= nil then
+        if ScaleX >= 0.0 then
+            scaleX = ScaleX
+        end
+    end
+      if ScaleY ~= nil then
+        if ScaleY >= 0.0 then
+            scaleY = ScaleY
+        end
+    end
     --convert h/v offsets to x/y offsets
     local xoffset,yoffset = convertOffsets(horizontalOffset,verticalOffset,Z)
     local xoffset,yoffset = fixOffsets(xoffset,yoffset)
@@ -610,6 +755,7 @@ function frame.add_ui_element(name,player_id,texture,animation,animation_state,h
     Net.create_bot(player_id.."-ui-"..name, { area_id=area_id, warp_in=false, texture_path=texture, animation_path=animation, animation=animation_state,x=x-.5, y=y-.5, z=z, solid=false})
 
     exclude_except_for(player_id,player_id.."-ui-"..name)
+
     local keyframes = {{properties={{property="Animation",value=animation_state}, {property="ScaleX",value=tonumber(scaleX)}, {property="ScaleY",value=tonumber(scaleY)}},duration=0}}
     Net.animate_bot(player_id.."-ui-"..name, animation_state, true)
     Net.animate_bot_properties(player_id.."-ui-"..name, keyframes)
@@ -648,7 +794,7 @@ end
 --purpose: move existing UI element
 function frame.move_ui_element(name,player_id,horizontalOffset,verticalOffset,Z)
     local cam_position = Net.get_bot_position(player_id.."-camera")
-    local area_id = Net.get_bot_area(player_id.."-camera") 
+    local area_id = last_position_cache[player_id]["area"]
     local xoffset,yoffset = convertOffsets(horizontalOffset,verticalOffset,Z)
     local xoffset,yoffset = fixOffsets(xoffset,yoffset)
     local x = cam_position.x + xoffset
@@ -657,6 +803,29 @@ function frame.move_ui_element(name,player_id,horizontalOffset,verticalOffset,Z)
     ui_elements[player_id][name]["xoffset"] = xoffset
     ui_elements[player_id][name]["yoffset"] = yoffset
     Net.transfer_bot(player_id.."-ui-"..name, area_id, false, x-.5, y-.5, z)
+end
+
+--purpose: slide an existing UI element across the screen over a specified duration
+--STATUS: TEST
+function frame.slide_ui_element(name,player_id,horizontalOffset,verticalOffset,duration)
+    local cam_position = Net.get_bot_position(player_id.."-camera")
+    local area_id = last_position_cache[player_id]["area"]
+    local element = ui_elements[player_id][name]
+    local xoffset,yoffset = convertOffsets(horizontalOffset,verticalOffset,cam_position.z-1)
+    local xoffset,yoffset = fixOffsets(xoffset,yoffset)
+    local x = cam_position.x + xoffset
+    local y = cam_position.y + yoffset
+    ui_elements[player_id][name]["xoffset"] = xoffset
+    ui_elements[player_id][name]["yoffset"] = yoffset
+    local old_position = Net.get_bot_position(player_id.."-ui-"..name)
+
+    local keyframes = {{properties={{property="Animation",value=element["state"]},{property="X",ease="Linear",value=old_position.x},{property="Y",ease="Linear",value=old_position.y}},duration=0}}
+    keyframes[#keyframes+1] = {properties={{property="Animation",value=element["state"]},{property="X",ease="Linear",value=x-.5},{property="Y",ease="Linear",value=y-.5}},duration=duration}
+    keyframes[#keyframes+1] = {properties={{property="Animation",value=element["state"]}},duration=0}
+    Net.move_bot(player_id.."-ui-"..element["name"],x,y,element["z"])
+    Net.animate_bot(player_id.."-ui-"..element["name"], element["state"], true)
+    Net.animate_bot_properties(player_id.."-ui-"..element["name"], keyframes)
+
 end
 
 --purpose: removes UI element from screen
@@ -682,7 +851,7 @@ function frame.spawn_cursor(cursor_id,player_id,options)
     --setup variables from provided options
     local texture = options["texture"]
     local animation = options["animation"]
-    local area_id = Net.get_bot_area(player_id.."-camera") 
+    local area_id = last_position_cache[player_id]["area"]
     if cursor_cache[player_id] ~= nil then if next(cursor_cache[player_id]) ~= nil then if cursor_cache[player_id] ~= {} then
         --print(cursor_cache[player_id])
         print("[games] You already got a cursor for that user, remove it first.") 
@@ -725,7 +894,7 @@ function frame.remove_cursor(cursor_id,player_id)
 end
 
 --purpose: logic to check if cursor is active and emit corresponding events
-frame.Game:on("button_press", function(event)
+Net:on("button_press", function(event)
     return async(function ()
     if cursor_cache[event.player_id] ~= nil then
         if cursor_cache[event.player_id]["locked"] == false then
@@ -736,10 +905,10 @@ frame.Game:on("button_press", function(event)
             if ((event.button == "D" or event.button == "U") and direction=="vertical") or
             ((event.button == "L" or event.button == "R") and direction=="horizontal") or
             (event.button == "LS" and direction=="shoulder") then
-                frame.Game:emit("cursor_move", {player_id = event.player_id, cursor = cursor["name"], selection = cursor["current"], button = event.button})
+                Net:emit("cursor_move", {player_id = event.player_id, cursor = cursor["name"], selection = cursor["current"], button = event.button})
             --if A button emit selection
             elseif event.button == "A" then
-                frame.Game:emit("cursor_selection", {player_id = event.player_id,cursor = cursor["name"],selection = cursor_cache[event.player_id]["selections"][cursor["current"]]})
+                Net:emit("cursor_selection", {player_id = event.player_id,cursor = cursor["name"],selection = cursor_cache[event.player_id]["selections"][cursor["current"]]})
             end
 
             cursor_cache[event.player_id]["lock-tick"] = previous_tick2
@@ -751,7 +920,7 @@ end)
 
 --purpose: handles cursor movement logic
 --usage: for framework only, use the Game:on("cursor_hover") to respond to cursor movements.
-frame.Game:on("cursor_move", function(event)
+Net:on("cursor_move", function(event)
     local last_selection = cursor_cache[event.player_id]["current"]
     if event.button == "L" or event.button == "LS" or event.button == "U" then
         if last_selection == 1 then
@@ -766,12 +935,12 @@ frame.Game:on("cursor_move", function(event)
             cursor_cache[event.player_id]["current"] = last_selection + 1
         end 
     end 
-    local area_id = Net.get_bot_area(event.player_id.."-camera")
+    local area_id = last_position_cache[player_id]["area"]
     local position = Net.get_bot_position(event.player_id.."-camera")
     local selection = cursor_cache[event.player_id]["selections"][cursor_cache[event.player_id]["current"]]
     Net.transfer_bot(event.player_id.."-cursor-"..cursor_cache[event.player_id]["name"], area_id,false,position.x+selection["xoffset"],position.y+selection["yoffset"],selection["z"]+100)
     Net.animate_bot(event.player_id.."-cursor-"..cursor_cache[event.player_id]["name"], selection["state"], true)
-    frame.Game:emit("cursor_hover", {player_id = event.player_id,cursor = cursor_cache[event.player_id]["name"],selection = selection})
+    Net:emit("cursor_hover", {player_id = event.player_id,cursor = cursor_cache[event.player_id]["name"],selection = selection})
 
 end)
 
@@ -1408,6 +1577,7 @@ function frame.write_text(text_id,player_id,font,color,text,horizontalOffset,ver
         if color == "black" then
             extra = "_dark"
         end 
+        local area_id = last_position_cache[player_id]["area"]
         Net.create_bot(player_id.."-text-"..text_id.."-"..tostring(i), { area_id=area_id, warp_in=false, texture_path="/server/assets/net-games/fonts"..extra.."_compressed.png", animation_path="/server/assets/net-games/fonts"..extra.."_compressed.animation",animation=letter["name"], x=position.x+data["xoffset"]-.5, y=position.y+data["yoffset"]-.5, z=tonumber(Z+100), solid=false})
         exclude_except_for(player_id,player_id.."-text-"..text_id.."-"..tostring(i))
         i=i+1
@@ -1457,7 +1627,7 @@ end
 
 function frame.spawn_countdown(player_id,horizontalOffset,verticalOffset,Z,duration)
     local position = Net.get_bot_position(player_id.."-camera")
-    local area_id = Net.get_bot_area(player_id.."-camera")
+    local area_id = last_position_cache[player_id]["area"]
     if countdown_cache[player_id] == nil then countdown_cache[player_id] = {} end
     countdown_cache[player_id]["raw_duration"] = duration --167
     countdown_cache[player_id]["m1"],countdown_cache[player_id]["m2"],countdown_cache[player_id]["s1"], countdown_cache[player_id]["s2"] = secondstoMMSS(duration) -- reformats duration into base-10
@@ -1605,7 +1775,7 @@ local function update_countdown(player_id,deltaTime)
 
         if countdown_cache[player_id]["m1"] == 0 and countdown_cache[player_id]["m2"] == 0 and countdown_cache[player_id]["s1"] == 0 and countdown_cache[player_id]["s2"] == 0 then
             countdown_cache[player_id]["paused"] = true
-            frame.Game:emit("countdown_ended", {player_id = player_id})
+            Net:emit("countdown_ended", {player_id = player_id})
         end 
     end
 end
@@ -1685,7 +1855,7 @@ end
 function frame.spawn_timer(player_id,horizontalOffset,verticalOffset,Z)
     local duration = 0
     local position = Net.get_bot_position(player_id.."-camera")
-    local area_id = Net.get_bot_area(player_id.."-camera")
+    local area_id = last_position_cache[player_id]["area"]
     if timer_cache[player_id] == nil then timer_cache[player_id] = {} end
     timer_cache[player_id]["raw_duration"] = duration --167
     timer_cache[player_id]["m1"],timer_cache[player_id]["m2"],timer_cache[player_id]["s1"], timer_cache[player_id]["s2"] = secondstoMMSS(duration) -- reformats duration into base-10
@@ -1762,7 +1932,7 @@ end
 
 --purpose: sets the stasis chamber location used during freeze_player() 
 --usage: automatically called on server boot and creates a stasis tile high on every map 
-local function set_stasis()
+function frame.set_stasis()
 	local areas = Net.list_areas()
     for i, area_id in next, areas do
         local area_id = tostring(area_id)
@@ -1789,7 +1959,7 @@ end
 function frame.start_framework()
     print("")
     print("[games] Framework initiated")
-    set_stasis()
+    frame.set_stasis()
 end 
 
 --purpose: splits a string based on a delimiter
@@ -1818,7 +1988,7 @@ local function process_button_press(player_id,button)
         button = "LS" --Left Shoulder 
     end 
 
-    frame.Game:emit("button_press", {player_id = player_id, button = button})
+    Net:emit("button_press", {player_id = player_id, button = button})
 end 
 
 --purpose: checks player movements as they happen and returns the direction, speed, and whether they are the same as last reported
@@ -1841,7 +2011,7 @@ local function analyze_player_movement(player_id,x,y,z) --was process_movement_e
         last_position_cache[player_id]["ps"] = ""
         return
     end
-    
+    local area_id = last_position_cache[player_id]["area"]
     local position = stasis_cache[area_id]
 
     --running
@@ -1938,7 +2108,7 @@ local function analyze_player_movement(player_id,x,y,z) --was process_movement_e
     last_position_cache[player_id]["s"] = speed
 
     if direction ~= "" then
-            frame.Game:emit("button_press", {player_id = player_id, button = direction})
+            Net:emit("button_press", {player_id = player_id, button = direction})
     end
     local same = false
     if speed_match == true and direction_match == true then
@@ -1968,7 +2138,7 @@ local function handle_bot_movement(player_id,x,y,z,direction,speed) --was proces
                 last_position_cache[player_id]["z"] = tonumber(position.z)
                 Net.teleport_player(player_id, false, position.x+.5, position.y+.5, position.z)
 
-            --if camera isn't tracked to player (when moving camera w/ UI but not player)
+            --if camera is being moved by player but isn't tracked to player's bot (when moving camera w/ UI but not player)
             elseif track_player[player_id] == false then
 
                 --move stunt double 
