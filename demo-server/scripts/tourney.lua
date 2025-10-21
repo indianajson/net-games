@@ -15,8 +15,14 @@ local mob_path = "/server/assets/tourney/npc-navis/"
 local default_mug_anim = "/server/assets/tourney/mug.anim"
 
 local frames_to_remove = {
-    "MUG_FRAME_"..1, "MUG_FRAME_"..2, "MUG_FRAME_"..3, "MUG_FRAME_"..4, "MUG_FRAME_"..5, "MUG_FRAME_"..6, "MUG_FRAME_"..7, "MUG_FRAME_"..8,
-    "MUG_"..1, "MUG_"..2, "MUG_"..3, "MUG_"..4, "MUG_"..5, "MUG_"..6, "MUG_"..7, "MUG_"..8, "BOARD BG", "TOURNEY TREE", "TITLE BANNER"
+    "MUG_FRAME_"..1, "MUG_FRAME_"..2, "MUG_FRAME_"..3, 
+    "MUG_FRAME_"..4, "MUG_FRAME_"..5, "MUG_FRAME_"..6, 
+    "MUG_FRAME_"..7, "MUG_FRAME_"..8,
+    "MUG_"..1, "MUG_"..2, "MUG_"..3, 
+    "MUG_"..4, "MUG_"..5, "MUG_"..6, 
+    "MUG_"..7, "MUG_"..8, "BOARD BG", 
+    "TOURNEY TREE", "TITLE BANNER", 
+    --"CROWN_1", "CROWN_2",
 }
 
 local npc_paths = {
@@ -237,6 +243,10 @@ local function start_tourney(pid)
             "/server/assets/tourney/tourney-tree.anim", "BLANK_TREE", -120, 80, 0)
         games.add_ui_element("TITLE BANNER", player_id, "/server/assets/tourney/title-banner.png",
             "/server/assets/tourney/title-banner.anim", "RED", -120, 80, 0)
+        --games.add_ui_element("CROWN_1", player_id, "/server/assets/tourney/crown.png",
+        --    "/server/assets/tourney/crown.anim", "IDLE", -56, 31, 0)
+        --games.add_ui_element("CROWN_2", player_id, "/server/assets/tourney/crown.png",
+        --    "/server/assets/tourney/crown.anim", "IDLE", 55, 31, 0)
 
         for i, p in next, active_tournaments[1].participants do
             print(p)

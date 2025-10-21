@@ -5,3 +5,27 @@ frame duration="0.133333" x="60" y="8" w="18" h="17" originx="8" originy="16"
 
 animation state="IDLE"
 frame duration="0.0833333" x="8" y="8" w="18" h="17" originx="8" originy="16"  
+
+animation state="IDLE_DR"
+
+animation state="IDLE_DL"
+
+animation state="IDLE_UR"
+
+animation state="IDLE_UL"
+
+animation state="WALK_DR"
+
+animation state="WALK_DL"
+
+animation state="WALK_UR"
+
+animation state="WALK_UL"
+
+animation state="RUN_DR"
+
+animation state="RUN_DL"
+
+animation state="RUN_UR"
+
+animation state="RUN_UL"
