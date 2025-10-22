@@ -60,33 +60,42 @@ local function setup_matches(tbl)
     return result
 end
 
-local function start_party(player_id)
-    local player_mugshot = Net.get_player_mugshot(player_id)
-    local party = {
-        participants = {
-            [player_id] = { player_id = player_id, player_mugshot = { mug_texture = player_mugshot.texture_path, mug_animation = default_mug_anim } }
-        }
+local function start_party(player_id, player_area, object_id)
+    local player_mugshot = ''
+    player_mugshot = Net.get_player_mugshot(player_id)
+    local party = {}
+    party = {
+            player_id = player_id, 
+            player_mugshot = { 
+                mug_texture = player_mugshot.texture_path, 
+                mug_animation = default_mug_anim
+            } 
     }
-    table.insert(active_tournaments, party)
+    table.insert(tourney_boards[player_area][object_id].active_tournaments, party)
 end
 
-local function join_or_create_party(player_id)
-    if (#active_tournaments < 1) then
+local function join_or_create_party(player_id, object_id)
+    local player_area = ""
+    player_area = Net.get_player_area(player_id)
+    --tourney_boards[]    
+    if (#tourney_boards[player_area][object_id].active_tournaments < 1) then
         print("No active parties.")
-        start_party(player_id)
-        print("Starting tournament. This is all active tournaments :" .. tostring(active_tournaments))
+        start_party(player_id, player_area, object_id)
         return
     end
     print("Active tournament exists")
-    for i, party in next, active_tournaments do
-        if #(party.participants) < 8 and not TableUtils.Contains(party.participants, player_id) then
-            active_tournaments[i].participants[player_id] = { player_id = player_id, player_mugshot = Net
-            .get_player_mugshot(player_id) }
+    for i, party in next, tourney_boards[player_area][object_id].active_tournaments do
+        if #tourney_boards[player_area][object_id].active_tournaments[i] < 8 and not TableUtils.Contains(party, player_id) then
+            local mug_texture = ''
+            local mug = Net.get_player_mugshot(player_id)
+            mug_texture = mug.texture_path
+            print(tourney_boards[player_area][object_id].active_tournaments[i])
+            tourney_boards[player_area][object_id].active_tournaments[i] = {player_id = player_id, player_mugshot = {mug_animation = default_mug_anim, mug_texture=mug_texture} }
             print("Added player with player_id : " .. player_id .. " to tournament party")
-            print(active_tournaments)
-            break
+            return
+        else
+        print("player in party, but needs to fill")
         end
-        start_party(player_id)
     end
 end
 
@@ -154,18 +163,23 @@ local function gather_boards()
             if (props_result ~= nil) then 
             --print(props_result)
                 board_props = props_result.boards
+                for k, id in next, board_props do
+                print(k)
+                print(id)
+                board_props[k]["active_tournaments"] = {}
+                
+                end
                 board_with_props[j] = board_props
             end
             
         end
-        
+
         for k, option in next, board_with_props do
             tourney_boards[k] = option
-          
         end
-
     end
     print(tourney_boards)
+    
 end
 
 gather_boards()
@@ -186,6 +200,7 @@ local function initialize_tournament_participants(participants, backfill)
     for i, p in next, participants do
         table.insert(cleaned_up, p)
     end
+    print(cleaned_up)
 
     if backfill then
         should_backfill = backfill
@@ -194,13 +209,12 @@ local function initialize_tournament_participants(participants, backfill)
     final_participants = cleaned_up
     if should_backfill then
         if (#final_participants < 8) then
+            print("needs to fill")
             local need_to_fill = 8 - #final_participants
             local random_npc_filler = TableUtils.SelectRandomItemsFromTableClamped(npc_paths, need_to_fill)
-            print(random_npc_filler)
             for i, filler_npc in next, random_npc_filler do
                 table.insert(final_participants, filler_npc)
             end
-            print(final_participants)
         end
     end
     return final_participants
@@ -214,8 +228,12 @@ local function cleanup_ui(player_id, player_area, original_map_name, original_ma
         Net.set_area_custom_property(player_area, "Song", original_map_song)
 end
 
+local function cleanup_tourney()
+
+end
+
 -- REQUIRED: pid: string,
-local function start_tourney(pid)
+local function start_tourney(pid, tourney)
     return async(function()
         local player_id = pid
         local player_area = Net.get_player_area(player_id)
@@ -249,8 +267,7 @@ local function start_tourney(pid)
         --games.add_ui_element("CROWN_2", player_id, "/server/assets/tourney/crown.png",
         --    "/server/assets/tourney/crown.anim", "IDLE", 55, 31, 0)
 
-        for i, p in next, active_tournaments[1].participants do
-            print(p)
+        for i, p in next, tourney do
             add_participant_mugshot(pid, i, p["player_mugshot"]["mug_texture"], mug_pos.bottom_tier[i].x, mug_pos.bottom_tier[i].y)
         end
 
@@ -272,6 +289,7 @@ end
 
 
 Net:on("object_interaction", function(event)
+    local tournament = {}
     local player_area = Net.get_player_area(event.player_id)
     local object = Net.get_object_by_id(player_area, event.object_id)
     if object.type ~= "Tournament Board" and object.class ~= "Tournament Board" then
@@ -279,17 +297,20 @@ Net:on("object_interaction", function(event)
         return
     end
     print("Object match")
-    join_or_create_party(event.player_id)
-    local tournament = {}
-    tournament = initialize_tournament_participants(active_tournaments[1].participants)
-    active_tournaments[1].participants = tournament
-    start_tourney(event.player_id)
+    join_or_create_party(event.player_id, event.object_id)
+    start_tourney(event.player_id, initialize_tournament_participants(tourney_boards[player_area][event.object_id].active_tournaments))
 end)
 
 Net:on("player_connect", function(event)
     local player_mug = Net.get_player_mugshot(event.player_id)
     Net.provide_asset_for_player(event.player_id, "/server/assets/tourney/mug.anim")
-    online_players[event.player_id] = { player_id = event.player_id, mugshot_texture = { mugshot_texture = player_mug.texture_path, mug_animation = "/server/assets/tourney/mug.anim" } }
+    online_players = { player_id = event.player_id, mugshot_texture = { mugshot_texture = player_mug.texture_path, mug_animation = "/server/assets/tourney/mug.anim" } }
+end)
+
+Net:on("avatar_change", function(event)
+    print("changed avatar")
+    local player_mug = Net.get_player_mugshot(event.player_id)
+    online_players = { player_id = event.player_id, mugshot_texture = { mugshot_texture = player_mug.texture_path, mug_animation = "/server/assets/tourney/mug.anim" } }
 end)
 
 Net:on("player_disconnect", function(event)
