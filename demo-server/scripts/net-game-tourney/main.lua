@@ -217,7 +217,7 @@ local function initialize_tournament_participants(participants, backfill)
             end
         end
     end
-    return final_participants
+    return TableUtils.SelectRandomItemsFromTableClamped(final_participants, 8)
 end
 
 local function cleanup_ui(player_id, player_area, original_map_name, original_map_song)
