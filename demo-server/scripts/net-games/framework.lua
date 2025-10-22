@@ -225,12 +225,16 @@ function frame.activate_framework(player_id)
     avatar_cache[player_id]["animation"] = avatar.animation_path
     -- adjust originY in animation file
     -- disabled as not currently working
+    
     --local fixedOrigin = adjustOriginy(Net.read_asset(avatar.animation_path))
-    local fixedOrigin = Net.read_asset(avatar.animation_path)
-    Net.update_asset(avatar.animation_path.."-fixed", fixedOrigin)
-    avatar_cache[player_id]["animation-fixed"] = avatar.animation_path.."-fixed"
+    --local fixedOrigin = Net.read_asset(avatar.animation_path)
+    --Net.update_asset(avatar.animation_path.."-fixed", fixedOrigin)
+    --avatar_cache[player_id]["animation-fixed"] = avatar.animation_path.."-fixed"
+    
     -- create stunt double
-    Net.create_bot(player_id.."-double", { area_id=area_id, warp_in=false, texture_path=avatar.texture_path, animation_path=avatar.animation_path.."-fixed", x=position.x+0.001+.5, y=position.y+0.001+.5, z=position.z+1, direction=direction, solid=true})
+    Net.create_bot(player_id.."-double", { area_id=area_id, warp_in=false, texture_path=avatar.texture_path, animation_path=avatar.animation_path
+    --.."-fixed"
+    , x=position.x+0.001+.5, y=position.y+0.001+.5, z=position.z+1, direction=direction, solid=true})
     -- hide player
     Net.set_player_avatar(player_id, empty_texture, empty_animation)
     -- create camera holder
@@ -739,19 +743,6 @@ function frame.add_ui_element(name,player_id,texture,animation,animation_state,h
     local x = cam_position.x + xoffset
     local y = cam_position.y + yoffset
     local z = 100 + Z
-    local area_id = Net.get_player_area(player_id)
-    local scaleX = 1.0
-    local scaleY = 1.0
-    if ScaleX ~= nil then
-        if ScaleX >= 0.0 then
-            scaleX = ScaleX
-        end
-    end
-      if ScaleY ~= nil then
-        if ScaleY >= 0.0 then
-            scaleY = ScaleY
-        end
-    end
     Net.create_bot(player_id.."-ui-"..name, { area_id=area_id, warp_in=false, texture_path=texture, animation_path=animation, animation=animation_state,x=x-.5, y=y-.5, z=z, solid=false})
 
     exclude_except_for(player_id,player_id.."-ui-"..name)
@@ -2152,7 +2143,7 @@ local function handle_bot_movement(player_id,x,y,z,direction,speed) --was proces
                 
                 --update UI position
                 if ui_elements[player_id] ~= nil then for name,element in next,ui_elements[player_id] do
-                    local keyframes = {{properties={{property="Animation",value=element["state"]}, {property="ScaleX",value=element["ScaleX"],}, {property="ScaleY",value=element["ScaleY"]}},duration=0}}
+                    local keyframes = {{properties={{property="Animation",value=element["state"]}},duration=0}}
                     Net.animate_bot(player_id.."-ui-"..element["name"], element["state"], true)
                     Net.animate_bot_properties(player_id.."-ui-"..element["name"], keyframes)
                 end 

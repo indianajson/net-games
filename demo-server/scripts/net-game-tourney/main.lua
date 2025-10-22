@@ -5,7 +5,8 @@
 --   - Current thinking grab a copy of each unique "elbow" and setup the animation on each and we can set which one to start animating/change to solid color on next re-open of the tourney board.
 local TableUtils = require("scripts/table-utils")
 local games = require("scripts/net-games/framework")
-local Constants = require("scripts/net-game-tourney/constants")
+
+local constants = require("scripts/net-game-tourney/constants")
 local npc_paths = require("scripts/net-game-tourney/npc-paths")
 local mug_pos = require("scripts/net-game-tourney/mug-pos")
 local ui_data = require("scripts/net-game-tourney/ui-data")
@@ -89,43 +90,6 @@ local function join_or_create_party(player_id)
     end
 end
 
-
--- top down positions, this is including interprolation positions as well as resting locations
-local bottom_tier = {
-    [1] = {
-        x = -112,
-        y = -48,
-    },
-    [2] = {
-        x = -86,
-        y = -48,
-    },
-    [3] = {
-        x = -56,
-        y = -48,
-    },
-    [4] = {
-        x = -30,
-        y = -48,
-    },
-    [5] = {
-        x = 8,
-        y = -48,
-    },
-    [6] = {
-        x = 34,
-        y = -48,
-    },
-    [7] = {
-        x = 64,
-        y = -48,
-    },
-    [8] = {
-        x = 90,
-        y = -48,
-    },
-}
-
 local function start_battle(player1_id, player2_id)
     if string.find(player2_id, ".zip") then
         Net.initiate_encounter(player1_id, player2_id)
@@ -143,13 +107,63 @@ end
 --Shorthand for await
 function await(v) return Async.await(v) end
 
-local function gather_boards()
-    local areas = Net.list_areas()
-    for i, area_id in next, areas do
-        local boards = TableUtils.GetAllTiledObjOfXType(area_id, "Tournament Board")
-        if (#boards > 0) then
-            tourney_boards[area_id] = boards
+
+local function get_board_properties(boards_in, area_id)
+    if area_id == nil then 
+        return 
+    end
+    
+    local sanitized_board = {}
+    for i, value in next, boards_in do
+       
+        sanitized_board = {
+        area_id = i,
+        boards = {},
+        }
+        for j, detail in next, value do
+            for k, prop in next, detail do
+                if k == "custom_properties" then
+                    sanitized_board.boards[detail.id] = prop
+                end
+            end
         end
+    end
+    return sanitized_board
+end
+
+local function gather_boards()
+    local board = {}
+    local board_with_props = {}
+    local areas = {}
+
+    areas = Net.list_areas()
+
+    for i, area_id in next, areas do
+        local get_boards = TableUtils.GetAllTiledObjOfXType(area_id, "Tournament Board") 
+        if (#get_boards >0) then
+            board[area_id] = get_boards
+        end
+        --print(tourney_boards)
+    end
+
+
+    for j, board_obj in next, board do
+        local board_props = {}
+        if #board_obj > 0 then 
+            local props_result = get_board_properties(board, j)
+            if (props_result ~= nil) then 
+            --print(props_result)
+                board_props = props_result.boards
+                board_with_props[j] = board_props
+            end
+            
+        end
+        
+        for k, option in next, board_with_props do
+            tourney_boards[k] = option
+          
+        end
+
     end
     print(tourney_boards)
 end
@@ -219,12 +233,17 @@ local function start_tourney(pid)
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
         await(Async.sleep(.75))
 
-        games.add_ui_element("BOARD BG", player_id, Constants.bracket_background_path.yellow_bn45,
-            Constants.bracket_background_anim_path, "BG", -120, 80, -1)
+        local ui_data_pos = ui_data.unmoving_ui_pos
+        local board_pos = ui_data_pos.bg
+        local bracket_pos = ui_data_pos.bracket
+        local title_banner_pos = ui_data_pos.title_banner
+
+        games.add_ui_element("BOARD BG", player_id, constants.bracket_background_path.yellow_bn45,
+            constants.bracket_background_anim_path, "BG", board_pos.x, board_pos.y, board_pos.z)
         games.add_ui_element("TOURNEY TREE", player_id, "/server/assets/tourney/tourney-tree.png",
-            "/server/assets/tourney/tourney-tree.anim", "BLANK_TREE", -120, 80, 0)
+            "/server/assets/tourney/tourney-tree.anim", "BLANK_TREE", bracket_pos.x, bracket_pos.y, bracket_pos.z)
         games.add_ui_element("TITLE BANNER", player_id, "/server/assets/tourney/title-banner.png",
-            "/server/assets/tourney/title-banner.anim", "RED", -120, 80, 0)
+            "/server/assets/tourney/title-banner.anim", "RED", title_banner_pos.x, title_banner_pos.y, title_banner_pos.z)
         --games.add_ui_element("CROWN_1", player_id, "/server/assets/tourney/crown.png",
         --    "/server/assets/tourney/crown.anim", "IDLE", -56, 31, 0)
         --games.add_ui_element("CROWN_2", player_id, "/server/assets/tourney/crown.png",
@@ -232,7 +251,7 @@ local function start_tourney(pid)
 
         for i, p in next, active_tournaments[1].participants do
             print(p)
-            add_participant_mugshot(pid, i, p["player_mugshot"]["mug_texture"], bottom_tier[i].x, bottom_tier[i].y)
+            add_participant_mugshot(pid, i, p["player_mugshot"]["mug_texture"], mug_pos.bottom_tier[i].x, mug_pos.bottom_tier[i].y)
         end
 
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }

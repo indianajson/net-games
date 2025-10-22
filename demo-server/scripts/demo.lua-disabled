@@ -14,7 +14,7 @@ games.start_framework()
 local points = 8
 local bat_active = {} 
 
-Net.create_bot("bat", { area_id="default", warp_in=false, texture_path="/server/assets/cyber_bat.png", animation_path="/server/assets/cyber_bat.animation", x=26, y=21, z=0, solid=true})
+Net.create_bot("bat", { area_id="default", warp_in=false, texture_path="/server/assets/demo/cyber_bat.png", animation_path="/server/assets/demo/cyber_bat.animation", x=26, y=21, z=0, solid=true})
 
 Net:on("player_join", function(event)
     bat_active[event.player_id] = false
@@ -86,8 +86,8 @@ Net:on("cursor_selection", function(event)
         games.erase_text("navi_label_mm",event.player_id)
         games.erase_text("navi_label_proto",event.player_id)
         games.remove_cursor("navi_select",event.player_id)
-        local texture = "/server/assets/cyber_bat.png"
-        local animation = "/server/assets/cyber_bat.animation"
+        local texture = "/server/assets/demo/cyber_bat.png"
+        local animation = "/server/assets/demo/cyber_bat.animation"
         games.set_player_avatar(event.player_id,texture,animation)
     end
 end)

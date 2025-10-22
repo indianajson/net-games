@@ -35,11 +35,11 @@ local CONSTANTS = {
     bracket_bm_bn4 = ui_element_paths.."bracket-bm.png",
     bracket_rs_bn4 = ui_element_paths.."bracket-rs.png",
     -- Default bracket animation to be used with the above bracket_texture(s).
-    default_bracket_anim_path = ui_element_paths"bracket.anim",
+    default_bracket_anim_path_bn4 = ui_element_paths.."bracket.anim",
     -- Default bg animation to be used with the above BG gradients_texture(s).
-    default_background_anim_path = ui_element_paths.."gradient.anim",
+    default_background_anim_path_bn4 = ui_element_paths.."gradient.anim",
     -- Default grid animation to be used with the above grid_textures.
-    default_grid_anim_path = ui_element_paths.."grid.anim",
+    default_grid_anim_path_bn4 = ui_element_paths.."grid.anim",
     -- Default mugshot animation has all the needed built in empty animation_state(s)
     default_mug_anim = ui_element_paths.."mug.anim",
     crown_texture_path = ui_element_paths.."crown.png",
