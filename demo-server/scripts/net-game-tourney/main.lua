@@ -58,54 +58,71 @@ end
 
 local function start_party(player_id, player_area, object_id)
     local player_mugshot = ''
-    player_mugshot = Net.get_player_mugshot(player_id)
+    local pid = ""
+    local p_area = ""
+    local obj_id = ""
     local party = {}
+
+    obj_id = object_id
+    p_area = player_area
+    pid = player_id
+    player_mugshot = Net.get_player_mugshot(pid)
+
     party = {
-            player_id = player_id, 
+            player_id = pid, 
             player_mugshot = { 
                 mug_texture = player_mugshot.texture_path, 
                 mug_animation = default_mug_anim
             } 
     }
-    table.insert(tourney_boards[player_area][object_id].active_tournaments, party)
+    local index = math.max(#tourney_boards[p_area][obj_id]["active_tournaments"], 1)
+    table.insert(tourney_boards[p_area][obj_id]["active_tournaments"], index, party)
 end
 
 local function join_or_create_party(player_id, object_id)
     local player_area = ""
     player_area = Net.get_player_area(player_id)
-    --tourney_boards[]    
+    --tourney_boards[]
     if (#tourney_boards[player_area][object_id].active_tournaments < 1) then
         print("No active parties.")
         start_party(player_id, player_area, object_id)
-        return
     end
+
     print("Active tournament exists")
+    
     for i, party in next, tourney_boards[player_area][object_id].active_tournaments do
         if #tourney_boards[player_area][object_id].active_tournaments[i] < 8 and not TableUtils.Contains(party, player_id) then
-            local mug_texture = ''
-            local mug = Net.get_player_mugshot(player_id)
-            mug_texture = mug.texture_path
+            local mug_texture = ""
+            mug_texture = Net.get_player_mugshot(player_id).texture_path
             print(tourney_boards[player_area][object_id].active_tournaments[i])
             tourney_boards[player_area][object_id].active_tournaments[i] = {player_id = player_id, player_mugshot = {mug_animation = default_mug_anim, mug_texture=mug_texture} }
             print("Added player with player_id : " .. player_id .. " to tournament party")
-            return
+            break
         else
         print("player in party, but needs to fill")
         end
     end
 end
 
--- unused for now
+-- Should await whichever instance of a fight and return a winner, other than in the case of NPC VS NPC
+-- TODO: 
+--      - Add NPC weights to determine who wins with a roll of the dice between 2 NPCS. 
+--      - Add parameters to modify battle specifics for other cases. 
+--          - Aka NPC vs Player1, NPC vs Player2, Player1 vs Player2.
+
 local function start_battle(player1_id, player2_id)
         if string.find(player1_id, ".zip") and string.find(player2_id, ".zip") then
             print("THIS IS TWO NPCS fighting! DONT WORRY BOUT IT FOR RIGHT NOW")
         end
 
         if string.find(player2_id, ".zip") then
+            print("player1 vs NPC")
             Net.initiate_encounter(player1_id, player2_id)
         else if string.find(player1_id, ".zip") then
+            print("Player2 vs NPC")
             Net.initiate_encounter(player2_id, player1_id)
         else
+            print("Player vs Player")
             Net.initalize_pvp(player1_id, player2_id)
         end
     end
@@ -148,12 +165,13 @@ local function gather_boards()
     local board = {}
     local board_with_props = {}
     local areas = {}
+    local board_props = {}
 
     areas = Net.list_areas()
 
     for i, area_id in next, areas do
         local get_boards = TableUtils.GetAllTiledObjOfXType(area_id, "Tournament Board") 
-        if (#get_boards >0) then
+        if (#get_boards > 0) then
             board[area_id] = get_boards
         end
         --print(tourney_boards)
@@ -161,7 +179,6 @@ local function gather_boards()
 
 
     for j, board_obj in next, board do
-        local board_props = {}
         if #board_obj > 0 then 
             local props_result = get_board_properties(board, j)
             if (props_result ~= nil) then 
@@ -170,12 +187,10 @@ local function gather_boards()
                 for k, id in next, board_props do
                 print(k)
                 print(id)
-                board_props[k]["active_tournaments"] = {}
-                
+                board_props[k]["active_tournaments"] = {}        
                 end
                 board_with_props[j] = board_props
             end
-            
         end
 
         for k, option in next, board_with_props do
@@ -255,12 +270,11 @@ end
 -- REQUIRED: pid: string,
 local function start_and_show_tourney(pid, board_bg_element_info, tourney)
     return async(function()
+        -- Setup
         local player_id = pid
         local player_area = Net.get_player_area(player_id)
-
         local original_map_name = Net.get_area_custom_property(player_area, "Name")
         Net.set_area_custom_property(player_area, "Name", "            ")
-
         local original_map_song = Net.get_area_custom_property(player_area, "Song")
         Net.set_area_custom_property(player_area, "Song", "/server/assets/tourney/music/bbn4_tournament_announcement.ogg")
         -- Net.toggle_player_hud(player_id)
@@ -269,20 +283,17 @@ local function start_and_show_tourney(pid, board_bg_element_info, tourney)
         Net.lock_player_input(player_id)
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
         await(Async.sleep(.75))
-
+        
         setup_board_bg_elements(player_id,board_bg_element_info)
-
         for i, p in next, tourney do
             add_participant_mugshot(pid, i, p["player_mugshot"]["mug_texture"], mug_pos.bottom_tier[i].x, mug_pos.bottom_tier[i].y)
         end
-
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
         --start_battle(player_id, npc_paths[1].player_id)
-        await(Async.sleep(10))
+        await(Async.sleep(12.5))
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
         await(Async.sleep(0.5))
         cleanup_ui(player_id, player_area, original_map_name, original_map_song)
-
         await(Async.sleep(0.1))
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
         -- Net.toggle_player_hud(player_id)
@@ -292,38 +303,8 @@ local function start_and_show_tourney(pid, board_bg_element_info, tourney)
     end)
 end
 
--- = {
---            gradient_texture=ui_element_paths.."blue-bn4/gradient.png",
---            grid_texture=ui_element_paths.."blue-bn4/grid.png",
---        },
---        green_bn4 = {
---            gradient_texture=ui_element_paths.."green-bn4/gradient.png",
---            grid_texture=ui_element_paths.."green-bn4/grid.png",
---        },
---        pink_yellow_bn4 = {
---            gradient_texture=ui_element_paths.."pink-yellow-bn4/gradient.png",
---            grid_texture=ui_element_paths.."pink-yellow-bn4/grid.png",
---        },
---        pink_bn4 = {
---            gradient_texture=ui_element_paths.."pink-bn4/gradient.png",
---            grid_texture=ui_element_paths.."pink-bn4/grid.png",
---        },
---        lemon_lime_bn4 = {
---            gradient_texture=ui_element_paths.."lemon-lime-bn4/gradient.png",
---            grid_texture=ui_element_paths.."lemon-lime-bn4/grid.png",
---        },
---        green_blue_white_bn4 = {
---            gradient_texture=ui_element_paths.."green-blue-white-bn4/gradient.png",
---            grid_texture=ui_element_paths.."green-blue-white-bn4/grid.png",
---        },
---        red_orange_bn4 = {
---            gradient_texture=ui_element_paths.."red-orange-bn4/gradient.png",
---            grid_texture=ui_element_paths.."red-orange-bn4/grid.png",
---        },
-
 local function get_board_background_and_grid(object)
-    local board_background_and_grid_info = {}
-    if TiledUtils.check_custom_prop_validity(object, "Board Background") then 
+    if TiledUtils.check_custom_prop_validity(object.custom_properties, "Board Background") then 
         if object.custom_properties["Board Background"] == "blue_bn4" then
             return constants.bracket_background_path.blue_bn4
         else if object.custom_properties["Board Background"] == "green_bn4" then
