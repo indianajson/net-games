@@ -45,6 +45,11 @@ local UI_DATA = {
         },
         crown1 = {}, 
         crown2 ={},
+        champion_topper_bn4 = {
+            x=80,
+            y=40,
+            z=1
+        }
     },
 }
 

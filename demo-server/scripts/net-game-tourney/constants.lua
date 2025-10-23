@@ -49,7 +49,8 @@ local CONSTANTS = {
     champion_topper_bn4=ui_element_paths.."champion-topper-bn4.png",
     champion_topper_bn45=ui_element_paths.."champion-topper-bn45.png",
     -- Default Champion Topper animation path
-    default_champion_topper_anim=ui_element_paths.."champion-topper.anim",
+    champion_topper_bn4_anim=ui_element_paths.."champion-topper-bn4.anim",
+    champion_topper_bn45_anim=ui_element_paths.."champion-topper-bn45.anim",
 }
 
 return CONSTANTS
