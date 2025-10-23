@@ -19,8 +19,8 @@ local UI_DATA = {
     "BOARD BG",
     "BRACKET", 
     "TITLE BANNER",
-    --"CROWN_1", 
-    --"CROWN_2",
+    "CROWN_1", 
+    "CROWN_2",
     },
     unmoving_ui_pos = {
         bg = {

@@ -12,7 +12,7 @@ local mug_pos = require("scripts/net-game-tourney/mug-pos")
 local ui_data = require("scripts/net-game-tourney/ui-data")
 local TiledUtils = require("scripts/net-game-tourney/tiled-utils")
 
-games.start_framework()
+
 
 local tourney_boards = {}
 local players_waiting = {}
@@ -133,23 +133,30 @@ function await(v) return Async.await(v) end
 
 local function start_battle(player1_id, player2_id)
     return async(function()
-        if string.find(player1_id, ".zip") and string.find(player2_id, ".zip") then
-            print("THIS IS TWO NPCS fighting! DONT WORRY BOUT IT FOR RIGHT NOW")
-            return
-        end
-        if string.find(player2_id, ".zip") then
-            print("player1 vs NPC")
-            await(Net.initiate_encounter(player1_id, player2_id))
-            return
-        else if string.find(player1_id, ".zip") then
-            print("Player2 vs NPC")
-            await(Net.initiate_encounter(player2_id, player1_id))
-            return
-        else
-            print("Player vs Player")
-            await(Net.initalize_pvp(player1_id, player2_id))
-            return
-        end
+            if string.find(player1_id, ".zip") and string.find(player2_id, ".zip") then
+                print("THIS IS TWO NPCS fighting! DONT WORRY BOUT IT FOR RIGHT NOW")
+                return
+            end
+            if string.find(player2_id, ".zip") then
+                print("player1 vs NPC")
+                Net.lock_player_input(player1_id)
+                Net.initiate_encounter(player1_id, player2_id)
+                Net.unlock_player_input(player1_id)
+            end
+            if string.find(player1_id, ".zip") then
+                print("Player2 vs NPC")
+                Net.lock_player_input(player2_id)
+                Net.initiate_encounter(player2_id, player1_id)
+                Net.unlock_player_input(player2_id)
+            end
+            if not string.find(player1_id, ".zip") and not string.find(player2_id, ".zip") then
+                print("Player vs Player")
+                Net.lock_player_input(player1_id)
+                Net.lock_player_input(player2_id)
+                Net.initalize_pvp(player1_id, player2_id)
+                Net.unlock_player_input(player1_id)
+                Net.unlock_player_input(player2_id)
+
         end
     end)
 end
@@ -277,10 +284,10 @@ local function setup_board_bg_elements(player_id, board_bg_element_info)
 
         games.add_ui_element("TITLE BANNER", player_id, "/server/assets/tourney/title-banner.png",
             "/server/assets/tourney/title-banner.anim", "RED", title_banner_pos.x, title_banner_pos.y, title_banner_pos.z)
-        --games.add_ui_element("CROWN_1", player_id, "/server/assets/tourney/crown.png",
-        --    "/server/assets/tourney/crown.anim", "IDLE", -56, 31, 0)
-        --games.add_ui_element("CROWN_2", player_id, "/server/assets/tourney/crown.png",
-        --    "/server/assets/tourney/crown.anim", "IDLE", 55, 31, 0)
+        games.add_ui_element("CROWN_1", player_id, "/server/assets/tourney/crown.png",
+            "/server/assets/tourney/crown.anim", "IDLE", 64, 48, 0)
+        games.add_ui_element("CROWN_2", player_id, "/server/assets/tourney/crown.png",
+            "/server/assets/tourney/crown.anim", "IDLE", 176, 48, 0)
 end
 
 local function cleanup_tourney()
@@ -445,15 +452,4 @@ Net:on("object_interaction", function(event)
             end
         end
     end)
-end)
-
-
-
-Net:on("player_connect", function(event)
-end)
-
-Net:on("avatar_change", function(event)
-end)
-
-Net:on("player_disconnect", function(event)
 end)
