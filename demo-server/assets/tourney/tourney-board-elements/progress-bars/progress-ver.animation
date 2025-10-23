@@ -1,0 +1,71 @@
+imagePath="Z:/Users/romanrybko/Documents/Aseprite/progress-ver.png"
+
+animation state="START_Y"
+frame duration="0.05" x="27" y="0" w="6" h="26" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.067" x="27" y="26" w="6" h="26" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.067" x="27" y="52" w="6" h="26" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.067" x="27" y="78" w="6" h="26" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.083" x="27" y="104" w="6" h="26" originx="0" originy="0" flipx="0" flipy="0"
+
+animation state="START_N"
+frame duration="0" x="27" y="130" w="6" h="26" originx="0" originy="0" flipx="0" flipy="0"
+
+animation state="COLUMN1_L_Y"
+frame duration="0.05" x="16" y="0" w="11" h="24" originx="10" originy="0" flipx="1" flipy="0"
+frame duration="0.067" x="16" y="24" w="11" h="24" originx="10" originy="0" flipx="1" flipy="0"
+frame duration="0.067" x="16" y="48" w="11" h="24" originx="10" originy="0" flipx="1" flipy="0"
+frame duration="0.067" x="16" y="72" w="11" h="24" originx="10" originy="0" flipx="1" flipy="0"
+frame duration="0.083" x="16" y="96" w="11" h="24" originx="10" originy="0" flipx="1" flipy="0"
+
+animation state="COLUMN1_L_N"
+frame duration="0" x="16" y="120" w="11" h="24" originx="10" originy="0" flipx="1" flipy="0"
+
+animation state="COLUMN1_R_Y"
+frame duration="0.05" x="16" y="0" w="11" h="24" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.067" x="16" y="24" w="11" h="24" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.067" x="16" y="48" w="11" h="24" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.067" x="16" y="72" w="11" h="24" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.083" x="16" y="96" w="11" h="24" originx="0" originy="0" flipx="0" flipy="0"
+
+animation state="COLUMN1_R_N"
+frame duration="0" x="16" y="120" w="11" h="24" originx="0" originy="0" flipx="0" flipy="0"
+
+animation state="COLUMN2_L_Y"
+frame duration="0.05" x="6" y="0" w="10" h="24" originx="9" originy="0" flipx="1" flipy="0"
+frame duration="0.067" x="6" y="24" w="10" h="24" originx="9" originy="0" flipx="1" flipy="0"
+frame duration="0.067" x="6" y="48" w="10" h="24" originx="9" originy="0" flipx="1" flipy="0"
+frame duration="0.067" x="6" y="72" w="10" h="24" originx="9" originy="0" flipx="1" flipy="0"
+frame duration="0.083" x="6" y="96" w="10" h="24" originx="9" originy="0" flipx="1" flipy="0"
+
+animation state="COLUMN2_L_N"
+frame duration="0" x="6" y="120" w="10" h="24" originx="9" originy="0" flipx="1" flipy="0"
+
+animation state="COLUMN2_R_Y"
+frame duration="0.05" x="6" y="0" w="10" h="24" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.067" x="6" y="24" w="10" h="24" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.067" x="6" y="48" w="10" h="24" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.067" x="6" y="72" w="10" h="24" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.083" x="6" y="96" w="10" h="24" originx="0" originy="0" flipx="0" flipy="0"
+
+animation state="COLUMN2_R_N"
+frame duration="0" x="6" y="120" w="10" h="24" originx="0" originy="0" flipx="0" flipy="0"
+
+animation state="END_L_Y"
+frame duration="0.05" x="0" y="0" w="6" h="16" originx="5" originy="0" flipx="1" flipy="0"
+frame duration="0.067" x="0" y="16" w="6" h="16" originx="5" originy="0" flipx="1" flipy="0"
+frame duration="0.067" x="0" y="32" w="6" h="16" originx="5" originy="0" flipx="1" flipy="0"
+frame duration="0.067" x="0" y="48" w="6" h="16" originx="5" originy="0" flipx="1" flipy="0"
+frame duration="0.083" x="0" y="64" w="6" h="16" originx="5" originy="0" flipx="1" flipy="0"
+
+animation state="END_L_N"
+frame duration="0" x="0" y="80" w="6" h="16" originx="5" originy="0" flipx="1" flipy="0"
+
+animation state="END_R_Y"
+frame duration="0.05" x="0" y="0" w="6" h="16" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.067" x="0" y="16" w="6" h="16" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.067" x="0" y="32" w="6" h="16" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.067" x="0" y="48" w="6" h="16" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.083" x="0" y="64" w="6" h="16" originx="0" originy="0" flipx="0" flipy="0"
+
+animation state="END_R_N"
+frame duration="0" x="0" y="80" w="6" h="16" originx="0" originy="0" flipx="0" flipy="0"

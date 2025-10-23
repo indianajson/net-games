@@ -92,10 +92,7 @@ local function join_or_create_party(player_id, object_id, should_wait_backfill)
     player_area = Net.get_player_area(player_id)
     --tourney_boards[]
     
-    if (#tourney_boards[player_area][object_id].active_tournaments < 1) then
-        print("No active parties.")
-        start_party(player_id, player_area, object_id)
-    end
+    start_party(player_id, player_area, object_id)
     
     if wait_to_backfill == true then 
         print("wait_to_backfill is true")
@@ -105,7 +102,7 @@ local function join_or_create_party(player_id, object_id, should_wait_backfill)
     print("Active tournament exists")
     
     for i, party in next, tourney_boards[player_area][object_id].active_tournaments do
-        if #tourney_boards[player_area][object_id].active_tournaments[i] < 8 and not TableUtils.Contains(party, player_id) then
+        if #tourney_boards[player_area][object_id].active_tournaments[i] < 8 then
             local mug_texture = ""
             mug_texture = Net.get_player_mugshot(player_id).texture_path
             print(tourney_boards[player_area][object_id].active_tournaments[i])
@@ -242,7 +239,7 @@ local function initialize_tournament_participants(participants, backfill)
     end
     print(cleaned_up)
 
-    if backfill then
+    if backfill ~= nil then
         should_backfill = backfill
     end
 
@@ -349,35 +346,49 @@ local function get_board_background_and_grid(object)
         end
         print("Please only enter pre-defined BGs and grids for now! Will default to red_orange_bn4's setup")
         return constants.bracket_background_path.red_orange_bn4
-    else 
-        print("No BG was chosen will default to red_orange_bn4's setup")
-        return constants.bracket_background_path.red_orange_bn4
-        end
+    end
 end
 
 Net:on("countdown_ended", function(event)
     return async(function ()
-        local entry = players_waiting[event.player_id]
+        local matchups = {}
         local player_area = Net.get_player_area(event.player_id)
+        local entry = players_waiting[event.player_id]
+        local object = Net.get_object_by_id(player_area, entry["tourney_board"])
         games.remove_countdown(event.player_id)
         local board_info = tourney_boards[player_area][entry["tourney_board"]]
         print(board_info)
         Net.message_player(event.player_id, "There is currently: " .. #board_info.active_tournaments .. " In your tournament queue. What would you like to do?")
         local result = await(Async.quiz_player(event.player_id, "Backfill", "Wait"))
         if result == 0 then
-            local object = Net.get_object_by_id(player_area, entry["tourney_board"])
+            
             local board_background_setup_info = get_board_background_and_grid(object)
-            games.deactivate_framework(event.player_id)
-            games.unfreeze_player(event.player_id)
-            Net.unlock_player_input(event.player_id)
-            start_and_show_tourney(event.player_id,board_background_setup_info, initialize_tournament_participants(board_info.active_tournaments, true))
-            print("player said no")
+            print("Player said yes to backfill")
+            print(board_background_setup_info)
+            local tournament_setup = await(start_and_show_tourney(event.player_id, board_background_setup_info, initialize_tournament_participants(tourney_boards[player_area][entry["tourney_board"]].active_tournaments, true)))
+            games.activate_framework(event.player_id)
+            Net.lock_player_input(event.player_id)
+            if tournament_setup ~= nil then
+                    matchups = setup_matches(tournament_setup)
+                    for i, matches in next, matchups do
+                        local match = matchups[i]
+                        print(match)
+                        await(start_battle(match["player1_id"]["player_id"], match["player2_id"]["player_id"]))
+                    end
+                end 
         end
+
         if result == 1 then
-            print("player said yes")
+            print("player said yes to waiting")
             games.spawn_countdown(event.player_id, 100, 20, 10, duration)
             games.start_countdown(event.player_id)
+            
+            players_waiting[event.player_id] = {
+            waiting = true,
+            tourney_board = event.object_id
+            }
         end
+        
     end)
 end)
 
@@ -419,7 +430,6 @@ Net:on("object_interaction", function(event)
             end
 
             if single_player_result == 1 then
-                paricipants = 
                 print("Player said yes to single player")
                 join_or_create_party(event.player_id, event.object_id, true)
                 local tournament_setup = await(start_and_show_tourney(event.player_id, board_background_setup_info, initialize_tournament_participants(tourney_boards[player_area][event.object_id].active_tournaments, true)))
