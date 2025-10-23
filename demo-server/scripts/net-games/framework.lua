@@ -225,16 +225,12 @@ function frame.activate_framework(player_id)
     avatar_cache[player_id]["animation"] = avatar.animation_path
     -- adjust originY in animation file
     -- disabled as not currently working
-    
     --local fixedOrigin = adjustOriginy(Net.read_asset(avatar.animation_path))
     --local fixedOrigin = Net.read_asset(avatar.animation_path)
     --Net.update_asset(avatar.animation_path.."-fixed", fixedOrigin)
-    --avatar_cache[player_id]["animation-fixed"] = avatar.animation_path.."-fixed"
-    
+    avatar_cache[player_id]["animation-fixed"] = avatar.animation_path
     -- create stunt double
-    Net.create_bot(player_id.."-double", { area_id=area_id, warp_in=false, texture_path=avatar.texture_path, animation_path=avatar.animation_path
-    --.."-fixed"
-    , x=position.x+0.001+.5, y=position.y+0.001+.5, z=position.z+1, direction=direction, solid=true})
+    Net.create_bot(player_id.."-double", { area_id=area_id, warp_in=false, texture_path=avatar.texture_path, animation_path=avatar.animation_path, x=position.x+0.001+.5, y=position.y+0.001+.5, z=position.z+1, direction=direction, solid=true})
     -- hide player
     Net.set_player_avatar(player_id, empty_texture, empty_animation)
     -- create camera holder

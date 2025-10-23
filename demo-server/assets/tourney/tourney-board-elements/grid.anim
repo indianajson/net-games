@@ -1,4 +1,4 @@
-imagePath="D:/ONB/Teblat Wonterk Server/resources/mods/assets/bg-grid.png"
+imagePath=""
 
 animation state="UI"
 frame duration="0" x="0" y="0" w="240" h="160" originx="0" originy="0" flipx="0" flipy="0"

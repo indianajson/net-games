@@ -10,25 +10,21 @@ local constants = require("scripts/net-game-tourney/constants")
 local npc_paths = require("scripts/net-game-tourney/npc-paths")
 local mug_pos = require("scripts/net-game-tourney/mug-pos")
 local ui_data = require("scripts/net-game-tourney/ui-data")
+local TiledUtils = require("scripts/net-game-tourney/tiled-utils")
 
 games.start_framework()
 
 local tourney_boards = {}
 local online_players = {}
-local active_tournaments = {}
-local mob_path = "/server/assets/tourney/npc-navis/"
-local default_mug_anim = "/server/assets/tourney/mug.anim"
 
-local frames_to_remove = {
-    "MUG_FRAME_" .. 1, "MUG_FRAME_" .. 2, "MUG_FRAME_" .. 3,
-    "MUG_FRAME_" .. 4, "MUG_FRAME_" .. 5, "MUG_FRAME_" .. 6,
-    "MUG_FRAME_" .. 7, "MUG_FRAME_" .. 8,
-    "MUG_" .. 1, "MUG_" .. 2, "MUG_" .. 3,
-    "MUG_" .. 4, "MUG_" .. 5, "MUG_" .. 6,
-    "MUG_" .. 7, "MUG_" .. 8, "BOARD BG",
-    "TOURNEY TREE", "TITLE BANNER",
-    --"CROWN_1", "CROWN_2",
-}
+local default_mug_anim = constants.default_mug_anim
+local frames_to_remove = ui_data.frame_names
+local ui_data_pos = ui_data.unmoving_ui_pos
+local board_pos = ui_data_pos.bg
+local grid_pos = ui_data_pos.grid
+local bracket_pos = ui_data_pos.bracket
+local title_banner_pos = ui_data_pos.title_banner
+
 
 local function find_in_table(t, v1)
     for i, v2 in pairs(t) do
@@ -99,11 +95,19 @@ local function join_or_create_party(player_id, object_id)
     end
 end
 
+-- unused for now
 local function start_battle(player1_id, player2_id)
-    if string.find(player2_id, ".zip") then
-        Net.initiate_encounter(player1_id, player2_id)
-    else
-        Net.initalize_pvp(player1_id, player2_id)
+        if string.find(player1_id, ".zip") and string.find(player2_id, ".zip") then
+            print("THIS IS TWO NPCS fighting! DONT WORRY BOUT IT FOR RIGHT NOW")
+        end
+
+        if string.find(player2_id, ".zip") then
+            Net.initiate_encounter(player1_id, player2_id)
+        else if string.find(player1_id, ".zip") then
+            Net.initiate_encounter(player2_id, player1_id)
+        else
+            Net.initalize_pvp(player1_id, player2_id)
+        end
     end
 end
 
@@ -228,12 +232,28 @@ local function cleanup_ui(player_id, player_area, original_map_name, original_ma
         Net.set_area_custom_property(player_area, "Song", original_map_song)
 end
 
+-- handles setting up the background UI elements (Gradients, Grids, Torueny Tree, Title Banner, Tournament Title etc, if they are provided from the selection we will try to default (not currently implemented just is one BG, Grid, And Bracket Config.))
+local function setup_board_bg_elements(player_id, board_bg_element_info)
+        games.add_ui_element("BOARD BG", player_id, board_bg_element_info.gradient_texture, constants.default_background_anim_path_bn4, "BG", board_pos.x, board_pos.y, board_pos.z)
+
+        games.add_ui_element("BOARD GRID", player_id, board_bg_element_info.grid_texture, constants.default_grid_anim_path_bn4,"UI", grid_pos.x, grid_pos.y, grid_pos.z)
+
+        games.add_ui_element("TOURNEY TREE", player_id, constants.bracket_bm_bn4, constants.default_bracket_anim_path_bn4, "UI", bracket_pos.x, bracket_pos.y, bracket_pos.z)
+        
+        games.add_ui_element("TITLE BANNER", player_id, "/server/assets/tourney/title-banner.png",
+            "/server/assets/tourney/title-banner.anim", "RED", title_banner_pos.x, title_banner_pos.y, title_banner_pos.z)
+        --games.add_ui_element("CROWN_1", player_id, "/server/assets/tourney/crown.png",
+        --    "/server/assets/tourney/crown.anim", "IDLE", -56, 31, 0)
+        --games.add_ui_element("CROWN_2", player_id, "/server/assets/tourney/crown.png",
+        --    "/server/assets/tourney/crown.anim", "IDLE", 55, 31, 0)
+end
+
 local function cleanup_tourney()
 
 end
 
 -- REQUIRED: pid: string,
-local function start_tourney(pid, tourney)
+local function start_and_show_tourney(pid, board_bg_element_info, tourney)
     return async(function()
         local player_id = pid
         local player_area = Net.get_player_area(player_id)
@@ -243,7 +263,6 @@ local function start_tourney(pid, tourney)
 
         local original_map_song = Net.get_area_custom_property(player_area, "Song")
         Net.set_area_custom_property(player_area, "Song", "/server/assets/tourney/music/bbn4_tournament_announcement.ogg")
-
         -- Net.toggle_player_hud(player_id)
         games.activate_framework(player_id)
         games.freeze_player(player_id)
@@ -251,21 +270,7 @@ local function start_tourney(pid, tourney)
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
         await(Async.sleep(.75))
 
-        local ui_data_pos = ui_data.unmoving_ui_pos
-        local board_pos = ui_data_pos.bg
-        local bracket_pos = ui_data_pos.bracket
-        local title_banner_pos = ui_data_pos.title_banner
-
-        games.add_ui_element("BOARD BG", player_id, constants.bracket_background_path.yellow_bn45,
-            constants.bracket_background_anim_path, "BG", board_pos.x, board_pos.y, board_pos.z)
-        games.add_ui_element("TOURNEY TREE", player_id, "/server/assets/tourney/tourney-tree.png",
-            "/server/assets/tourney/tourney-tree.anim", "BLANK_TREE", bracket_pos.x, bracket_pos.y, bracket_pos.z)
-        games.add_ui_element("TITLE BANNER", player_id, "/server/assets/tourney/title-banner.png",
-            "/server/assets/tourney/title-banner.anim", "RED", title_banner_pos.x, title_banner_pos.y, title_banner_pos.z)
-        --games.add_ui_element("CROWN_1", player_id, "/server/assets/tourney/crown.png",
-        --    "/server/assets/tourney/crown.anim", "IDLE", -56, 31, 0)
-        --games.add_ui_element("CROWN_2", player_id, "/server/assets/tourney/crown.png",
-        --    "/server/assets/tourney/crown.anim", "IDLE", 55, 31, 0)
+        setup_board_bg_elements(player_id,board_bg_element_info)
 
         for i, p in next, tourney do
             add_participant_mugshot(pid, i, p["player_mugshot"]["mug_texture"], mug_pos.bottom_tier[i].x, mug_pos.bottom_tier[i].y)
@@ -287,6 +292,63 @@ local function start_tourney(pid, tourney)
     end)
 end
 
+-- = {
+--            gradient_texture=ui_element_paths.."blue-bn4/gradient.png",
+--            grid_texture=ui_element_paths.."blue-bn4/grid.png",
+--        },
+--        green_bn4 = {
+--            gradient_texture=ui_element_paths.."green-bn4/gradient.png",
+--            grid_texture=ui_element_paths.."green-bn4/grid.png",
+--        },
+--        pink_yellow_bn4 = {
+--            gradient_texture=ui_element_paths.."pink-yellow-bn4/gradient.png",
+--            grid_texture=ui_element_paths.."pink-yellow-bn4/grid.png",
+--        },
+--        pink_bn4 = {
+--            gradient_texture=ui_element_paths.."pink-bn4/gradient.png",
+--            grid_texture=ui_element_paths.."pink-bn4/grid.png",
+--        },
+--        lemon_lime_bn4 = {
+--            gradient_texture=ui_element_paths.."lemon-lime-bn4/gradient.png",
+--            grid_texture=ui_element_paths.."lemon-lime-bn4/grid.png",
+--        },
+--        green_blue_white_bn4 = {
+--            gradient_texture=ui_element_paths.."green-blue-white-bn4/gradient.png",
+--            grid_texture=ui_element_paths.."green-blue-white-bn4/grid.png",
+--        },
+--        red_orange_bn4 = {
+--            gradient_texture=ui_element_paths.."red-orange-bn4/gradient.png",
+--            grid_texture=ui_element_paths.."red-orange-bn4/grid.png",
+--        },
+
+local function get_board_background_and_grid(object)
+    local board_background_and_grid_info = {}
+    if TiledUtils.check_custom_prop_validity(object, "Board Background") then 
+        if object.custom_properties["Board Background"] == "blue_bn4" then
+            return constants.bracket_background_path.blue_bn4
+        else if object.custom_properties["Board Background"] == "green_bn4" then
+           return constants.bracket_background_path.green_bn4
+        else if object.custom_properties["Board Background"] == "pink_yellow_bn4" then
+            return constants.bracket_background_path.pink_yellow_bn4
+        else if object.custom_properties["Board Background"] == "lemon_lime_bn4" then
+            return constants.bracket_background_path.lemon_lime_bn4
+        else if object.custom_properties["Board Background"] == "green_blue_white_bn4" then
+            return constants.bracket_background_path.green_blue_white_bn4
+        else if object.custom_properties["Board Background"] == "red_orange_bn4" then
+            return constants.bracket_background_path.red_orange_bn4
+        end
+        print("Please only enter pre-defined BGs and grids for now! Will default to red_orange_bn4's setup")
+        return constants.bracket_background_path.red_orange_bn4
+    end
+    end
+    end
+    end
+    end
+    else 
+        print("No BG was chosen will default to red_orange_bn4's setup")
+        return constants.bracket_background_path.red_orange_bn4
+        end
+end
 
 Net:on("object_interaction", function(event)
     local tournament = {}
@@ -296,9 +358,11 @@ Net:on("object_interaction", function(event)
         print("No match found, No work to do.")
         return
     end
+    local board_background_setup_info = get_board_background_and_grid(object)
+    
     print("Object match")
     join_or_create_party(event.player_id, event.object_id)
-    start_tourney(event.player_id, initialize_tournament_participants(tourney_boards[player_area][event.object_id].active_tournaments))
+    start_and_show_tourney(event.player_id, board_background_setup_info, initialize_tournament_participants(tourney_boards[player_area][event.object_id].active_tournaments))
 end)
 
 Net:on("player_connect", function(event)
