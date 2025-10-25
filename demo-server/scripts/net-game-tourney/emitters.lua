@@ -1,12 +1,13 @@
+local debug = require("scripts/debug-utils")
 local change_area_emitter = Net.EventEmitter.new()
 local tourney_emitter     = Net.EventEmitter.new()
-
 
 local Tourney = {
     player_history      = {},
     online_players      = {},
     offline_players     = {},
     matchups_in_battle  = {},
+    tournaments         = {},
 }
 
 Net:on("player_transfer_area", function(event)
@@ -18,13 +19,13 @@ Net:on("player_join", function(event)
     local player_secret = Net.get_player_secret(event.player_id)
     local player_current_area = Net.get_player_area(event.player_id)
     Tourney.set_player_area(event.player_id, player_current_area)
+    debug.dprint("PLAYER JOIN", "Online players is now : " ..tostring(Tourney.online_players))
+    debug.dprint("PLAYER JOIN", "Offline players is now : " ..tostring(Tourney.offline_players))
+
     if Tourney.player_history[player_secret] == nil then
-    Tourney.player_history[player_secret] = {player_id = event.player_id, current_area = player_current_area}
-    print("[PLAYER JOIN] Player secret added to player history, this is the players secret : ".. player_secret .. "Player history is now : " ..tostring(Tourney.player_history))
-    end
-    print("[PLAYER JOIN] Online players is now : " ..tostring(Tourney.online_players))
-    print("[PLAYER JOIN] Offline players is now : " ..tostring(Tourney.offline_players))
-    
+        Tourney.player_history[player_secret] = {player_id = event.player_id, current_area = player_current_area}
+        print("[PLAYER JOIN] Player secret added to player history, this is the players secret : ".. player_secret .. "Player history is now : " ..tostring(Tourney.player_history))
+    end   
 end)
 
 Net:on("player_disconnect", function(event)

@@ -13,7 +13,19 @@ local ui_data = require("scripts/net-game-tourney/ui-data")
 local TiledUtils = require("scripts/net-game-tourney/tiled-utils")
 
 
+
+
 local TourneyEmitters = require("scripts/net-game-tourney/emitters")
+
+local tourney_table = require("scripts/net-game-tourney/table-templates/tournament-table")
+
+-- TESTING TEMPLATING FOR TABLES --
+local table_test = tourney_table
+    table_test = tourney_table.modify_value(table_test,"area_id", "TEST")
+    print(table_test)
+    table_test = tourney_table.modify_values(table_test,{area_id = "TEST", participants = {"Test", "Test", "Test", "Test", "Test", "Test", }})
+    print(table_test)
+-----------------------------------
 
 games.start_framework()
 
@@ -146,7 +158,6 @@ local function start_battle(player1_id, player2_id)
             Net.lock_player_input(player1_id)
             TourneyEmitters.start_tourney_battle(player1_id, player2_id)
             Net.initiate_encounter(player1_id, player2_id)
-            TourneyEmitters.end_tourney_battle(player1_id, player2_id)
             Net.unlock_player_input(player1_id)
         end
         if string.find(player1_id, ".zip") then
@@ -154,7 +165,6 @@ local function start_battle(player1_id, player2_id)
             Net.lock_player_input(player2_id)
             TourneyEmitters.start_tourney_battle(player1_id, player2_id)
             Net.initiate_encounter(player2_id, player1_id)
-            TourneyEmitters.end_tourney_battle(player1_id, player2_id)
             Net.unlock_player_input(player2_id)
         end
         if not string.find(player1_id, ".zip") and not string.find(player2_id, ".zip") then
@@ -163,7 +173,6 @@ local function start_battle(player1_id, player2_id)
             Net.lock_player_input(player2_id)
             TourneyEmitters.start_tourney_battle(player1_id, player2_id)
             Net.initalize_pvp(player1_id, player2_id)
-            TourneyEmitters.end_tourney_battle(player1_id, player2_id)
             Net.unlock_player_input(player1_id)
             Net.unlock_player_input(player2_id)
         end
@@ -295,8 +304,10 @@ local function setup_board_bg_elements(player_id, board_bg_element_info)
 
     games.add_ui_element("TITLE BANNER", player_id, "/server/assets/tourney/title-banner.png",
         "/server/assets/tourney/title-banner.anim", "RED", title_banner_pos.x, title_banner_pos.y, title_banner_pos.z)
+
     games.add_ui_element("CROWN_1", player_id, "/server/assets/tourney/crown.png",
         "/server/assets/tourney/crown.anim", "IDLE", 64, 48, 0)
+
     games.add_ui_element("CROWN_2", player_id, "/server/assets/tourney/crown.png",
         "/server/assets/tourney/crown.anim", "IDLE", 176, 48, 0)
 end
@@ -396,6 +407,7 @@ Net:on("countdown_ended", function(event)
                     local match = matchups[i]
                     print(match)
                     start_battle(match["player1_id"]["player_id"], match["player2_id"]["player_id"])
+                    TourneyEmitters.start_tourney_battle(match["player1_id"], match["player2_id"])
                     print(result)
                 end
             end
