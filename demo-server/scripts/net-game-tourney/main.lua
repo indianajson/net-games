@@ -20,11 +20,12 @@ local TourneyEmitters = require("scripts/net-game-tourney/emitters")
 local tourney_table = require("scripts/net-game-tourney/table-templates/tournament-table")
 
 -- TESTING TEMPLATING FOR TABLES --
-local table_test = tourney_table
-    table_test = tourney_table.modify_value(table_test,"area_id", "TEST")
-    print(table_test)
-    table_test = tourney_table.modify_values(table_test,{area_id = "TEST", participants = {"Test", "Test", "Test", "Test", "Test", "Test", }})
-    print(table_test)
+--local table_test = tourney_table
+--table_test = tourney_table.modify_value(table_test, "area_id", "TEST")
+--print(table_test)
+--table_test = tourney_table.modify_values(table_test,
+--    { area_id = "TEST", participants = { "Test", "Test", "Test", "Test", "Test", "Test", } })
+--print(table_test)
 -----------------------------------
 
 games.start_framework()
@@ -91,11 +92,12 @@ local function start_party(player_id, player_area, object_id)
     player_mugshot = Net.get_player_mugshot(pid)
 
     party = {
-        player_id = pid,
+        player_id      = pid,
         player_mugshot = {
-            mug_texture = player_mugshot.texture_path,
+            mug_texture   = player_mugshot.texture_path,
             mug_animation = default_mug_anim
-        }
+        },
+        player_spot = 1
     }
     local index = math.max(#tourney_boards[p_area][obj_id]["active_tournaments"], 1)
     table.insert(tourney_boards[p_area][obj_id]["active_tournaments"], index, party)
@@ -103,39 +105,30 @@ end
 
 --purpose: Add player to existing tournament or create new one
 --usage: Called when player interacts with tournament board to join tournament
-local function join_or_create_party(player_id, object_id, should_wait_backfill)
+local function join_or_create_party(player_id, object_id)
     local player_area = ""
-    local wait_to_backfill = false
-    if should_wait_backfill ~= nil then
-        wait_to_backfill = should_wait_backfill
-    end
 
     player_area = Net.get_player_area(player_id)
-    
-    if wait_to_backfill == true then
-        print("wait_to_backfill is true")
-        return
-    end
 
-    local found_a_tournament = false 
+    local found_a_tournament = false
     for i, party in next, tourney_boards[player_area][object_id].active_tournaments do
         if #tourney_boards[player_area][object_id].active_tournaments[i] < 8 then
-            print("[tourney] Active tournament exists.")
+          --  print("[tourney] Active tournament exists.")
             --existing tournament needs players, add player to this tournament
             local mug_texture = ""
             mug_texture = Net.get_player_mugshot(player_id).texture_path
             print(tourney_boards[player_area][object_id].active_tournaments[i])
-            tourney_boards[player_area][object_id].active_tournaments[i] = { player_id = player_id, player_mugshot = { mug_animation = default_mug_anim, mug_texture = mug_texture } }
-            print("Added player with player_id : " .. player_id .. " to tournament party")
+            tourney_boards[player_area][object_id].active_tournaments[i] = { player_id = player_id, player_mugshot = { mug_animation = default_mug_anim, mug_texture = mug_texture }, player_spot = i }
+            --print("Added player with player_id : " .. player_id .. " to tournament party")
             found_a_tournament = true
             break
         end
     end
     if found_a_tournament == false then
-        print("[tourney] No active tournament, creating a new one.")
+       -- print("[tourney] No active tournament, creating a new one.")
         --no tournament was found so create a new tournament
         start_party(player_id, player_area, object_id)
-    end 
+    end
 end
 
 -- Should await whichever instance of a fight and return a winner, other than in the case of NPC VS NPC
@@ -163,21 +156,21 @@ local function start_battle(player1_id, player2_id)
             return
         end
         if string.find(player2_id, ".zip") then
-            print("Player vs NPC")
+          --  print("Player vs NPC")
             Net.lock_player_input(player1_id)
             TourneyEmitters.start_tourney_battle(player1_id, player2_id)
             Net.initiate_encounter(player1_id, player2_id)
             Net.unlock_player_input(player1_id)
         end
         if string.find(player1_id, ".zip") then
-            print("NPC vs Player")
+         --   print("NPC vs Player")
             Net.lock_player_input(player2_id)
             TourneyEmitters.start_tourney_battle(player1_id, player2_id)
             Net.initiate_encounter(player2_id, player1_id)
             Net.unlock_player_input(player2_id)
         end
         if not string.find(player1_id, ".zip") and not string.find(player2_id, ".zip") then
-            print("Player vs Player")
+         --   print("Player vs Player")
             Net.lock_player_input(player1_id)
             Net.lock_player_input(player2_id)
             TourneyEmitters.start_tourney_battle(player1_id, player2_id)
@@ -252,10 +245,10 @@ local function gather_boards()
     end
 
     for area, board in next, tourney_boards do
-        for key,option in next, board do    
-            print("[tourney] Found "..option["Tournament Board Title"].." in "..area)
-        end  
-    end 
+        for key, option in next, board do
+           -- print("[tourney] Found " .. option["Tournament Board Title"] .. " in " .. area)
+        end
+    end
     --print(tourney_boards)
 end
 
@@ -278,10 +271,11 @@ local function initialize_tournament_participants(participants, backfill)
     local cleaned_up = {}
     local final_participants = {}
     local should_backfill = false
+    --print("[INITIALIZE PARTICIPANTS]", participants)
     for i, p in next, participants do
         table.insert(cleaned_up, p)
     end
-    print(cleaned_up)
+   -- print(cleaned_up)
 
     if backfill ~= nil then
         should_backfill = backfill
@@ -290,7 +284,7 @@ local function initialize_tournament_participants(participants, backfill)
     final_participants = cleaned_up
     if should_backfill then
         if (#final_participants < 8) then
-            print("needs to fill")
+            --print("needs to fill")
             local need_to_fill = 8 - #final_participants
             local random_npc_filler = TableUtils.SelectRandomItemsFromTableClamped(npc_paths, need_to_fill)
             for i, filler_npc in next, random_npc_filler do
@@ -320,7 +314,7 @@ local function setup_board_bg_elements(player_id, board_bg_element_info)
     games.add_ui_element("BOARD GRID", player_id, board_bg_element_info.grid_texture,
         constants.default_grid_anim_path_bn4, "UI", grid_pos.x, grid_pos.y, grid_pos.z)
 
-    games.add_ui_element("TOURNEY TREE", player_id, constants.bracket_bm_bn4, constants.default_bracket_anim_path_bn4,
+    games.add_ui_element("BRACKET", player_id, constants.bracket_bm_bn4, constants.default_bracket_anim_path_bn4,
         "UI", bracket_pos.x, bracket_pos.y, bracket_pos.z)
 
     games.add_ui_element("CHAMPION TOPPER", player_id, constants.champion_topper_bn4, constants.champion_topper_bn4_anim,
@@ -344,10 +338,14 @@ end
 --purpose: Main tournament display and flow controller
 --usage: Called to start the full tournament sequence for a player
 --REQUIRED: pid: string,
-local function start_and_show_tourney(pid, board_bg_element_info, tourney)
+local function start_and_show_tourney(pid, board_bg_element_info, tourney, board_id, start_round_1)
     return async(function()
         -- Setup
-        print(tourney)
+        --print(tourney)
+        local should_start_round_1 = false
+        if start_round_1 ~= nil then
+            should_start_round_1 = start_round_1
+        end
         local player_id = pid
         local player_area = Net.get_player_area(player_id)
         local original_map_name = Net.get_area_custom_property(player_area, "Name")
@@ -356,7 +354,7 @@ local function start_and_show_tourney(pid, board_bg_element_info, tourney)
         Net.set_area_custom_property(player_area, "Song", "/server/assets/tourney/music/bbn4_tournament_announcement.ogg")
         -- Net.toggle_player_hud(player_id)
         games.activate_framework(player_id)
-        games.freeze_player(player_id)
+        --games.freeze_player(player_id)
         Net.lock_player_input(player_id)
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
         await(Async.sleep(.75))
@@ -367,15 +365,39 @@ local function start_and_show_tourney(pid, board_bg_element_info, tourney)
                 mug_pos.bottom_tier[i].y)
         end
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
-        --start_battle(player_id, npc_paths[1].player_id)
         await(Async.sleep(12.5))
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
-        await(Async.sleep(0.5))
+        await(Async.sleep(.75))
         cleanup_ui(player_id, player_area, original_map_name, original_map_song)
-        await(Async.sleep(0.1))
-        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
         -- Net.toggle_player_hud(player_id)
-        games.unfreeze_player(player_id)
+        local final = {}
+        for i, p in next, tourney do
+            final[i] = tourney[i]
+            final[i]["player_spot"] = i 
+            --print("[OH SHIT FINAL I]",final[i]["player_spot"])
+        end
+        local copy = setup_matches(final) 
+        --print("[COPY IS]: ", copy)
+        local init_matches = {}
+                for i, match in next, copy do
+                    init_matches[i] = copy[i]
+                    --print("[INIT MATCH]",match)
+                    --start_battle(match["player1_id"]["player_id"], match["player2_id"]["player_id"])
+                    --TourneyEmitters.start_tourney_battle(match["player1_id"], match["player2_id"])
+                    --print()
+                end
+        TourneyEmitters.start_tourney_state_initial(tourney, pid, player_area, board_id, init_matches, should_start_round_1)
+        if should_start_round_1 == true then
+            for i, j in next, init_matches do
+             --   print("[ABSOLUTELY LOOK HERE THIS IS THE TRUE NEWEST]: ",i, j)
+             print("[TOURNEY CHECK]", tostring(tourney))
+                --print(init_matches[i]["player1_id"],init_matches[i]["player2_id"])
+            start_battle(init_matches[i]["player1_id"]["player_id"],init_matches[i]["player2_id"]["player_id"])
+            end
+        end
+        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5) -- color = { r: 0-255, g: 0-255, b: 0-255, a?: 0-255 }
+        await(Async.sleep(.75))
+        --games.unfreeze_player(player_id)
         Net.unlock_player_input(player_id)
         games.deactivate_framework(player_id)
         return tourney
@@ -414,8 +436,7 @@ Net:on("countdown_ended", function(event)
         if players_waiting[event.player_id] == nil then
             --stops logic from running unless player is setting up a tournament
             return
-        end 
-        local matchups = {}
+        end
         local player_area = Net.get_player_area(event.player_id)
         local entry = players_waiting[event.player_id]
         print(player_area)
@@ -432,31 +453,24 @@ Net:on("countdown_ended", function(event)
             local board_background_setup_info = get_board_background_and_grid(object)
             print("[tourney] Player requested a backfill")
             print(board_background_setup_info)
-            local tournament_participants = initialize_tournament_participants(tourney_boards[player_area][entry["tourney_board"]].active_tournaments, true)
+            local tournament_participants = initialize_tournament_participants(
+                tourney_boards[player_area][entry["tourney_board"]].active_tournaments, true)
             local tournament_setup = nil
-            for i,player in next,tourney_boards[player_area][entry["tourney_board"]].active_tournaments do
-                tournament_setup = start_and_show_tourney(player["player_id"], board_background_setup_info,tournament_participants)
-            end 
-            await(Async.sleep(13.85))
-            games.activate_framework(event.player_id)
-            print("moving on")
-            Net.lock_player_input(event.player_id)
-            print(tournament_setup)
-            if tournament_setup ~= nil then
-                matchups = setup_matches(tournament_participants)
-                for i, matches in next, matchups do
-                    local match = matchups[i]
-                    print("matches:")
-                    print(match)
-                    start_battle(match["player1_id"]["player_id"], match["player2_id"]["player_id"])
-                    TourneyEmitters.start_tourney_battle(match["player1_id"], match["player2_id"])
-                    print(result)
-                end
+            local board_id = entry["tourney_board"]
+            
+            for i, player in next, tourney_boards[player_area][entry["tourney_board"]].active_tournaments do
+                start_and_show_tourney(player["player_id"], board_background_setup_info,
+                    tournament_participants, board_id, true)
             end
+            await(Async.sleep(13.85))
+            --games.activate_framework(event.player_id)
+        --    print("moving on")
+            Net.lock_player_input(event.player_id)
+            
         end
 
         if result == 1 then
-            print("[tourney] Player requested to wait for more players.")
+          --  print("[tourney] Player requested to wait for more players.")
             games.spawn_countdown(event.player_id, 100, 20, 10, duration)
             games.start_countdown(event.player_id)
 
@@ -477,64 +491,61 @@ Net:on("object_interaction", function(event)
     end
     local board_background_setup_info = get_board_background_and_grid(object)
 
-    print("[tourney] Player opened a tournament board.")
-    local matchups = {}
-    local paricipants = {}
+  --  print("[tourney] Player opened a tournament board.")
     async(function()
-
         --check if a board tournament is available on this board
         local board_tournament = tourney_boards[player_area][event.object_id].active_tournaments
         if #board_tournament < 8 and #board_tournament >= 1 then
             local manager = Net.get_player_name(board_tournament[1]["player_id"])
-            local result = await(Async.question_player(event.player_id, "Would you like to join "..manager.."'s tournament?"))
-                if result == 0 then
-                    --no, ask about single player mode 
-                    local single_player_result = await(Async.question_player(event.player_id, "Single Player?"))
-                    if single_player_result == 1 then
-                        print("[tourney] Player requested single player tournament.")
-                        --join_or_create_party(event.player_id, event.object_id, true)
-                        local mug_texture = ""
-                        mug_texture = Net.get_player_mugshot(player_id).texture_path
-
-                        local tournament_setup = await(start_and_show_tourney(event.player_id, board_background_setup_info,
-                            initialize_tournament_participants({{ player_id = event.player_id, player_mugshot = { mug_animation = default_mug_anim, mug_texture = mug_texture } }},
-                                true)))
-                        if tournament_setup ~= nil then
-                            matchups = setup_matches(tournament_setup)
-                            for i, matches in next, matchups do
-                                local match = {}
-                                match = matchups[i]
-                                print(match)
-                                await(start_battle(match["player1_id"]["player_id"], match["player2_id"]["player_id"]))
-                            end
-                        end
-                    end
-                elseif result == 1 then
-                    --yes, join open tournament 
-                    print("[tourney] Active tournament exists.")
+            local result = await(Async.question_player(event.player_id,
+                "Would you like to join " .. manager .. "'s tournament?"))
+            if result == 0 then
+                --no, ask about single player mode
+                local single_player_result = await(Async.question_player(event.player_id, "Single Player?"))
+                if single_player_result == 1 then
+                   -- print("[tourney] Player requested single player tournament.")
+                    join_or_create_party(event.player_id, event.object_id)
                     local mug_texture = ""
-                    local mug_texture = Net.get_player_mugshot(event.player_id).texture_path
-                    local position = #board_tournament + 1
-                    tourney_boards[player_area][event.object_id].active_tournaments[position] = { player_id = event.player_id, player_mugshot = { mug_animation = default_mug_anim, mug_texture = mug_texture } }
-                    print("[tourney] Added player with player_id : " .. event.player_id .. " to "..manager.."'s tournament.")
-                end 
-        else            
+                    mug_texture = Net.get_player_mugshot(event.player_id).texture_path
+
+                    await(start_and_show_tourney(event.player_id, board_background_setup_info,
+                        initialize_tournament_participants(
+                            { { player_id = event.player_id, player_mugshot = { mug_animation = default_mug_anim, mug_texture = mug_texture } } },
+                            true),event.object_id, false))
+                    
+                    end
+            elseif result == 1 then
+                --yes, join open tournament
+              --  print("[tourney] Active tournament exists.")
+                local mug_texture = ""
+                local mug_texture = Net.get_player_mugshot(event.player_id).texture_path
+                local position = #board_tournament + 1
+            tourney_boards[player_area][event.object_id].active_tournaments[position] = {
+               player_spot = #tourney_boards[player_area][event.object_id].active_tournaments + 1,
+               player_id = event.player_id,
+               player_mugshot = { mug_animation = default_mug_anim, mug_texture = mug_texture }
+            }
+            -- print("[tourney] Added player with player_id : " .. event.player_id .. " to " ..
+              --      manager .. "'s tournament.")
+                end
+            else
             --if no open tournament then allow player to start one!
             local result = await(Async.question_player(event.player_id, "Would you like to start a tournament?"))
 
             if result == 0 then
-                print("PLAYER SAID NO! DO YOU EVEN READ THESE PRINTS DEAR PROGRAMMER?")
+                --print("PLAYER SAID NO! DO YOU EVEN READ THESE PRINTS DEAR PROGRAMMER?")
             elseif result == 1 then
                 --print("[tourney] Player requested a tournament to be started.")
                 local single_player_result = await(Async.question_player(event.player_id, "Single Player?"))
 
                 if single_player_result == 0 then
-                    print("[tourney] Player requested a multi-player tournament.")
+                   -- print("[tourney] Player requested a multi-player tournament.")
 
-                    join_or_create_party(event.player_id, event.object_id, false)
+                    join_or_create_party(event.player_id, event.object_id)
                     games.start_framework()
                     games.activate_framework(event.player_id)
                     Net.lock_player_input(event.player_id)
+
                     games.spawn_countdown(event.player_id, 100, 20, 10, duration)
                     games.start_countdown(event.player_id)
 
@@ -543,30 +554,101 @@ Net:on("object_interaction", function(event)
                         tourney_board = event.object_id
                     }
                 elseif single_player_result == 1 then
-                    print("[tourney] Player requested single player tournament.")
-                    join_or_create_party(event.player_id, event.object_id, true)
+                    --print("[tourney] Player requested single player tournament.")
+                    join_or_create_party(event.player_id, event.object_id)
                     local mug_texture = ""
                     mug_texture = Net.get_player_mugshot(event.player_id).texture_path
 
-                    local tournament_setup = await(start_and_show_tourney(event.player_id, board_background_setup_info,
-                        initialize_tournament_participants({{ player_id = event.player_id, player_mugshot = { mug_animation = default_mug_anim, mug_texture = mug_texture } }},
-                            true)))
-                    if tournament_setup ~= nil then
-                        matchups = setup_matches(tournament_setup)
-                        for i, matches in next, matchups do
-                            local match = {}
-                            match = matchups[i]
-                            print(match)
-                            await(start_battle(match["player1_id"]["player_id"], match["player2_id"]["player_id"]))
-                        end
-                    end
+                    await(start_and_show_tourney(event.player_id, board_background_setup_info,
+                        initialize_tournament_participants(
+                            { { player_id = event.player_id, player_mugshot = { mug_animation = default_mug_anim, mug_texture = mug_texture } } },
+                            true), event.object_id, true))
+                 
+                        --await(start_battle(match["player1_id"]["player_id"], match["player2_id"]["player_id"]))
                 end
             end
-        end 
+        end
     end)
 end)
 
 Net:on("battle_results", function(event)
-    -- { player_id: string, health: number, score: number, time: number, ran: bool, emotion: number, turns: number, enemies: { id: String, health: number }[] } }
-    print(event.player_id, event.health, event.time, event.ran, event.emotion, event.turns, event.enemies)
-end)
+    local enemy_info = {}
+    print(event.e)
+    if #event["enemies"] > 0 then
+       for i, j in next, event.enemies do
+        print(i)
+        print(j)
+       end 
+    end
+    local players_in_tourney_round_if_it_exists = TourneyEmitters.check_if_they_exist(event.player_id, event.enemies.id, event.ran, event.health, event.enemies.health)
+    local winner_info = {}
+    local loser_info = {}
+
+    if players_in_tourney_round_if_it_exists ~= nil then
+        local tourney_id = players_in_tourney_round_if_it_exists.tournament_id
+        local match_id = players_in_tourney_round_if_it_exists.match_id
+        local status = players_in_tourney_round_if_it_exists.status
+        local participants = players_in_tourney_round_if_it_exists.participant_pairs
+        if event.ran ~= true then
+            print(event.ran)
+            if event["enemies"]["id"] == nil then
+                print(event.player_id)
+                print("A PLAYER WIN VS NPC OPPONENET SINCE THEY DID NOT RUN AND THE PLAYER2_ID IS NIL, Below is their PAIR")
+                print(participants)
+                TourneyEmitters.set_round_results(players_in_tourney_round_if_it_exists.tournament_id, TourneyEmitters.tournaments[players_in_tourney_round_if_it_exists.tournament_id][players_in_tourney_round_if_it_exists.status.."_matches"].matchups)
+            end
+                --if participants["player1_id"]["player_id"], player1_id) or string.find(participants["player2_id"]["player_id"], player1_id) then
+                --    local second_check = TourneyEmitters.tournaments[tonumber(players_in_tourney_round_if_it_exists.tournament_id)][players_in_tourney_round_if_it_exists.status.."_matches"]["matchups"][match_id]
+                --    print("CHECK CHECK")
+                --    print(tostring(second_check)) 
+                --end
+                --winner_info = participants["player1_id"]
+                --loser_info = participants["player2_id"]
+            --TourneyEmitters.set_round_results(players_in_tourney_round_if_it_exists.tournament_id, players_in_tourney_round_if_it_exists.status, players_in_tourney_round_if_it_exists.match_id, winner_info , loser_info )
+            --if string.find(participants["player1_id"]["player_id"], player1_id) then
+            --    print("Found it")
+            --end
+        --print("Got back needed data")
+        --TourneyEmitters.set_round_results(players_in_tourney_round_if_it_exists.tournament_id, players_in_tourney_round_if_it_exists.status, players_in_tourney_round_if_it_exists.match_id)
+            end
+        end
+    --for tourney_index, tournament in next, TourneyEmitters.tournaments do
+    --    for p_index, participants in next, TourneyEmitters.tournaments[tourney_index] do
+    --        print("[PINDEX IS]",p_index)
+    --        print("[THESE ARE THE PARTICIPANTS]", participants)
+    --    end
+    --end
+    --local check = TableUtils.deepSearch(TourneyEmitters.tournaments, "tournament_id", )
+    --    print(check)
+    --     TourneyEmitters.set_round_results(1, TourneyEmitters.tournaments[1].round_1_matches, {winners = {player2_id}, losers = {match["player2_id"]}})
+    --end
+    
+    --local player2_id = event.enemies.id
+    --for i, tournament in next, TourneyEmitters.tournaments do
+    --    for j, p in tournament.participants do
+    --        if player2_id == nil then
+    --        --print("A Player WON vs NPC Opponnet since they did not run, and the player2_id is nil")
+    --        if p.round_1_matches[j]["player1_id"] == player1_id or p.round_1_matches[j]["player2_id"] == player1_id then  
+    --            --print("i is: ", i, "match is: ", p.round_1_matches[j])
+    --            TourneyEmitters.set_round_results(1, p.round_1_matches[i], {winners = {player1_id}, losers = {p.round_1_matches[j]["player2_id"]}})
+    --            break
+    --        end
+    --    end
+    --    if p.round_1_matches[j]["player1_id"] == player2_id or p.round_1_matches[j]["player2_id"] == player2_id then
+    --   -- print("Player 2 exists so either a player or an NPC won this fight.")
+    --        if string.find(p.round_1_matches[j]["player1_id"], tostring(player2_id)) then
+    --           -- print("Player 2 is actually player1_id in our matchup")
+    --          --  print("i is: ", i, "match is: ", p.round_1_matches[j])
+    --            break
+    --        end
+    --        if string.find(p.round_1_matches[j]["player2_id"], tostring(player2_id)) then
+    --         --   print("Player 2 is player2_id in our matchup")
+--pr--int("i is: ", i, "match is: ", p.round_1_matches[j])
+    --            break
+    --            end
+    --        end
+    --    end
+    --end
+    --    local player2_health = event.enemies
+       -- print("[PRINTING RESULTS OF FIGHT] :",player1_id, player2_id)
+    end)

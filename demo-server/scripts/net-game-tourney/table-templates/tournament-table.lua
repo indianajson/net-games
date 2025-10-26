@@ -1,12 +1,25 @@
 local TEMPLATE_TOURNAMENT_TABLE = {
+    host_id               = "",
     tournament_id         = 0,
     tournament_nickname   = "",
     participant_count     = 0,
     status                = "INITIAL",
     participants          = {},
-    round_1_results       = {},
-    round_2_results       = {},
-    round_3_results       = {},
+    round_1_matches       = {
+        matchups = {},
+        winners = {[1] = {}, [2] = {}, [3] = {}, [4] = {}},
+        losers = {[1] = {}, [2] = {}, [3] = {}, [4] = {}},
+    },
+    round_2_matches       = {
+        matchups = {},
+        winners = {[1] = {}, [2] = {}},
+        losers = {[1] = {}, [2] = {}},
+    },
+    round_3_matches       = {
+        matchups = {},
+        winners = {[1] = {}},
+        losers = {[1] = {}},
+    },
     area_id               = "",
     board_id              = 0,
     -- TODO: [board_ui_information] - fill in defaults

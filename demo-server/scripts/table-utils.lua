@@ -54,4 +54,53 @@ function TableUtils.SelectRandomItemsFromTableClamped(tbl, limit)
     return result
 end
 
+
+function TableUtils.deepSearch(tbl, searchKey, searchValue, path)
+    -- Initialize path tracking if not provided
+    path = path or {}
+    
+    -- Track current position in path
+    local currentPosition = #path + 1
+    
+    -- Iterate through all key-value pairs in the table
+    for k, v in pairs(tbl) do
+        -- Create current path string for debugging
+        local currentPath = table.concat(path, ".") .. "." .. tostring(k)
+        
+        -- Check if we're looking for a specific key
+        if searchKey ~= nil and k == searchKey then
+            return true, currentPath
+        end
+        
+        -- Check if we're looking for a specific value
+        if searchValue ~= nil and v == searchValue then
+            return true, currentPath
+        end
+        
+        -- If value is a table, recurse into it
+        if type(v) == "table" then
+            local found, fullPath = TableUtils.deepSearch(v, searchKey, searchValue, path)
+            
+            -- If something was found in the recursive call, return it
+            if found then
+                return true, fullPath
+            end
+        end
+    end
+    
+    -- Nothing found in this branch
+    return false, nil
+end
+
+-- Helper function to format results nicely
+function TableUtils.searchTable(tbl, searchKey, searchValue)
+    local found, path = TableUtils.deepSearch(tbl, searchKey, searchValue)
+    if found then
+        print(path)
+        return path
+    else
+        return nil
+    end
+end
+
 return TableUtils
