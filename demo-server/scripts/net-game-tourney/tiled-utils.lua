@@ -2,8 +2,8 @@ local tiled_utils = {}
 
 function tiled_utils.check_custom_prop_validity(object_props, custom_prop_name, empty_string_is_valid)
     local empty_string_is_check = false
-    local prop_name = ""
-    prop_name = custom_prop_name
+    local result = false
+
     if object_props == nil then return end
     if custom_prop_name == nil then return end
     
@@ -12,20 +12,15 @@ function tiled_utils.check_custom_prop_validity(object_props, custom_prop_name, 
     end
     
     if empty_string_is_check then
-        if object_props[prop_name] ~= nil then 
-            return true  
-        else 
-            return false
+        if object_props[custom_prop_name] ~= nil then 
+        result = true
         end
     end
     
-    if object_props[prop_name] ~= nil and object_props[prop_name] ~= "" then
-        return true 
-    else 
-        return false
+    if object_props[custom_prop_name] ~= nil and object_props[custom_prop_name] ~= "" then
+        result = true
     end
-    print("Failed all")
-    return false
+    return result    
 end
 
 return tiled_utils

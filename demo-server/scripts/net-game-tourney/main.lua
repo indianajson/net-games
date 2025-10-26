@@ -42,6 +42,8 @@ local grid_pos = ui_data_pos.grid
 local bracket_pos = ui_data_pos.bracket
 local title_banner_pos = ui_data_pos.title_banner
 local champion_topper_pos = ui_data_pos.champion_topper_bn4
+local crown1_pos = ui_data_pos.crown1
+local crown2_pos = ui_data_pos.crown2
 
 local duration = 10
 
@@ -153,6 +155,7 @@ local function start_battle(player1_id, player2_id)
     return async(function()
         if string.find(player1_id, ".zip") and string.find(player2_id, ".zip") then
             print("THIS IS TWO NPCS fighting! DONT WORRY BOUT IT FOR RIGHT NOW")
+            TourneyEmitters.check_if_they_exist(player1_id, player2_id, false, 0, 100)
             return
         end
         if string.find(player2_id, ".zip") then
@@ -324,15 +327,14 @@ local function setup_board_bg_elements(player_id, board_bg_element_info)
         "/server/assets/tourney/title-banner.anim", "RED", title_banner_pos.x, title_banner_pos.y, title_banner_pos.z)
 
     games.add_ui_element("CROWN_1", player_id, "/server/assets/tourney/crown.png",
-        "/server/assets/tourney/crown.anim", "IDLE", 64, 48, 0)
+        "/server/assets/tourney/crown.anim", "IDLE", crown1_pos.x, crown1_pos.y, crown1_pos.z)
 
     games.add_ui_element("CROWN_2", player_id, "/server/assets/tourney/crown.png",
-        "/server/assets/tourney/crown.anim", "IDLE", 176, 48, 0)
+        "/server/assets/tourney/crown.anim", "IDLE", crown2_pos.x, crown2_pos.y, crown2_pos.z)
 end
 
 --usage: Called when tournament completes to reset state
 local function cleanup_tourney()
-
 end
 
 --purpose: Main tournament display and flow controller
@@ -407,28 +409,28 @@ end
 --purpose: Determine which background and grid assets to use based on board configuration
 --usage: Called when setting up tournament display to get visual theme from board properties
 local function get_board_background_and_grid(object)
+    local background_data = constants.bracket_background_path.red_orange_bn4
     if TiledUtils.check_custom_prop_validity(object.custom_properties, "Board Background") then
         if object.custom_properties["Board Background"] == "blue_bn4" then
-            return constants.bracket_background_path.blue_bn4
+            background_data =constants.bracket_background_path.blue_bn4
         end
         if object.custom_properties["Board Background"] == "green_bn4" then
-            return constants.bracket_background_path.green_bn4
+            background_data = constants.bracket_background_path.green_bn4
         end
         if object.custom_properties["Board Background"] == "pink_yellow_bn4" then
-            return constants.bracket_background_path.pink_yellow_bn4
+            background_data =constants.bracket_background_path.pink_yellow_bn4
         end
         if object.custom_properties["Board Background"] == "lemon_lime_bn4" then
-            return constants.bracket_background_path.lemon_lime_bn4
+            background_data =constants.bracket_background_path.lemon_lime_bn4
         end
         if object.custom_properties["Board Background"] == "green_blue_white_bn4" then
-            return constants.bracket_background_path.green_blue_white_bn4
+            background_data =constants.bracket_background_path.green_blue_white_bn4
         end
         if object.custom_properties["Board Background"] == "red_orange_bn4" then
-            return constants.bracket_background_path.red_orange_bn4
+            background_data = constants.bracket_background_path.red_orange_bn4
         end
-        print("Please only enter pre-defined BGs and grids for now! Will default to red_orange_bn4's setup")
-        return constants.bracket_background_path.red_orange_bn4
     end
+    return background_data
 end
 
 Net:on("countdown_ended", function(event)
@@ -595,6 +597,8 @@ Net:on("battle_results", function(event)
                 print(event.player_id)
                 print("A PLAYER WIN VS NPC OPPONENET SINCE THEY DID NOT RUN AND THE PLAYER2_ID IS NIL, Below is their PAIR")
                 print(participants)
+                table.insert(winner_info)
+                table.insert(winner_info)
                 TourneyEmitters.set_round_results(players_in_tourney_round_if_it_exists.tournament_id, TourneyEmitters.tournaments[players_in_tourney_round_if_it_exists.tournament_id][players_in_tourney_round_if_it_exists.status.."_matches"].matchups)
             end
                 --if participants["player1_id"]["player_id"], player1_id) or string.find(participants["player2_id"]["player_id"], player1_id) then

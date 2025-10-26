@@ -97,16 +97,48 @@ function Tourney.check_if_they_exist(player1_id, player2_id, player_ran, player1
                 for k, pair in next,match do 
                     if player2_id == nil and player1_id ~= nil and player_ran == true then
                         if pair["player1_id"].player_id == player1_id or pair["player2_id"].player_id == player1_id then
-                        print("player2_id is nil and player1_id is not and player1_id ran away")
+                            if pair["player1_id"].player_id == player1_id then
+                                print("[PAIR FOUND IN] :", pair["player1_id"])
+                            tourney_state:emit("set_round_results", {losers = {[pair["player1_id"]["player_spot"]] = pair["player1_id"]}, winners = {[pair["player2_id"]["player_spot"]]= pair["player2_id"]}})
+                            end
+                            if pair["player2_id"].player_id == player1_id then
+                                print("[PAIR FOUND IN] :", pair["player2_id"])
+                            tourney_state:emit("set_round_results", {losers = {[pair["player2_id"]["player_spot"]]= pair["player2_id"]},winners = {[pair["player1_id"]["player_spot"]]= pair["player1_id"]}})
+                            end
+                        print("player2_id is nil and player1_id is not and player1_id ran away and they exist in this tournament")
                         end
                     end
                     if player1_id == nil and player2_id ~= nil and (player1_health <= 0 or player1_health == nil) then
-                        print("player1_id is nil, while player2_id isnt nil and player health is either not there or is less than or equal to 0")
-                        print("[PRINTING MATCH]",pair)
+                        print("player1_id is nil, while player2_id isnt nil and player health is either not there or is less than or equal to 0 so the player lost to player2_id fair and square")
+                        if pair["player1_id"].player_id == player2_id then
+                        print("player1_id is nil, while player2_id isnt nil and player health is either not there or is less than or equal to 0 so the player lost to player2_id fair and square")
+                        end
+                        if pair["player2_id"].player_id == player2_id then
+                        print("player1_id is nil, while player2_id isnt nil and player health is either not there or is less than or equal to 0 so the player lost to player2_id fair and square")
+                        end
                     end
                     if player1_id ~= nil and player2_id ~= nil then
-                        print("Both players ids arent nil")
-                        print("[PRINTING MATCH]", pair)
+                        if player1_health <= 0 then
+                            if pair["player1_id"].player_id == player1_id then
+                            print("Both players ids arent nil")
+                            tourney_state:emit("set_round_results", {losers = {[pair["player1_id"]["player_spot"]]= pair["player1_id"]},winners = {[pair["player2_id"]["player_spot"]]= pair["player2_id"]}})    
+                            print("Player1_id lost")    
+                            end
+                            if pair["player2_id"].player_id == player1_id then
+                            print("Both players ids arent nil")
+                            tourney_state:emit("set_round_results", {losers = {[pair["player2_id"]["player_spot"]]= pair["player2_id"]},winners = {[pair["player1_id"]["player_spot"]]= pair["player1_id"]}})
+                            print("Player1_id lost")
+                            end
+                        else 
+                            if pair["player1_id"].player_id == player2_id then
+                                tourney_state:emit("set_round_results", {losers = {[pair["player1_id"]["player_spot"]]= pair["player1_id"]},winners = {[pair["player2_id"]["player_spot"]]= pair["player2_id"]}})
+                                print("Player2_id lost")
+                            end
+                            if pair["player2_id"].player_id == player2_id then
+                                tourney_state:emit("set_round_results", {losers = {[pair["player2_id"]["player_spot"]]= pair["player2_id"]},winners = {[pair["player1_id"]["player_spot"]]= pair["player1_id"]}})
+                                print("Player2_id lost")
+                            end
+                        end
                     end
                 end
             end
@@ -148,8 +180,7 @@ tourney_state:on("check_if_exists", function(event)
 end)
 
 tourney_state:on("set_round_results", function (event)
-    local tourney_id = event.tourney_id
-    print(tourney_id)
+    print(event)
 end)
 
 tourney_emitter:on("in_tourney_battle", function(event)

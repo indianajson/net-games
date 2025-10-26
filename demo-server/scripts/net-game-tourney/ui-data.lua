@@ -26,31 +26,39 @@ local UI_DATA = {
     },
     unmoving_ui_pos = {
         bg = {
-            x= 0,
+            x = 0,
             y = 0,
             z = -2,
         },
         grid={
-            x= 0,
+            x = 0,
             y = 0,
             z = -1,
         },
         title_banner = {
-            x= 0,
+            x = 0,
             y = 0,
             z = 0,
         },
         bracket = {
-            x= 0,
+            x = 0,
             y = 0,
             z = 0,
         },
-        crown1 = {}, 
-        crown2 ={},
+        crown1 = { 
+            x = 64, 
+            y = 48,
+            z = 0,
+        }, 
+        crown2 ={
+            x = 176,
+            y = 48,
+            z = 0,
+        },
         champion_topper_bn4 = {
-            x=80,
-            y=40,
-            z=1
+            x = 80,
+            y = 40,
+            z = 1,
         }
     },
 }

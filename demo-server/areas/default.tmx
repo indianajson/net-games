@@ -92,7 +92,6 @@
   </object>
   <object id="84" type="Tournament Board" gid="19" x="931" y="643" width="64" height="57">
    <properties>
-    <property name="Board Background" value=""/>
     <property name="Tournament Board Title" value="CUSTOM TOURNAMENT"/>
    </properties>
   </object>
