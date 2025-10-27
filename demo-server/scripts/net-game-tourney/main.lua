@@ -17,7 +17,6 @@ local tourney_table = require("scripts/net-game-tourney/table-templates/tourname
 games.start_framework()
 
 local tourney_boards = {}
-local players_waiting = {}
 local player_interaction_locks = {} -- prevent duplicate prompts
 
 local default_mug_anim = constants.default_mug_anim
@@ -262,7 +261,7 @@ Net:on("object_interaction", function(event)
                         Net.lock_player_input(event.player_id)
                         games.spawn_countdown(event.player_id, 100, 20, 10, duration)
                         games.start_countdown(event.player_id)
-                        players_waiting[event.player_id] = { waiting = true, tourney_board = event.object_id }
+                        TourneyEmitters.players_waiting[event.player_id] = { waiting = true, tourney_board = event.object_id }
                     elseif single == 1 then
                         join_or_create_party(event.player_id, event.object_id, true)
                         local mug = Net.get_player_mugshot(event.player_id).texture_path
