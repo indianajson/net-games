@@ -10,6 +10,39 @@ function TableUtils.Contains(tbl, value)
     return found
 end
 
+--- Creates a deep copy of a table, optionally ignoring specified keys
+function TableUtils.deepCopy(obj, ignoreKeys, seen)
+    -- Handle non-tables and previously-seen tables
+    if type(obj) ~= 'table' then return obj end
+    seen = seen or {}
+    if seen[obj] then return seen[obj] end
+    
+    -- Create new table and mark it as seen
+    local res = {}
+    seen[obj] = res
+    
+    -- Handle metatables separately
+    local mt = getmetatable(obj)
+    if mt then
+        setmetatable(res, {})
+    end
+    
+    -- Copy all keys except ignored ones
+    for k, v in next, obj do
+        if ignoreKeys and ignoreKeys[k] then
+            goto skip_key
+        end
+        res[TableUtils.deepCopy(k, ignoreKeys, seen)] = TableUtils.deepCopy(v, ignoreKeys, seen)
+        ::skip_key::
+    end
+    
+    -- Restore metatable if original had one
+    if mt then
+        setmetatable(res, mt)
+    end
+    return res
+end
+
 function TableUtils.GetAllTiledObjOfXType(area_id, type)
     local objects = Net.list_objects(area_id)
     local results = {}
@@ -101,6 +134,16 @@ function TableUtils.searchTable(tbl, searchKey, searchValue)
     else
         return nil
     end
+end
+
+function TableUtils.shallow_copy(original)
+  local copy = {}
+
+  for key, value in pairs(original) do
+    copy[key] = value
+  end
+
+  return copy
 end
 
 return TableUtils

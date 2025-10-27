@@ -2,14 +2,7 @@ local participant_info = require("scripts/net-game-tourney/table-templates/parti
 local exclusionary = require("scripts/net-game-tourney/table-templates/exclusionary-deep-copy")
 
 local PARTICIPANT_LIST_TABLE = {
-    [1] = {},
-    [2] = {},
-    [3] = {},
-    [4] = {},
-    [5] = {},
-    [6] = {},
-    [7] = {},
-    [8] = {},
+
 }
 
 local function fill_participant_list()
