@@ -283,6 +283,65 @@ Net:on("object_interaction", function(event)
     end)
 end)
 
+Net:on("countdown_ended", function(event)
+    return async(function()
+        if TourneyEmitters.players_waiting[event.player_id] == nil then
+            --stops logic from running unless player is setting up a tournament
+            return
+        end 
+        local matchups = {}
+        local player_area = Net.get_player_area(event.player_id)
+        local entry = TourneyEmitters.players_waiting[event.player_id]
+        print(player_area)
+        print(entry["tourney_board"])
+        local object = Net.get_object_by_id(player_area, entry["tourney_board"])
+        games.remove_countdown(event.player_id)
+        local board_info = tourney_boards[player_area][entry["tourney_board"]]
+        print(board_info)
+        Net.message_player(event.player_id,
+            "There is currently " ..
+            #board_info.active_tournaments .. "/8 in your tournament queue. What would you like to do?")
+        local result = await(Async.quiz_player(event.player_id, "Backfill", "Wait"))
+        if result == 0 then
+            local board_background_setup_info = get_board_background_and_grid(object)
+            print("[tourney] Player requested a backfill")
+            print(board_background_setup_info)
+            local tournament_participants = initialize_tournament_participants(tourney_boards[player_area][entry["tourney_board"]].active_tournaments, true)
+            local tournament_setup = nil
+            for i,player in next,tourney_boards[player_area][entry["tourney_board"]].active_tournaments do
+                tournament_setup = start_and_show_tourney(player["player_id"], board_background_setup_info,tournament_participants)
+            end 
+            await(Async.sleep(13.85))
+            games.activate_framework(event.player_id)
+            print("moving on")
+            Net.lock_player_input(event.player_id)
+            print(tournament_setup)
+            if tournament_setup ~= nil then
+                matchups = setup_matches(tournament_participants)
+                for i, matches in next, matchups do
+                    local match = matchups[i]
+                    print("matches:")
+                    print(match)
+                    start_battle(match["player1_id"]["player_id"], match["player2_id"]["player_id"])
+                    TourneyEmitters.start_tourney_battle(match["player1_id"], match["player2_id"])
+                    print(result)
+                end
+            end
+        end
+
+        if result == 1 then
+            print("[tourney] Player requested to wait for more players.")
+            games.spawn_countdown(event.player_id, 100, 20, 10, duration)
+            games.start_countdown(event.player_id)
+
+            TourneyEmitters.players_waiting[event.player_id] = {
+                waiting = true,
+                tourney_board = entry["tourney_board"]
+            }
+        end
+    end)
+end)
+
 Net:on("battle_results", function(event)
     print(event.player_id, event.health, event.time, event.ran, event.emotion, event.turns, event.enemies)
 end)
