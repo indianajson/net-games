@@ -235,6 +235,11 @@ function TournamentState.cleanup_tournament(tournament_id)
     active_tournaments[tournament_id] = nil
 end
 
+-- NEW: Remove a specific player from tournament tracking
+function TournamentState.remove_player_from_tournament(player_id)
+    player_tournaments[player_id] = nil
+end
+
 function TournamentState.get_tournament(tournament_id)
     return active_tournaments[tournament_id]
 end

@@ -168,6 +168,14 @@ function TournamentUtils.ask_host_about_next_round(tournament_id, TournamentStat
         end
         
         Net.message_player(current_host, "Round " .. tournament.current_round .. " completed!")
+        await(Async.sleep(0.1)) -- Wait for message to be read
+        
+        -- Only ask about next round if tournament isn't completed (after 3 rounds)
+        if tournament.current_round >= 3 then
+            print("[tourney] Tournament completed after 3 rounds, not asking host")
+            return true
+        end
+        
         local result = await(Async.question_player(current_host, "Start next round?"))
         
         -- DEBUG: Print the actual result from the question

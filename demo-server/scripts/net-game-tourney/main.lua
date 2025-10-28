@@ -86,6 +86,11 @@ local function get_new_host(tournament)
     return nil
 end
 
+-- Check if tournament is completed (3 rounds have passed)
+local function is_tournament_completed(tournament)
+    return tournament.current_round >= 3 and #tournament.winners == 1
+end
+
 -- Enhanced battle starter with proper framework management
 local function start_battle(player1_id, player2_id, tournament_id, match_index)
     return async(function()
@@ -116,6 +121,7 @@ local function start_battle(player1_id, player2_id, tournament_id, match_index)
         elseif is_player1_npc then
             -- Player vs NPC - notify the player
             Net.message_player(player2_id, "Starting battle against NPC opponent!")
+            await(Async.sleep(2)) -- Wait for message to be read
             Net.lock_player_input(player2_id)
             local result = await(Async.initiate_encounter(player2_id, player1_id))
             Net.unlock_player_input(player2_id)
@@ -123,6 +129,7 @@ local function start_battle(player1_id, player2_id, tournament_id, match_index)
         elseif is_player2_npc then
             -- Player vs NPC - notify the player
             Net.message_player(player1_id, "Starting battle against NPC opponent!")
+            await(Async.sleep(2)) -- Wait for message to be read
             Net.lock_player_input(player1_id)
             local result = await(Async.initiate_encounter(player1_id, player2_id))
             Net.unlock_player_input(player1_id)
@@ -131,6 +138,7 @@ local function start_battle(player1_id, player2_id, tournament_id, match_index)
             -- PvP - notify both players
             Net.message_player(player1_id, "Starting PvP battle!")
             Net.message_player(player2_id, "Starting PvP battle!")
+            await(Async.sleep(2)) -- Wait for messages to be read
             Net.lock_player_input(player1_id)
             Net.lock_player_input(player2_id)
             local result = await(Async.initiate_pvp(player1_id, player2_id))
@@ -163,6 +171,9 @@ local function run_tournament_battles(tournament_id)
             end
         end
         
+        -- Wait for players to read the round message
+        await(Async.sleep(3))
+        
         -- Don't freeze all players at start - let them move around
         TournamentUtils.notify_waiting_for_matches(tournament_id, TournamentState)
         
@@ -180,7 +191,7 @@ local function run_tournament_battles(tournament_id)
                 if not string.find(player2_id, ".zip") then
                     Net.close_bbs(player2_id)
                 end
-                await(Async.sleep(0.2)) -- Brief pause to ensure text boxes close
+                await(Async.sleep(0.5)) -- Pause to ensure text boxes close
                 
                 -- Start the battle (players will be unfrozen in start_battle)
                 print("[tourney] Starting player battle: " .. player1_id .. " vs " .. player2_id)
@@ -237,6 +248,38 @@ local function run_tournament_battles(tournament_id)
             end
         end
         
+        -- Check if tournament is completed (after 3 rounds)
+        if is_tournament_completed(tournament) then
+            print("[tourney] Tournament completed! Winner: " .. tournament.winners[1].player_id)
+            
+            -- Announce winner to all players
+            local winner = tournament.winners[1]
+            local winner_name = winner.player_id
+            if not string.find(winner.player_id, ".zip") then
+                winner_name = Net.get_player_name(winner.player_id) or winner.player_id
+            end
+            
+            for _, participant in ipairs(tournament.participants) do
+                if not string.find(participant.player_id, ".zip") then
+                    Net.message_player(participant.player_id, "Tournament completed! Winner: " .. winner_name)
+                    await(Async.sleep(0.1)) -- Small delay between messages
+                end
+            end
+            
+            -- Clean up all players
+            for _, participant in ipairs(tournament.participants) do
+                if not string.find(participant.player_id, ".zip") then
+                    games.deactivate_framework(participant.player_id)
+                    games.unfreeze_player(participant.player_id)
+                    -- Remove player from tournament tracking
+                    TournamentState.remove_player_from_tournament(participant.player_id)
+                end
+            end
+            
+            TournamentState.cleanup_tournament(tournament_id)
+            return
+        end
+        
         -- Check if tournament still has real players
         if not has_real_players(tournament) then
             print("[tourney] No real players left, ending tournament")
@@ -246,6 +289,8 @@ local function run_tournament_battles(tournament_id)
                 if not string.find(participant.player_id, ".zip") then
                     games.deactivate_framework(participant.player_id)
                     games.unfreeze_player(participant.player_id)
+                    -- Remove player from tournament tracking
+                    TournamentState.remove_player_from_tournament(participant.player_id)
                 end
             end
             
@@ -272,6 +317,7 @@ local function run_tournament_battles(tournament_id)
                 tournament.host_player_id = new_host
                 print("[tourney] Host eliminated or disconnected. New host: " .. new_host)
                 Net.message_player(new_host, "You are now the tournament host!")
+                await(Async.sleep(0.1)) -- Wait for message to be read
                 current_host = new_host
             else
                 print("[tourney] No real players left to be host, ending tournament")
@@ -305,6 +351,7 @@ local function run_tournament_battles(tournament_id)
                         for _, participant in ipairs(tournament.participants) do
                             if not string.find(participant.player_id, ".zip") then
                                 Net.message_player(participant.player_id, "Tournament completed! Winner: " .. winner_name)
+                                await(Async.sleep(0.1)) -- Small delay between messages
                             end
                         end
                     end
@@ -314,6 +361,8 @@ local function run_tournament_battles(tournament_id)
                         if not string.find(participant.player_id, ".zip") then
                             games.deactivate_framework(participant.player_id)
                             games.unfreeze_player(participant.player_id)
+                            -- Remove player from tournament tracking
+                            TournamentState.remove_player_from_tournament(participant.player_id)
                         end
                     end
                 else
@@ -370,6 +419,8 @@ local function run_tournament_battles(tournament_id)
                 if not string.find(participant.player_id, ".zip") then
                     games.deactivate_framework(participant.player_id)
                     games.unfreeze_player(participant.player_id)
+                    -- Remove player from tournament tracking
+                    TournamentState.remove_player_from_tournament(participant.player_id)
                 end
             end
             
