@@ -17,9 +17,10 @@ function TournamentState.create_tournament(board_id, area_id, host_player_id)
         round_results = { {}, {}, {} },
         losers = { {}, {}, {} }, -- Track losers per round
         board_data = nil, -- Will store board background info and mugshots
-        -- ADD: Position tracking for display
+        -- ADD: Enhanced position tracking for display
         participant_positions = {}, -- Track current position for each participant
-        round_positions = { {}, {}, {} } -- Store positions after each round
+        round_positions = { {}, {}, {} }, -- Store positions after each round
+        current_state_positions = {} -- Track the current display state
     }
     
     active_tournaments[tournament_id] = tournament
@@ -259,6 +260,23 @@ function TournamentState.store_round_positions(tournament_id, round_number, posi
     tournament.participant_positions = positions_data
     
     return true
+end
+
+-- ADD: Function to store current state positions
+function TournamentState.store_current_state_positions(tournament_id, positions_data)
+    local tournament = active_tournaments[tournament_id]
+    if not tournament then return false end
+    
+    tournament.current_state_positions = positions_data
+    return true
+end
+
+-- ADD: Function to get current state positions
+function TournamentState.get_current_state_positions(tournament_id)
+    local tournament = active_tournaments[tournament_id]
+    if not tournament then return nil end
+    
+    return tournament.current_state_positions
 end
 
 function TournamentState.get_tournament(tournament_id)

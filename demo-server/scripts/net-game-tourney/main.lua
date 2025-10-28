@@ -132,6 +132,15 @@ local function store_tournament_board_data(tournament_id, board_background_info,
                 position = mug_pos.initial[i] or {x = 0, y = 0, z = 2}
             }
         end
+        
+        -- Initialize current state positions
+        local initial_positions = {}
+        for i = 1, #participants do
+            if mug_pos.initial[i] then
+                initial_positions[i] = mug_pos.initial[i]
+            end
+        end
+        TournamentState.store_current_state_positions(tournament_id, initial_positions)
     end
 end
 
@@ -154,35 +163,13 @@ local function add_participant_mugshot(player_id, mugshot_id, mug_texture_path, 
     games.add_ui_element("MUG_FRAME_" .. mugshot_id, player_id,
         "/server/assets/tourney/mini-mug-frame.png", "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", x, y, z_pos + 1)  -- Frame above mugshot
     games.add_ui_element("MUG_" .. mugshot_id, player_id, mug_texture_path,
-        "/server/assets/tourney/mug.anim", "UI", x, y, z, .50, .50)
+        "/server/assets/tourney/mug.anim", "UI", x, y, z_pos, .50, .50)
 end
 
 -- Enhanced function to remove specific participant mugshot
 local function remove_participant_mugshot(player_id, mugshot_id)
     games.remove_ui_element("MUG_FRAME_" .. mugshot_id, player_id)
     games.remove_ui_element("MUG_" .. mugshot_id, player_id)
-end
-
--- Enhanced function to move participant mugshot to new position with z-coordinate
-local function move_participant_mugshot(player_id, mugshot_id, new_x, new_y, new_z)
-    local z_pos = new_z or 2  -- Default to 1 if z is not provided
-    -- For now, we'll remove and re-add at new position
-    -- In a future enhancement, we could add smooth animation
-    remove_participant_mugshot(player_id, mugshot_id)
-    
-    -- Find the mug texture from tournament state
-    local tournament_id = TournamentState.get_tournament_id_by_player(player_id)
-    if tournament_id then
-        local tournament = TournamentState.get_tournament(tournament_id)
-        if tournament and tournament.board_data then
-            for _, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
-                if tostring(mugshot_data.player_id) == tostring(mugshot_id) then
-                    add_participant_mugshot(player_id, mugshot_id, mugshot_data.mug_texture, new_x, new_y, z_pos)
-                    break
-                end
-            end
-        end
-    end
 end
 
 local function setup_board_bg_elements(player_id, info)
@@ -208,8 +195,8 @@ local function cleanup_ui(player_id, player_area, name, song)
     Net.set_song(player_area, song)
 end
 
--- MODIFIED: Enhanced tournament board display with pairing-based positions
-local function show_tournament_stage(player_id, tournament, stage_type)
+-- OPTIMIZED: Enhanced function for seamless board transitions with individual mugshot animations
+local function show_tournament_results_with_animation(player_id, tournament, round_number)
     return async(function()
         if not tournament or not tournament.board_data then
             print("[tourney] No board data stored for tournament")
@@ -225,8 +212,156 @@ local function show_tournament_stage(player_id, tournament, stage_type)
         games.activate_framework(player_id)
         games.freeze_player(player_id)
         Net.lock_player_input(player_id)
-        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, .5)
-        await(Async.sleep(.75))
+        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, 0.3)
+        await(Async.sleep(0.3))
+        
+        -- Setup board background once (keep it open throughout)
+        setup_board_bg_elements(player_id, tournament.board_data.background_info)
+        
+        -- PHASE 1: Show current state positions
+        local current_positions = TournamentState.get_current_state_positions(tournament.tournament_id) or {}
+        
+        -- If no current positions, use initial positions
+        if not current_positions or next(current_positions) == nil then
+            current_positions = {}
+            for i = 1, #tournament.board_data.stored_mugshots do
+                if mug_pos.initial[i] then
+                    current_positions[i] = mug_pos.initial[i]
+                end
+            end
+        end
+        
+        -- Display all participants in their current positions
+        for i, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
+            if current_positions[i] then
+                local pos = current_positions[i]
+                add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
+            end
+        end
+        
+        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, 0.3)
+        await(Async.sleep(0.3))
+        
+        print("[tourney] Showing CURRENT STATE for round " .. round_number)
+        
+        -- Let players see the current state
+        await(Async.sleep(1.5))
+        
+        -- PHASE 2: Calculate new positions and animate transitions
+        local new_positions = TournamentUtils.calculate_round_positions(tournament, round_number)
+        
+        if new_positions and next(new_positions) ~= nil then
+            print("[tourney] Animating transitions to new positions")
+            
+            -- FIXED: Enhanced winner detection for all rounds
+            local winners_to_move = {}
+            for i, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
+                local current_pos = current_positions[i]
+                local new_pos = new_positions[i]
+                
+                -- Check if this participant's position changed AND they are a current round winner
+                if current_pos and new_pos and 
+                   (current_pos.x ~= new_pos.x or current_pos.y ~= new_pos.y) then
+                    
+                    -- More robust winner detection - check if they won in the current round
+                    local is_current_winner = false
+                    for _, winner in ipairs(tournament.winners) do
+                        if winner.player_id == mugshot_data.player_id then
+                            is_current_winner = true
+                            break
+                        end
+                    end
+                    
+                    -- Also check if they advanced from previous round (for round 2 and 3)
+                    local advanced_from_previous = false
+                    if round_number > 1 then
+                        local previous_winners = {}
+                        if round_number == 2 then
+                            previous_winners = tournament.round_results[1] or {}
+                        elseif round_number == 3 then
+                            previous_winners = tournament.round_results[2] or {}
+                        end
+                        
+                        for _, prev_result in ipairs(previous_winners) do
+                            if prev_result.winner and prev_result.winner.player_id == mugshot_data.player_id then
+                                advanced_from_previous = true
+                                break
+                            end
+                        end
+                    else
+                        advanced_from_previous = true -- Round 1, all participants started
+                    end
+                    
+                    if is_current_winner or (round_number > 1 and advanced_from_previous) then
+                        table.insert(winners_to_move, {
+                            index = i,
+                            mugshot_data = mugshot_data,
+                            from_pos = current_pos,
+                            to_pos = new_pos
+                        })
+                        print(string.format("[tourney] Will move participant %d from (%d,%d) to (%d,%d) - winner: %s", 
+                              i, current_pos.x, current_pos.y, new_pos.x, new_pos.y, tostring(is_current_winner)))
+                    end
+                end
+            end
+            
+            -- Animate winners moving one by one
+            for _, move_data in ipairs(winners_to_move) do
+                print(string.format("[tourney] Moving winner mugshot %d", move_data.index))
+                
+                -- Remove from old position and add to new position
+                remove_participant_mugshot(player_id, move_data.index)
+                add_participant_mugshot(player_id, move_data.index, 
+                    move_data.mugshot_data.mug_texture, 
+                    move_data.to_pos.x, move_data.to_pos.y, move_data.to_pos.z)
+                
+                -- Brief pause between each movement
+                await(Async.sleep(0.6))
+            end
+            
+            -- Store the new positions as current state
+            TournamentState.store_current_state_positions(tournament.tournament_id, new_positions)
+            TournamentState.store_round_positions(tournament.tournament_id, round_number, new_positions)
+            
+            print("[tourney] Finished animating transitions")
+            
+            -- Final pause to let players see the updated board
+            await(Async.sleep(1.5))
+        else
+            -- No position changes needed, just show for longer
+            await(Async.sleep(2.0))
+        end
+        
+        -- Clean up (only after everything is complete)
+        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, 0.3)
+        await(Async.sleep(0.3))
+        cleanup_ui(player_id, player_area, original_map_name, original_map_song)
+        await(Async.sleep(0.1))
+        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, 0.3)
+        Net.unlock_player_input(player_id)
+        games.deactivate_framework(player_id)
+    end)
+end
+
+-- OPTIMIZED: Enhanced tournament board display with proper state tracking
+local function show_tournament_stage(player_id, tournament, stage_type, is_current_state)
+    return async(function()
+        if not tournament or not tournament.board_data then
+            print("[tourney] No board data stored for tournament")
+            return
+        end
+        
+        local player_area = Net.get_player_area(player_id)
+        local original_map_name = Net.get_area_name(player_area)
+        Net.set_area_name(player_area, "            ")
+        local original_map_song = Net.get_song(player_area)
+        Net.set_song(player_area, "/server/assets/tourney/music/bbn4_tournament_announcement.ogg")
+
+        games.activate_framework(player_id)
+        games.freeze_player(player_id)
+        Net.lock_player_input(player_id)
+        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, 0.3)
+        await(Async.sleep(0.3))
         
         -- Setup board background
         setup_board_bg_elements(player_id, tournament.board_data.background_info)
@@ -234,25 +369,33 @@ local function show_tournament_stage(player_id, tournament, stage_type)
         -- Get positions based on stage type and actual pairings
         local display_positions = {}
         
-        if stage_type == "initial" then
-            -- Use initial positions
-            for i, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
-                if mug_pos.initial[i] then
-                    display_positions[i] = mug_pos.initial[i]
+        if is_current_state then
+            -- Show current state (positions from end of previous round)
+            display_positions = TournamentState.get_current_state_positions(tournament.tournament_id) or {}
+            print("[tourney] Showing CURRENT STATE for round " .. tournament.current_round)
+        else
+            -- Show updated state (new positions based on current round results)
+            if stage_type == "initial" then
+                -- Use initial positions
+                for i, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
+                    if mug_pos.initial[i] then
+                        display_positions[i] = mug_pos.initial[i]
+                    end
                 end
+                
+            elseif stage_type == "round1_results" then
+                -- Calculate positions based on round 1 pairings
+                display_positions = TournamentUtils.calculate_round_positions(tournament, 1)
+                
+            elseif stage_type == "round2_results" then
+                -- Calculate positions based on round 2 pairings
+                display_positions = TournamentUtils.calculate_round_positions(tournament, 2)
+                
+            elseif stage_type == "champion" then
+                -- Calculate positions for champion display
+                display_positions = TournamentUtils.calculate_round_positions(tournament, 3)
             end
-            
-        elseif stage_type == "round1_results" then
-            -- Calculate positions based on round 1 pairings
-            display_positions = TournamentUtils.calculate_round_positions(tournament, 1)
-            
-        elseif stage_type == "round2_results" then
-            -- Calculate positions based on round 2 pairings
-            display_positions = TournamentUtils.calculate_round_positions(tournament, 2)
-            
-        elseif stage_type == "champion" then
-            -- Calculate positions for champion display
-            display_positions = TournamentUtils.calculate_round_positions(tournament, 3)
+            print("[tourney] Showing UPDATED STATE for " .. stage_type)
         end
         
         -- Show all participants in their calculated positions
@@ -267,8 +410,8 @@ local function show_tournament_stage(player_id, tournament, stage_type)
             end
         end
         
-        -- STORE positions after showing results (except initial)
-        if stage_type ~= "initial" then
+        -- STORE positions if this is an updated state (not current state display)
+        if not is_current_state and stage_type ~= "initial" then
             local round_number = nil
             if stage_type == "round1_results" then round_number = 1
             elseif stage_type == "round2_results" then round_number = 2
@@ -276,24 +419,27 @@ local function show_tournament_stage(player_id, tournament, stage_type)
             
             if round_number then
                 TournamentState.store_round_positions(tournament.tournament_id, round_number, display_positions)
+                TournamentState.store_current_state_positions(tournament.tournament_id, display_positions)
                 print("[tourney] Stored pairing-based positions for " .. stage_type)
             end
+        elseif is_current_state then
+            print("[tourney] Displayed current state, no storage needed")
         end
         
-        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5)
-        await(Async.sleep(3.0)) -- Show positions
+        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, 0.3)
+        await(Async.sleep(2.0)) -- Show positions
         
-        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, .5)
-        await(Async.sleep(0.5))
+        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, 0.3)
+        await(Async.sleep(0.3))
         cleanup_ui(player_id, player_area, original_map_name, original_map_song)
         await(Async.sleep(0.1))
-        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5)
+        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, 0.3)
         Net.unlock_player_input(player_id)
         games.deactivate_framework(player_id)
     end)
 end
 
--- Enhanced battle starter with proper framework management and consistent NPC results
+-- OPTIMIZED: Enhanced battle starter with proper framework management and consistent NPC results
 local function start_battle(player1_id, player2_id, tournament_id, match_index)
     return async(function()
         local is_player1_npc = string.find(player1_id, ".zip")
@@ -312,7 +458,7 @@ local function start_battle(player1_id, player2_id, tournament_id, match_index)
             table.insert(players_to_cleanup, player2_id)
         end
         
-        await(Async.sleep(0.5)) -- Brief pause to ensure cleanup
+        await(Async.sleep(0.3)) -- Brief pause to ensure cleanup
         
         if is_player1_npc and is_player2_npc then
             -- NPC vs NPC - instant resolution with weighted random
@@ -407,7 +553,7 @@ local function start_battle(player1_id, player2_id, tournament_id, match_index)
     end)
 end
 
--- MODIFIED: Enhanced tournament battles with proper board display sequencing and pairing-based positions
+-- OPTIMIZED: Enhanced tournament battles with proper state tracking and display sequencing
 local function run_tournament_battles(tournament_id)
     return async(function()
         local tournament = TournamentState.get_tournament(tournament_id)
@@ -415,19 +561,26 @@ local function run_tournament_battles(tournament_id)
         
         print("[tourney] Starting tournament battles for round " .. tournament.current_round)
         
-        -- Show initial board for all real players
+        -- FIRST: Show current state of the board before any battles
         if tournament.current_round == 1 then
-        else
-            -- For subsequent rounds, show the results of the previous round
-            local previous_stage = "round" .. (tournament.current_round - 1) .. "_results"
-            print("[tourney] Showing previous round results: " .. previous_stage)
+            print("[tourney] Showing initial tournament board")
             for _, participant in ipairs(tournament.participants) do
                 if not string.find(participant.player_id, ".zip") then
-                    await(show_tournament_stage(participant.player_id, tournament, previous_stage))
-                    await(Async.sleep(0.5)) -- Stagger board displays
+                    await(show_tournament_stage(participant.player_id, tournament, "initial", false))
+                    await(Async.sleep(0.3)) -- Stagger board displays
                 end
             end
-            await(Async.sleep(2)) -- Additional pause after all boards are shown
+            await(Async.sleep(1.0)) -- Additional pause after all boards are shown
+        else
+            -- For subsequent rounds, show the CURRENT STATE (positions from previous round)
+            print("[tourney] Showing CURRENT STATE before round " .. tournament.current_round .. " battles")
+            for _, participant in ipairs(tournament.participants) do
+                if not string.find(participant.player_id, ".zip") then
+                    await(show_tournament_stage(participant.player_id, tournament, "current_state", true))
+                    await(Async.sleep(0.3)) -- Stagger board displays
+                end
+            end
+            await(Async.sleep(1.0)) -- Additional pause after all boards are shown
         end
         
         -- First, resolve all NPC vs NPC battles instantly for consistency
@@ -456,7 +609,7 @@ local function run_tournament_battles(tournament_id)
                 if not string.find(player2_id, ".zip") then
                     Net.close_bbs(player2_id)
                 end
-                await(Async.sleep(0.5)) -- Pause to ensure text boxes close
+                await(Async.sleep(0.3)) -- Pause to ensure text boxes close
                 
                 -- Start the battle
                 print("[tourney] Starting player battle: " .. player1_id .. " vs " .. player2_id)
@@ -464,7 +617,7 @@ local function run_tournament_battles(tournament_id)
                 
                 -- Brief pause between matches
                 if i < #tournament.matches then
-                    await(Async.sleep(1))
+                    await(Async.sleep(0.5))
                 end
             end
         end
@@ -472,7 +625,7 @@ local function run_tournament_battles(tournament_id)
         print("[tourney] Finished all battles for round " .. tournament.current_round)
         
         -- Wait a moment to ensure all battle results are processed
-        await(Async.sleep(2))
+        await(Async.sleep(1.0))
         
         -- Check if all matches are completed, if not, manually complete any remaining battles
         local all_matches_completed = true
@@ -501,28 +654,22 @@ local function run_tournament_battles(tournament_id)
             end
             
             if results_stage then
-                print("[tourney] Showing tournament results stage: " .. results_stage)
+                print("[tourney] Showing tournament UPDATED STATE with animations: " .. results_stage)
                 
-                -- Calculate pairing-based positions before showing
                 local round_number = nil
                 if results_stage == "round1_results" then round_number = 1
                 elseif results_stage == "round2_results" then round_number = 2
                 elseif results_stage == "champion" then round_number = 3 end
                 
-                if round_number then
-                    local calculated_positions = TournamentUtils.calculate_round_positions(tournament, round_number)
-                    TournamentState.store_round_positions(tournament_id, round_number, calculated_positions)
-                end
-                
-                -- Show board to all real players
+                -- Use the new animation function for seamless transitions
                 for _, participant in ipairs(tournament.participants) do
                     if not string.find(participant.player_id, ".zip") then
-                        await(show_tournament_stage(participant.player_id, tournament, results_stage))
-                        await(Async.sleep(0.5)) -- Stagger board displays
+                        await(show_tournament_results_with_animation(participant.player_id, tournament, round_number))
+                        await(Async.sleep(0.3)) -- Stagger board displays
                     end
                 end
                 
-                await(Async.sleep(2)) -- Additional pause after all boards are shown
+                await(Async.sleep(1.0)) -- Additional pause after all boards are shown
             end
         end
         
@@ -813,8 +960,8 @@ local function start_and_show_tourney(pid, board_bg_element_info, tourney)
         games.activate_framework(player_id)
         games.freeze_player(player_id)
         Net.lock_player_input(player_id)
-        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, .5)
-        await(Async.sleep(.75))
+        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, 0.3)
+        await(Async.sleep(0.3))
         setup_board_bg_elements(player_id, board_bg_element_info)
         for i, p in next, tourney do
             local pos = mug_pos.initial[i]
@@ -822,13 +969,13 @@ local function start_and_show_tourney(pid, board_bg_element_info, tourney)
                 add_participant_mugshot(pid, i, p.player_mugshot.mug_texture, pos.x, pos.y, pos.z)
             end
         end
-        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5)
-        await(Async.sleep(12.5))
-        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, .5)
-        await(Async.sleep(0.5))
+        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, 0.3)
+        await(Async.sleep(8.0)) -- Reduced from 12.5
+        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, 0.3)
+        await(Async.sleep(0.3))
         cleanup_ui(player_id, player_area, original_map_name, original_map_song)
         await(Async.sleep(0.1))
-        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5)
+        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, 0.3)
         Net.unlock_player_input(player_id)
         games.deactivate_framework(player_id)
         return tourney
@@ -909,7 +1056,7 @@ Net:on("object_interaction", function(event)
                         if tournament_id then
                             -- Show tournament board with consistent participants
                             start_and_show_tourney(event.player_id, board_background_setup_info, participants)
-                            await(Async.sleep(2))
+                            await(Async.sleep(1.0))
                             
                             -- Run battles
                             await(run_tournament_battles(tournament_id))
@@ -947,7 +1094,7 @@ Net:on("object_interaction", function(event)
                         if tournament_id then
                             -- Show tournament board with consistent participants
                             start_and_show_tourney(event.player_id, board_background_setup_info, participants)
-                            await(Async.sleep(2))
+                            await(Async.sleep(1.0))
                             
                             -- Run battles
                             await(run_tournament_battles(tournament_id))
@@ -1004,7 +1151,7 @@ Net:on("countdown_ended", function(event)
                     end
                 end
                 
-                await(Async.sleep(13.9))
+                await(Async.sleep(9.0)) -- Reduced from 13.9
                 
                 -- Run battles with consistent participant order
                 await(run_tournament_battles(tournament_id))
