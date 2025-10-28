@@ -500,14 +500,14 @@ local function run_tournament_battles(tournament_id)
         end
         
         -- Show round message for all players
-        for _, participant in ipairs(tournament.participants) do
-            if not string.find(participant.player_id, ".zip") then
-                TournamentUtils.show_round_ui(participant.player_id, tournament.current_round)
-            end
-        end
-        
-        -- Wait for players to read the round message
-        await(Async.sleep(3))
+        -- for _, participant in ipairs(tournament.participants) do
+        --     if not string.find(participant.player_id, ".zip") then
+        --         TournamentUtils.show_round_ui(participant.player_id, tournament.current_round)
+        --     end
+        -- end
+        -- 
+        -- -- Wait for players to read the round message
+        -- await(Async.sleep(3))
         
         -- Don't freeze all players at start - let them move around
         -- TournamentUtils.notify_waiting_for_matches(tournament_id, TournamentState)

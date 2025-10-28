@@ -35,27 +35,27 @@ function TournamentUtils.freeze_players(player_ids)
 end
 
 -- Show round UI for a player - REMOVED: No longer using framework for round UI
-function TournamentUtils.show_round_ui(player_id, round_number)
+--function TournamentUtils.show_round_ui(player_id, round_number)
     -- Send message instead of using framework UI to avoid bot conflicts
-    Net.message_player(player_id, "Round " .. round_number .. " starting!")
-end
+--    Net.message_player(player_id, "Round " .. round_number .. " starting!")
+--end
 
 -- Remove round UI for a player - REMOVED: No longer using framework for round UI
-function TournamentUtils.remove_round_ui(player_id)
+--function TournamentUtils.remove_round_ui(player_id)
     -- No UI to remove since we're using messages
-end
+--end
 
 -- Notify all players about waiting for matches
-function TournamentUtils.notify_waiting_for_matches(tournament_id, TournamentState)
-    local tournament = TournamentState.get_tournament(tournament_id)
-    if not tournament then return end
-    
-    for _, participant in ipairs(tournament.participants) do
-        if not string.find(participant.player_id, ".zip") then
-            Net.message_player(participant.player_id, "Waiting for other matches to complete. Please wait patiently.")
-        end
-    end
-end
+--function TournamentUtils.notify_waiting_for_matches(tournament_id, TournamentState)
+--     local tournament = TournamentState.get_tournament(tournament_id)
+--     if not tournament then return end
+--     
+--     for _, participant in ipairs(tournament.participants) do
+--         if not string.find(participant.player_id, ".zip") then
+--             Net.message_player(participant.player_id, "Waiting for other matches to complete. Please wait patiently.")
+--         end
+--     end
+-- end
 
 -- Process battle results and determine winner/loser with proper NPC battle detection
 function TournamentUtils.process_battle_results(event, tournament_id, match_index, TournamentState)
