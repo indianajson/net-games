@@ -208,7 +208,7 @@ local function cleanup_ui(player_id, player_area, name, song)
     Net.set_song(player_area, song)
 end
 
--- Enhanced tournament board display with proper stage timing
+-- MODIFIED: Enhanced tournament board display with pairing-based positions
 local function show_tournament_stage(player_id, tournament, stage_type)
     return async(function()
         if not tournament or not tournament.board_data then
@@ -231,104 +231,52 @@ local function show_tournament_stage(player_id, tournament, stage_type)
         -- Setup board background
         setup_board_bg_elements(player_id, tournament.board_data.background_info)
         
+        -- Get positions based on stage type and actual pairings
+        local display_positions = {}
+        
         if stage_type == "initial" then
-            -- Show all initial participants
+            -- Use initial positions
             for i, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
                 if mug_pos.initial[i] then
-                    local pos = mug_pos.initial[i]
-                    add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
+                    display_positions[i] = mug_pos.initial[i]
                 end
             end
             
         elseif stage_type == "round1_results" then
-            -- Show Round 1 results - winners moved up, losers stay
-            local winners = tournament.winners
-            local placed_winners = 0
-            
-            for i, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
-                local is_winner = false
-                for _, winner in ipairs(winners) do
-                    if winner.player_id == mugshot_data.player_id then
-                        is_winner = true
-                        break
-                    end
-                end
-                
-                if is_winner and mug_pos.round1_winners[placed_winners + 1] then
-                    placed_winners = placed_winners + 1
-                    local pos = mug_pos.round1_winners[placed_winners]
-                    add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
-                else
-                    -- Losers stay in initial positions
-                    local pos = mug_pos.initial[i]
-                    if pos then
-                        add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
-                    end
-                end
-            end
+            -- Calculate positions based on round 1 pairings
+            display_positions = TournamentUtils.calculate_round_positions(tournament, 1)
             
         elseif stage_type == "round2_results" then
-            -- Show Round 2 results - winners move to top positions
-            local winners = tournament.winners
-            local placed_winners = 0
-            
-            for i, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
-                local is_winner = false
-                for _, winner in ipairs(winners) do
-                    if winner.player_id == mugshot_data.player_id then
-                        is_winner = true
-                        break
-                    end
-                end
-                
-                if is_winner and mug_pos.round2_winners[placed_winners + 1] then
-                    placed_winners = placed_winners + 1
-                    local pos = mug_pos.round2_winners[placed_winners]
-                    add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
-                else
-                    -- Non-winners show in appropriate positions based on previous round
-                    if i <= 4 then
-                        local pos = mug_pos.round1_winners[i] or mug_pos.initial[i]
-                        if pos then
-                            add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
-                        end
-                    else
-                        local pos = mug_pos.initial[i]
-                        if pos then
-                            add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
-                        end
-                    end
-                end
-            end
+            -- Calculate positions based on round 2 pairings
+            display_positions = TournamentUtils.calculate_round_positions(tournament, 2)
             
         elseif stage_type == "champion" then
-            -- Show final champion
-            local champion = tournament.winners[1]
-            if champion then
-                for i, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
-                    if mugshot_data.player_id == champion.player_id then
-                        local pos = mug_pos.champion[1]
-                        add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
-                    else
-                        -- Others in appropriate positions
-                        if i <= 2 then
-                            local pos = mug_pos.round2_winners[i] or mug_pos.round1_winners[i] or mug_pos.initial[i]
-                            if pos then
-                                add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
-                            end
-                        elseif i <= 4 then
-                            local pos = mug_pos.round1_winners[i] or mug_pos.initial[i]
-                            if pos then
-                                add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
-                            end
-                        else
-                            local pos = mug_pos.initial[i]
-                            if pos then
-                                add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
-                            end
-                        end
-                    end
-                end
+            -- Calculate positions for champion display
+            display_positions = TournamentUtils.calculate_round_positions(tournament, 3)
+        end
+        
+        -- Show all participants in their calculated positions
+        for i, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
+            if display_positions[i] then
+                local pos = display_positions[i]
+                add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
+            elseif mug_pos.initial[i] then
+                -- Fallback to initial position
+                local pos = mug_pos.initial[i]
+                add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
+            end
+        end
+        
+        -- STORE positions after showing results (except initial)
+        if stage_type ~= "initial" then
+            local round_number = nil
+            if stage_type == "round1_results" then round_number = 1
+            elseif stage_type == "round2_results" then round_number = 2
+            elseif stage_type == "champion" then round_number = 3 end
+            
+            if round_number then
+                TournamentState.store_round_positions(tournament.tournament_id, round_number, display_positions)
+                print("[tourney] Stored pairing-based positions for " .. stage_type)
             end
         end
         
@@ -340,7 +288,6 @@ local function show_tournament_stage(player_id, tournament, stage_type)
         cleanup_ui(player_id, player_area, original_map_name, original_map_song)
         await(Async.sleep(0.1))
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5)
-        --games.unfreeze_player(player_id)
         Net.unlock_player_input(player_id)
         games.deactivate_framework(player_id)
     end)
@@ -357,12 +304,10 @@ local function start_battle(player1_id, player2_id, tournament_id, match_index)
         -- Ensure players are unfrozen and framework is deactivated before battle
         local players_to_cleanup = {}
         if not is_player1_npc then 
-            --games.unfreeze_player(player1_id)
             games.deactivate_framework(player1_id)
             table.insert(players_to_cleanup, player1_id)
         end
         if not is_player2_npc then 
-            --games.unfreeze_player(player2_id)
             games.deactivate_framework(player2_id)
             table.insert(players_to_cleanup, player2_id)
         end
@@ -432,25 +377,18 @@ local function start_battle(player1_id, player2_id, tournament_id, match_index)
             return {player_id = winner_id, health = 100, ran = false}
         elseif is_player1_npc then
             -- Player vs NPC - notify the player
-            --Net.message_player(player2_id, "Starting battle against NPC opponent!")
-            --await(Async.sleep(2)) -- Wait for message to be read
             Net.lock_player_input(player2_id)
             local result = await(Async.initiate_encounter(player2_id, player1_id))
             Net.unlock_player_input(player2_id)
             return result
         elseif is_player2_npc then
             -- Player vs NPC - notify the player
-            --Net.message_player(player1_id, "Starting battle against NPC opponent!")
-            --await(Async.sleep(2)) -- Wait for message to be read
             Net.lock_player_input(player1_id)
             local result = await(Async.initiate_encounter(player1_id, player2_id))
             Net.unlock_player_input(player1_id)
             return result
         else
             -- PvP - notify both players
-            --Net.message_player(player1_id, "Starting PvP battle!")
-            --Net.message_player(player2_id, "Starting PvP battle!")
-            --await(Async.sleep(2)) -- Wait for messages to be read
             Net.lock_player_input(player1_id)
             Net.lock_player_input(player2_id)
             local result = await(Async.initiate_pvp(player1_id, player2_id))
@@ -469,7 +407,7 @@ local function start_battle(player1_id, player2_id, tournament_id, match_index)
     end)
 end
 
--- Enhanced tournament battles with proper board display sequencing and consistent NPC results
+-- MODIFIED: Enhanced tournament battles with proper board display sequencing and pairing-based positions
 local function run_tournament_battles(tournament_id)
     return async(function()
         local tournament = TournamentState.get_tournament(tournament_id)
@@ -479,13 +417,6 @@ local function run_tournament_battles(tournament_id)
         
         -- Show initial board for all real players
         if tournament.current_round == 1 then
-        --    print("[tourney] Showing initial tournament board")
-        --    for _, participant in ipairs(tournament.participants) do
-        --        if not string.find(participant.player_id, ".zip") then
-        --            await(show_tournament_stage(participant.player_id, tournament, "initial"))
-        --            await(Async.sleep(0.5)) -- Stagger board displays
-        --        end
-        --    await(Async.sleep(2)) -- Additional pause after all boards are shown
         else
             -- For subsequent rounds, show the results of the previous round
             local previous_stage = "round" .. (tournament.current_round - 1) .. "_results"
@@ -498,19 +429,6 @@ local function run_tournament_battles(tournament_id)
             end
             await(Async.sleep(2)) -- Additional pause after all boards are shown
         end
-        
-        -- Show round message for all players
-        -- for _, participant in ipairs(tournament.participants) do
-        --     if not string.find(participant.player_id, ".zip") then
-        --         TournamentUtils.show_round_ui(participant.player_id, tournament.current_round)
-        --     end
-        -- end
-        -- 
-        -- -- Wait for players to read the round message
-        -- await(Async.sleep(3))
-        
-        -- Don't freeze all players at start - let them move around
-        -- TournamentUtils.notify_waiting_for_matches(tournament_id, TournamentState)
         
         -- First, resolve all NPC vs NPC battles instantly for consistency
         for i, match in ipairs(tournament.matches) do
@@ -585,6 +503,17 @@ local function run_tournament_battles(tournament_id)
             if results_stage then
                 print("[tourney] Showing tournament results stage: " .. results_stage)
                 
+                -- Calculate pairing-based positions before showing
+                local round_number = nil
+                if results_stage == "round1_results" then round_number = 1
+                elseif results_stage == "round2_results" then round_number = 2
+                elseif results_stage == "champion" then round_number = 3 end
+                
+                if round_number then
+                    local calculated_positions = TournamentUtils.calculate_round_positions(tournament, round_number)
+                    TournamentState.store_round_positions(tournament_id, round_number, calculated_positions)
+                end
+                
                 -- Show board to all real players
                 for _, participant in ipairs(tournament.participants) do
                     if not string.find(participant.player_id, ".zip") then
@@ -615,7 +544,6 @@ local function run_tournament_battles(tournament_id)
             -- Clean up all original participants
             for _, participant in ipairs(tournament.participants) do
                 if not string.find(participant.player_id, ".zip") then
-                    --games.unfreeze_player(participant.player_id)
                     games.deactivate_framework(participant.player_id)
                     -- Remove player from tournament tracking
                     TournamentState.remove_player_from_tournament(participant.player_id)
@@ -647,7 +575,6 @@ local function run_tournament_battles(tournament_id)
             -- Clean up all players
             for _, participant in ipairs(tournament.participants) do
                 if not string.find(participant.player_id, ".zip") then
-                    --games.unfreeze_player(participant.player_id)
                     games.deactivate_framework(participant.player_id)
                     -- Remove player from tournament tracking
                     TournamentState.remove_player_from_tournament(participant.player_id)
@@ -692,7 +619,6 @@ local function run_tournament_battles(tournament_id)
                 -- Clean up all original participants
                 for _, participant in ipairs(tournament.participants) do
                     if not string.find(participant.player_id, ".zip") then
-                        --games.unfreeze_player(participant.player_id)
                         games.deactivate_framework(participant.player_id)
                         TournamentState.remove_player_from_tournament(participant.player_id)
                     end
@@ -735,7 +661,6 @@ local function run_tournament_battles(tournament_id)
                     -- Clean up all players
                     for _, participant in ipairs(tournament.participants) do
                         if not string.find(participant.player_id, ".zip") then
-                            --games.unfreeze_player(participant.player_id)
                             games.deactivate_framework(participant.player_id)
                             -- Remove player from tournament tracking
                             TournamentState.remove_player_from_tournament(participant.player_id)
@@ -793,7 +718,6 @@ local function run_tournament_battles(tournament_id)
             -- Clean up all players
             for _, participant in ipairs(tournament.participants) do
                 if not string.find(participant.player_id, ".zip") then
-                    --games.unfreeze_player(participant.player_id)
                     games.deactivate_framework(participant.player_id)
                     -- Remove player from tournament tracking
                     TournamentState.remove_player_from_tournament(participant.player_id)
@@ -905,7 +829,6 @@ local function start_and_show_tourney(pid, board_bg_element_info, tourney)
         cleanup_ui(player_id, player_area, original_map_name, original_map_song)
         await(Async.sleep(0.1))
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5)
-        --games.unfreeze_player(player_id)
         Net.unlock_player_input(player_id)
         games.deactivate_framework(player_id)
         return tourney
@@ -1006,10 +929,6 @@ Net:on("object_interaction", function(event)
                         join_or_create_party(event.player_id, event.object_id, false)
                         
                         -- Clean up framework before starting countdown to prevent conflicts
-                        --games.unfreeze_player(event.player_id)
-                        --games.deactivate_framework(event.player_id)
-                        --await(Async.sleep(0.1))
-                        
                         games.activate_framework(event.player_id)
                         Net.lock_player_input(event.player_id)
                         
@@ -1048,8 +967,6 @@ Net:on("countdown_ended", function(event)
             print("nil")
             -- Remove countdown if it exists
             if active_countdowns[event.player_id] then
-                --games.remove_countdown(event.player_id)
-                --games.unfreeze_player(event.player_id)
                 games.deactivate_framework(event.player_id)
                 active_countdowns[event.player_id] = nil
             end
@@ -1060,8 +977,6 @@ Net:on("countdown_ended", function(event)
         local entry = TourneyEmitters.players_waiting[event.player_id]
         
         -- Always remove the countdown and clean up framework when it ends
-        --games.remove_countdown(event.player_id)
-        --games.unfreeze_player(event.player_id)
         games.deactivate_framework(event.player_id)
         active_countdowns[event.player_id] = nil
         
@@ -1098,11 +1013,6 @@ Net:on("countdown_ended", function(event)
         elseif result == 1 then -- Wait
             print("[tourney] Player requested to wait for more players.")
             
-            -- Clean up framework before restarting countdown
-            --games.unfreeze_player(event.player_id)
-            --games.deactivate_framework(event.player_id)            
-            --await(Async.sleep(0.1))
-            
             -- Restart countdown with fresh framework
             games.activate_framework(event.player_id)
             Net.lock_player_input(event.player_id)
@@ -1116,8 +1026,6 @@ Net:on("countdown_ended", function(event)
                 tourney_board = entry.tourney_board
             }
         end
-        
-        --TourneyEmitters.players_waiting[event.player_id] = nil
     end)
 end)
 
@@ -1232,9 +1140,6 @@ Net:on("player_disconnect", function(event)
     if active_countdowns[event.player_id] then
         active_countdowns[event.player_id] = nil
     end
-    
-    -- Remove round UI
-    TournamentUtils.remove_round_ui(event.player_id)
 end)
 
 -- UI customization event handlers

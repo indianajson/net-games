@@ -16,7 +16,10 @@ function TournamentState.create_tournament(board_id, area_id, host_player_id)
         winners = {},
         round_results = { {}, {}, {} },
         losers = { {}, {}, {} }, -- Track losers per round
-        board_data = nil -- Will store board background info and mugshots
+        board_data = nil, -- Will store board background info and mugshots
+        -- ADD: Position tracking for display
+        participant_positions = {}, -- Track current position for each participant
+        round_positions = { {}, {}, {} } -- Store positions after each round
     }
     
     active_tournaments[tournament_id] = tournament
@@ -81,11 +84,13 @@ function TournamentState.record_battle_result(tournament_id, match_index, winner
     match.winner = winner_participant
     match.loser = loser_participant
     
-    -- Record in round results
+    -- Record in round results with pairing information
     table.insert(tournament.round_results[tournament.current_round], {
         match = match_index,
         winner = winner_participant,
-        loser = loser_participant
+        loser = loser_participant,
+        player1 = match.player1,  -- Store the original pairing
+        player2 = match.player2   -- Store the original pairing
     })
     
     -- Add to winners list if not already there
@@ -239,6 +244,21 @@ end
 -- NEW: Remove a specific player from tournament tracking
 function TournamentState.remove_player_from_tournament(player_id)
     player_tournaments[player_id] = nil
+end
+
+-- ADD: Function to store round positions based on pairings
+function TournamentState.store_round_positions(tournament_id, round_number, positions_data)
+    local tournament = active_tournaments[tournament_id]
+    if not tournament then return false end
+    
+    if not tournament.round_positions then
+        tournament.round_positions = {}
+    end
+    
+    tournament.round_positions[round_number] = positions_data
+    tournament.participant_positions = positions_data
+    
+    return true
 end
 
 function TournamentState.get_tournament(tournament_id)
