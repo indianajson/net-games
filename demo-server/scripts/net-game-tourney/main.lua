@@ -106,7 +106,7 @@ local function store_tournament_board_data(tournament_id, board_background_info,
             tournament.board_data.stored_mugshots[i] = {
                 player_id = participant.player_id,
                 mug_texture = participant.player_mugshot.mug_texture,
-                position = mug_pos.initial_tier[i] or {x = 0, y = 0, z = 1}
+                position = mug_pos.initial_tier[i] or {x = 0, y = 0, z = 2}
             }
         end
     end
@@ -114,9 +114,9 @@ end
 
 -- Enhanced function to add participant mugshot with proper ID tracking and z-coordinate
 local function add_participant_mugshot(player_id, mugshot_id, mug_texture_path, x, y, z)
-    local z_pos = z or 1  -- Default to 1 if z is not provided
+    local z_pos = z or 2  -- Default to 1 if z is not provided
     games.add_ui_element("MUG_FRAME_" .. mugshot_id, player_id,
-        "/server/assets/tourney/mini-mug-frame.png", "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", x, y, z_pos + 1)  -- Frame above mugshot
+        "/server/assets/tourney/mini-mug-frame.png", "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", x, y, 3)  -- Frame above mugshot
     games.add_ui_element("MUG_" .. mugshot_id, player_id, mug_texture_path,
         "/server/assets/tourney/mug.anim", "UI", x, y, z_pos, .50, .50)
 end
@@ -129,7 +129,7 @@ end
 
 -- Enhanced function to move participant mugshot to new position with z-coordinate
 local function move_participant_mugshot(player_id, mugshot_id, new_x, new_y, new_z)
-    local z_pos = new_z or 1  -- Default to 1 if z is not provided
+    local z_pos = new_z or 2  -- Default to 1 if z is not provided
     -- For now, we'll remove and re-add at new position
     -- In a future enhancement, we could add smooth animation
     remove_participant_mugshot(player_id, mugshot_id)
