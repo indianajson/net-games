@@ -32,6 +32,29 @@ local title_banner_pos = ui_data_pos.title_banner
 local champion_topper_pos = ui_data_pos.champion_topper_bn4
 local duration = 10
 
+-- NPC weight lookup table
+local NPC_WEIGHTS = {
+    ["airman/airman1.zip"] = 50,
+    ["blastman/blastman1.zip"] = 60,
+    ["burnerman/burnerman1.zip"] = 55,
+    ["colonel/colonel1.zip"] = 70,
+    ["circusman/circusman1.zip"] = 45,
+    ["cutman/cutman1.zip"] = 40,
+    ["elementman/elementman1.zip"] = 65,
+    ["fireman/fireman1.zip"] = 58,
+    ["gbeast-megaman/gbeast-megaman1.zip"] = 80,
+    ["gutsman/gutsman1.zip"] = 62,
+    ["hatman/hatman1.zip"] = 48,
+    ["iceman/iceman1.zip"] = 52,
+    ["jammingman/jammingman1.zip"] = 47,
+    ["protoman/protoman1.zip"] = 75,
+    ["quickman/quickman1.zip"] = 68,
+    ["roll/roll1.zip"] = 42,
+    ["shadowman/shadowman1.zip"] = 72,
+    ["starman/starman1.zip"] = 54,
+    ["woodman/woodman1.zip"] = 56
+}
+
 ---------------------------------------------------------------------
 -- Core Tournament Functions
 ---------------------------------------------------------------------
@@ -106,19 +129,32 @@ local function store_tournament_board_data(tournament_id, board_background_info,
             tournament.board_data.stored_mugshots[i] = {
                 player_id = participant.player_id,
                 mug_texture = participant.player_mugshot.mug_texture,
-                position = mug_pos.initial_tier[i] or {x = 0, y = 0, z = 2}
+                position = mug_pos.initial[i] or {x = 0, y = 0, z = 2}
             }
         end
     end
+end
+
+-- Get NPC weight for battle calculations
+local function get_npc_weight(npc_id)
+    -- Extract NPC name from path
+    for name, weight in pairs(NPC_WEIGHTS) do
+        if string.find(npc_id, name) then
+            return weight
+        end
+    end
+    
+    -- Default weight if not found
+    return 50
 end
 
 -- Enhanced function to add participant mugshot with proper ID tracking and z-coordinate
 local function add_participant_mugshot(player_id, mugshot_id, mug_texture_path, x, y, z)
     local z_pos = z or 2  -- Default to 1 if z is not provided
     games.add_ui_element("MUG_FRAME_" .. mugshot_id, player_id,
-        "/server/assets/tourney/mini-mug-frame.png", "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", x, y, 3)  -- Frame above mugshot
+        "/server/assets/tourney/mini-mug-frame.png", "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", x, y, z_pos + 1)  -- Frame above mugshot
     games.add_ui_element("MUG_" .. mugshot_id, player_id, mug_texture_path,
-        "/server/assets/tourney/mug.anim", "UI", x, y, z_pos, .50, .50)
+        "/server/assets/tourney/mug.anim", "UI", x, y, z, .50, .50)
 end
 
 -- Enhanced function to remove specific participant mugshot
@@ -172,8 +208,8 @@ local function cleanup_ui(player_id, player_area, name, song)
     Net.set_song(player_area, song)
 end
 
--- Enhanced tournament board display with multi-stage support and z-coordinates
-local function show_tournament_board(player_id, tournament, stage)
+-- Enhanced tournament board display with proper stage timing
+local function show_tournament_stage(player_id, tournament, stage_type)
     return async(function()
         if not tournament or not tournament.board_data then
             print("[tourney] No board data stored for tournament")
@@ -195,168 +231,109 @@ local function show_tournament_board(player_id, tournament, stage)
         -- Setup board background
         setup_board_bg_elements(player_id, tournament.board_data.background_info)
         
-        -- Stage 1: Show all participants in initial positions
-        if stage == 1 then
-            -- Show all initial participants in bottom tier
+        if stage_type == "initial" then
+            -- Show all initial participants
             for i, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
-                if mug_pos.initial_tier[i] then
-                    local pos = mug_pos.initial_tier[i]
+                if mug_pos.initial[i] then
+                    local pos = mug_pos.initial[i]
                     add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
                 end
             end
             
-            Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5)
-            await(Async.sleep(3.0)) -- Show initial positions
-            
-        -- Stage 2: Show winners moving to middle tier after round 1
-        elseif stage == 2 then
-            -- First show all participants in their current positions
-            for i, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
-                if mug_pos.initial_tier[i] then
-                    local pos = mug_pos.initial_tier[i]
-                    add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
-                end
-            end
-            
-            Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5)
-            await(Async.sleep(2.0)) -- Show initial positions
-            
-            -- Then move winners to middle tier
+        elseif stage_type == "round1_results" then
+            -- Show Round 1 results - winners moved up, losers stay
             local winners = tournament.winners
-            for i, winner in ipairs(winners) do
-                local mugshot_index = nil
-                -- Find the index of this winner in stored mugshots
-                for idx, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
-                    if mugshot_data.player_id == winner.player_id then
-                        mugshot_index = idx
-                        break
-                    end
-                end
-                
-                if mugshot_index and mug_pos.middle_tier[i] then
-                    local new_pos = mug_pos.middle_tier[i]
-                    move_participant_mugshot(player_id, mugshot_index, new_pos.x, new_pos.y, new_pos.z)
-                    await(Async.sleep(0.3)) -- Stagger the movements
-                end
-            end
+            local placed_winners = 0
             
-            await(Async.sleep(2.0)) -- Show final positions
-            
-        -- Stage 3: Show winners moving to top tier after round 2
-        elseif stage == 3 then
-            -- First show participants in their current positions (winners in middle, losers in initial)
-            local winners = TournamentState.get_current_round_winners(tournament.tournament_id)
-            local winner_indices = {}
-            
-            -- Place winners in middle tier positions
-            for i, winner in ipairs(winners) do
-                local mugshot_index = nil
-                for idx, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
-                    if mugshot_data.player_id == winner.player_id then
-                        mugshot_index = idx
-                        break
-                    end
-                end
-                
-                if mugshot_index and mug_pos.middle_tier[i] then
-                    local pos = mug_pos.middle_tier[i]
-                    add_participant_mugshot(player_id, mugshot_index, winner.player_mugshot.mug_texture, pos.x, pos.y, pos.z)
-                    winner_indices[mugshot_index] = true
-                end
-            end
-            
-            -- Place losers in initial tier positions
             for i, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
-                if not winner_indices[i] and mug_pos.initial_tier[i] then
-                    local pos = mug_pos.initial_tier[i]
+                local is_winner = false
+                for _, winner in ipairs(winners) do
+                    if winner.player_id == mugshot_data.player_id then
+                        is_winner = true
+                        break
+                    end
+                end
+                
+                if is_winner and mug_pos.round1_winners[placed_winners + 1] then
+                    placed_winners = placed_winners + 1
+                    local pos = mug_pos.round1_winners[placed_winners]
                     add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
-                end
-            end
-            
-            Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5)
-            await(Async.sleep(2.0)) -- Show current positions
-            
-            -- Then move winners to top tier
-            for i, winner in ipairs(winners) do
-                local mugshot_index = nil
-                for idx, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
-                    if mugshot_data.player_id == winner.player_id then
-                        mugshot_index = idx
-                        break
+                else
+                    -- Losers stay in initial positions
+                    local pos = mug_pos.initial[i]
+                    if pos then
+                        add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
                     end
                 end
-                
-                if mugshot_index and mug_pos.top_tier[i] then
-                    local new_pos = mug_pos.top_tier[i]
-                    move_participant_mugshot(player_id, mugshot_index, new_pos.x, new_pos.y, new_pos.z)
-                    await(Async.sleep(0.3)) -- Stagger the movements
-                end
             end
             
-            await(Async.sleep(2.0)) -- Show final positions
+        elseif stage_type == "round2_results" then
+            -- Show Round 2 results - winners move to top positions
+            local winners = tournament.winners
+            local placed_winners = 0
             
-        -- Stage 4: Show final champion after round 3
-        elseif stage == 4 then
-            -- Show all participants in their current positions
-            local winners = TournamentState.get_current_round_winners(tournament.tournament_id)
-            local winner_indices = {}
-            
-            -- Place finalists in top tier
-            for i, winner in ipairs(winners) do
-                local mugshot_index = nil
-                for idx, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
-                    if mugshot_data.player_id == winner.player_id then
-                        mugshot_index = idx
-                        break
-                    end
-                end
-                
-                if mugshot_index and mug_pos.top_tier[i] then
-                    local pos = mug_pos.top_tier[i]
-                    add_participant_mugshot(player_id, mugshot_index, winner.player_mugshot.mug_texture, pos.x, pos.y, pos.z)
-                    winner_indices[mugshot_index] = true
-                end
-            end
-            
-            -- Place others in their respective positions
             for i, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
-                if not winner_indices[i] then
-                    -- Try to place in appropriate tier based on tournament progress
-                    if i <= 4 and mug_pos.middle_tier[i] then
-                        local pos = mug_pos.middle_tier[i]
-                        add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
-                    elseif mug_pos.initial_tier[i] then
-                        local pos = mug_pos.initial_tier[i]
-                        add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
-                    end
-                end
-            end
-            
-            Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5)
-            await(Async.sleep(2.0)) -- Show current positions
-            
-            -- If we have a champion, highlight them
-            if #winners == 1 and mug_pos.top_tier[1] then
-                local champion = winners[1]
-                local champion_index = nil
-                for idx, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
-                    if mugshot_data.player_id == champion.player_id then
-                        champion_index = idx
+                local is_winner = false
+                for _, winner in ipairs(winners) do
+                    if winner.player_id == mugshot_data.player_id then
+                        is_winner = true
                         break
                     end
                 end
                 
-                if champion_index then
-                    -- For now, we'll just ensure they're in the champion position
-                    -- In a future enhancement, we could add special effects
-                    local champion_pos = mug_pos.top_tier[1]
-                    move_participant_mugshot(player_id, champion_index, champion_pos.x, champion_pos.y, champion_pos.z)
-                    await(Async.sleep(0.5))
+                if is_winner and mug_pos.round2_winners[placed_winners + 1] then
+                    placed_winners = placed_winners + 1
+                    local pos = mug_pos.round2_winners[placed_winners]
+                    add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
+                else
+                    -- Non-winners show in appropriate positions based on previous round
+                    if i <= 4 then
+                        local pos = mug_pos.round1_winners[i] or mug_pos.initial[i]
+                        if pos then
+                            add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
+                        end
+                    else
+                        local pos = mug_pos.initial[i]
+                        if pos then
+                            add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
+                        end
+                    end
                 end
             end
             
-            await(Async.sleep(2.0)) -- Show final positions
+        elseif stage_type == "champion" then
+            -- Show final champion
+            local champion = tournament.winners[1]
+            if champion then
+                for i, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
+                    if mugshot_data.player_id == champion.player_id then
+                        local pos = mug_pos.champion[1]
+                        add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
+                    else
+                        -- Others in appropriate positions
+                        if i <= 2 then
+                            local pos = mug_pos.round2_winners[i] or mug_pos.round1_winners[i] or mug_pos.initial[i]
+                            if pos then
+                                add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
+                            end
+                        elseif i <= 4 then
+                            local pos = mug_pos.round1_winners[i] or mug_pos.initial[i]
+                            if pos then
+                                add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
+                            end
+                        else
+                            local pos = mug_pos.initial[i]
+                            if pos then
+                                add_participant_mugshot(player_id, i, mugshot_data.mug_texture, pos.x, pos.y, pos.z)
+                            end
+                        end
+                    end
+                end
+            end
         end
+        
+        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5)
+        await(Async.sleep(3.0)) -- Show positions
         
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, .5)
         await(Async.sleep(0.5))
@@ -369,7 +346,7 @@ local function show_tournament_board(player_id, tournament, stage)
     end)
 end
 
--- Enhanced battle starter with proper framework management
+-- Enhanced battle starter with proper framework management and consistent NPC results
 local function start_battle(player1_id, player2_id, tournament_id, match_index)
     return async(function()
         local is_player1_npc = string.find(player1_id, ".zip")
@@ -393,9 +370,66 @@ local function start_battle(player1_id, player2_id, tournament_id, match_index)
         await(Async.sleep(0.5)) -- Brief pause to ensure cleanup
         
         if is_player1_npc and is_player2_npc then
-            -- NPC vs NPC - simulate battle (no notifications to players)
-            print("[tourney] Starting NPC vs NPC battle")
-            await(TourneyEmitters.simulate_npc_battle(player1_id, player2_id, tournament_id, match_index))
+            -- NPC vs NPC - instant resolution with weighted random
+            print("[tourney] Starting instant NPC vs NPC battle")
+            
+            -- Get tournament to store consistent results
+            local tournament = TournamentState.get_tournament(tournament_id)
+            
+            -- Check if we already have a predetermined result for this match
+            local predetermined_key = "npc_result_" .. match_index
+            local predetermined_result = tournament[predetermined_key]
+            
+            local winner_id, loser_id
+            
+            if predetermined_result then
+                -- Use predetermined result for consistency across all players
+                winner_id = predetermined_result.winner_id
+                loser_id = predetermined_result.loser_id
+                print("[tourney] Using predetermined NPC result: " .. winner_id .. " defeated " .. loser_id)
+            else
+                -- Determine result with weighted random and store it for consistency
+                local npc1_weight = get_npc_weight(player1_id)
+                local npc2_weight = get_npc_weight(player2_id)
+                local total_weight = npc1_weight + npc2_weight
+                local random_val = math.random(1, total_weight)
+                
+                if random_val <= npc1_weight then
+                    winner_id = player1_id
+                    loser_id = player2_id
+                else
+                    winner_id = player2_id
+                    loser_id = player1_id
+                end
+                
+                -- Store the result for consistency across all players
+                tournament[predetermined_key] = {
+                    winner_id = winner_id,
+                    loser_id = loser_id,
+                    weights = {npc1_weight, npc2_weight}
+                }
+                
+                print("[tourney] NPC battle result: " .. winner_id .. " defeated " .. loser_id .. " (weights: " .. npc1_weight .. " vs " .. npc2_weight .. ")")
+            end
+            
+            -- Get tournament and match info to record the result
+            if tournament and tournament.matches and tournament.matches[match_index] then
+                local match = tournament.matches[match_index]
+                local winner = match.player1.player_id == winner_id and match.player1 or match.player2
+                local loser = match.player1.player_id == loser_id and match.player1 or match.player2
+                
+                -- Record the battle result directly in tournament state
+                TournamentState.record_battle_result(tournament_id, match_index, winner, loser)
+                
+                -- Emit battle completed event
+                TourneyEmitters.tourney_emitter:emit("battle_completed", {
+                    matchup = {player1_id = player1_id, player2_id = player2_id},
+                    tournament_id = tournament_id,
+                    match_index = match_index
+                })
+            end
+            
+            return {player_id = winner_id, health = 100, ran = false}
         elseif is_player1_npc then
             -- Player vs NPC - notify the player
             Net.message_player(player2_id, "Starting battle against NPC opponent!")
@@ -435,7 +469,7 @@ local function start_battle(player1_id, player2_id, tournament_id, match_index)
     end)
 end
 
--- Enhanced tournament battles with proper board display sequencing
+-- Enhanced tournament battles with proper board display sequencing and consistent NPC results
 local function run_tournament_battles(tournament_id)
     return async(function()
         local tournament = TournamentState.get_tournament(tournament_id)
@@ -443,12 +477,23 @@ local function run_tournament_battles(tournament_id)
         
         print("[tourney] Starting tournament battles for round " .. tournament.current_round)
         
-        -- Show initial board for all real players (Stage 1)
+        -- Show initial board for all real players
         if tournament.current_round == 1 then
             print("[tourney] Showing initial tournament board")
             for _, participant in ipairs(tournament.participants) do
                 if not string.find(participant.player_id, ".zip") then
-                    await(show_tournament_board(participant.player_id, tournament, 1))
+                    await(show_tournament_stage(participant.player_id, tournament, "initial"))
+                    await(Async.sleep(0.5)) -- Stagger board displays
+                end
+            end
+            await(Async.sleep(2)) -- Additional pause after all boards are shown
+        else
+            -- For subsequent rounds, show the results of the previous round
+            local previous_stage = "round" .. (tournament.current_round - 1) .. "_results"
+            print("[tourney] Showing previous round results: " .. previous_stage)
+            for _, participant in ipairs(tournament.participants) do
+                if not string.find(participant.player_id, ".zip") then
+                    await(show_tournament_stage(participant.player_id, tournament, previous_stage))
                     await(Async.sleep(0.5)) -- Stagger board displays
                 end
             end
@@ -468,7 +513,19 @@ local function run_tournament_battles(tournament_id)
         -- Don't freeze all players at start - let them move around
         TournamentUtils.notify_waiting_for_matches(tournament_id, TournamentState)
         
-        -- First, start all player battles first (PvP and PvE)
+        -- First, resolve all NPC vs NPC battles instantly for consistency
+        for i, match in ipairs(tournament.matches) do
+            local player1_id = match.player1.player_id
+            local player2_id = match.player2.player_id
+            local is_npc_battle = string.find(player1_id, ".zip") and string.find(player2_id, ".zip")
+            
+            if is_npc_battle then
+                print("[tourney] Resolving NPC vs NPC battle instantly: " .. player1_id .. " vs " .. player2_id)
+                await(start_battle(player1_id, player2_id, tournament_id, i))
+            end
+        end
+        
+        -- Then, run player battles (PvP and PvE)
         for i, match in ipairs(tournament.matches) do
             local player1_id = match.player1.player_id
             local player2_id = match.player2.player_id
@@ -484,32 +541,11 @@ local function run_tournament_battles(tournament_id)
                 end
                 await(Async.sleep(0.5)) -- Pause to ensure text boxes close
                 
-                -- Start the battle (players will be unfrozen in start_battle)
+                -- Start the battle
                 print("[tourney] Starting player battle: " .. player1_id .. " vs " .. player2_id)
                 await(start_battle(player1_id, player2_id, tournament_id, i))
                 
-                -- Players remain unfrozen after battle to move around
-                
                 -- Brief pause between matches
-                if i < #tournament.matches then
-                    await(Async.sleep(1))
-                end
-            end
-        end
-        
-        -- Then, simulate all NPC vs NPC battles sequentially (no notifications)
-        for i, match in ipairs(tournament.matches) do
-            local player1_id = match.player1.player_id
-            local player2_id = match.player2.player_id
-            local is_npc_battle = string.find(player1_id, ".zip") and string.find(player2_id, ".zip")
-            
-            if is_npc_battle then
-                -- No announcements for NPC vs NPC battles
-                -- Start the NPC battle simulation
-                print("[tourney] Starting NPC battle simulation: " .. player1_id .. " vs " .. player2_id)
-                await(start_battle(player1_id, player2_id, tournament_id, i))
-                
-                -- Brief pause between NPC matches
                 if i < #tournament.matches then
                     await(Async.sleep(1))
                 end
@@ -521,42 +557,39 @@ local function run_tournament_battles(tournament_id)
         -- Wait a moment to ensure all battle results are processed
         await(Async.sleep(2))
         
-        -- Check if all matches are completed, if not, manually complete NPC battles
+        -- Check if all matches are completed, if not, manually complete any remaining battles
         local all_matches_completed = true
         for i, match in ipairs(tournament.matches) do
             if not match.completed then
                 all_matches_completed = false
-                -- If this is an NPC vs NPC battle that didn't complete, manually complete it
+                print("[tourney] Match not completed: " .. match.player1.player_id .. " vs " .. match.player2.player_id)
+                
+                -- For any remaining NPC vs NPC battles, complete them with predetermined results
                 if string.find(match.player1.player_id, ".zip") and string.find(match.player2.player_id, ".zip") then
-                    print("[tourney] Manually completing NPC vs NPC match: " .. match.player1.player_id .. " vs " .. match.player2.player_id)
-                    -- Randomly pick a winner for NPC vs NPC
-                    local winner = math.random(1, 2) == 1 and match.player1 or match.player2
-                    local loser = winner == match.player1 and match.player2 or match.player1
-                    
-                    TournamentState.record_battle_result(tournament_id, i, winner, loser)
-                    print("[tourney] NPC match completed: " .. winner.player_id .. " defeated " .. loser.player_id)
+                    print("[tourney] Manually completing NPC vs NPC match")
+                    await(start_battle(match.player1.player_id, match.player2.player_id, tournament_id, i))
                 end
             end
         end
         
-        -- Show appropriate board stage based on current round
+        -- Show appropriate results board after the round is complete
         if all_matches_completed then
-            local board_stage = nil
+            local results_stage = nil
             if tournament.current_round == 1 then
-                board_stage = 2 -- Move winners to middle tier
+                results_stage = "round1_results"
             elseif tournament.current_round == 2 then
-                board_stage = 3 -- Move winners to top tier
+                results_stage = "round2_results" 
             elseif tournament.current_round == 3 then
-                board_stage = 4 -- Show final champion
+                results_stage = "champion"
             end
             
-            if board_stage then
-                print("[tourney] Showing tournament board stage " .. board_stage .. " after round " .. tournament.current_round)
+            if results_stage then
+                print("[tourney] Showing tournament results stage: " .. results_stage)
                 
                 -- Show board to all real players
                 for _, participant in ipairs(tournament.participants) do
                     if not string.find(participant.player_id, ".zip") then
-                        await(show_tournament_board(participant.player_id, tournament, board_stage))
+                        await(show_tournament_stage(participant.player_id, tournament, results_stage))
                         await(Async.sleep(0.5)) -- Stagger board displays
                     end
                 end
@@ -861,7 +894,7 @@ local function start_and_show_tourney(pid, board_bg_element_info, tourney)
         await(Async.sleep(.75))
         setup_board_bg_elements(player_id, board_bg_element_info)
         for i, p in next, tourney do
-            local pos = mug_pos.initial_tier[i]
+            local pos = mug_pos.initial[i]
             if pos then
                 add_participant_mugshot(pid, i, p.player_mugshot.mug_texture, pos.x, pos.y, pos.z)
             end
