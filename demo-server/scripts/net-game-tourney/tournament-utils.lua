@@ -175,7 +175,7 @@ function TournamentUtils.get_board_background_and_grid(object, TiledUtils, const
     return p[bg] or p.red_orange_bn4
 end
 
--- FIXED: Correct positioning logic for all rounds
+-- FIXED: Enhanced positioning logic with proper round 3 champion movement
 function TournamentUtils.calculate_round_positions(tournament, round_number)
     local mug_pos = require("scripts/net-game-tourney/mug-pos")
     local positions = {}
@@ -258,64 +258,84 @@ function TournamentUtils.calculate_round_positions(tournament, round_number)
         end
         
     elseif round_number == 3 then
-        -- Round 3: 1 champion moves to top, 1 runner-up stays in round2 position, 2 round2 losers stay in round1, 4 round1 losers stay at bottom
+        -- FIXED: Round 3 - Only the champion moves to the top position
+        -- All other participants (runner-up, semi-finalists, quarter-finalists) stay in their current positions
+        
         local current_matches = tournament.matches or {}
         local round1_results = tournament.round_results[1] or {}
         local round2_results = tournament.round_results[2] or {}
         
-        -- First, place all round1 losers in initial positions
-        for _, round1_result in ipairs(round1_results) do
-            local loser = round1_result.loser
-            if loser then
-                local loser_index = find_initial_index(loser)
-                if loser_index and mug_pos.initial[loser_index] then
-                    positions[loser_index] = mug_pos.initial[loser_index]
+        -- Start with all participants in their current positions (from round 2)
+        -- First get the current state positions
+        local current_positions = TournamentState.get_current_state_positions(tournament.tournament_id) or {}
+        
+        -- If no current positions, build from round results
+        if not current_positions or next(current_positions) == nil then
+            current_positions = {}
+            
+            -- Place round1 losers in initial positions
+            for _, round1_result in ipairs(round1_results) do
+                local loser = round1_result.loser
+                if loser then
+                    local loser_index = find_initial_index(loser)
+                    if loser_index and mug_pos.initial[loser_index] then
+                        current_positions[loser_index] = mug_pos.initial[loser_index]
+                    end
                 end
             end
-        end
-        
-        -- Place round1 winners who lost in round2 in round1 positions
-        for _, round2_result in ipairs(round2_results) do
-            local loser = round2_result.loser
-            if loser then
-                -- Find which round1 match this participant won
-                for _, round1_result in ipairs(round1_results) do
-                    if round1_result.winner and round1_result.winner.player_id == loser.player_id then
-                        local loser_index = find_initial_index(loser)
-                        if loser_index and mug_pos.round1_winners[round1_result.match] then
-                            positions[loser_index] = mug_pos.round1_winners[round1_result.match]
+            
+            -- Place round1 winners who lost in round2 in round1 positions
+            for _, round2_result in ipairs(round2_results) do
+                local loser = round2_result.loser
+                if loser then
+                    -- Find which round1 match this participant won
+                    for _, round1_result in ipairs(round1_results) do
+                        if round1_result.winner and round1_result.winner.player_id == loser.player_id then
+                            local loser_index = find_initial_index(loser)
+                            if loser_index and mug_pos.round1_winners[round1_result.match] then
+                                current_positions[loser_index] = mug_pos.round1_winners[round1_result.match]
+                            end
+                            break
                         end
-                        break
+                    end
+                end
+            end
+            
+            -- Place round2 winners in round2 positions
+            for _, round2_result in ipairs(round2_results) do
+                local winner = round2_result.winner
+                local match_index = round2_result.match
+                
+                if winner then
+                    local winner_index = find_initial_index(winner)
+                    if winner_index and mug_pos.round2_winners[match_index] then
+                        current_positions[winner_index] = mug_pos.round2_winners[match_index]
                     end
                 end
             end
         end
         
-        -- Place round2 winners in round2 positions
-        for _, round2_result in ipairs(round2_results) do
-            local winner = round2_result.winner
-            local match_index = round2_result.match
-            
-            if winner then
-                local winner_index = find_initial_index(winner)
-                if winner_index and mug_pos.round2_winners[match_index] then
-                    positions[winner_index] = mug_pos.round2_winners[match_index]
-                end
-            end
+        -- Copy current positions as starting point
+        for i, pos in pairs(current_positions) do
+            positions[i] = pos
         end
         
-        -- Now handle the final round
+        -- FIXED: Only move the champion to the top position
         for _, match in ipairs(current_matches) do
             if match.completed then
                 local champion_index = find_initial_index(match.winner)
-                local runner_up_index = find_initial_index(match.loser)
                 
                 -- Champion moves to top position
                 if champion_index and mug_pos.champion[1] then
                     positions[champion_index] = mug_pos.champion[1]
+                    print("[tourney] Moving champion " .. match.winner.player_id .. " to top position")
                 end
                 
-                -- Runner-up stays in their round2 position (already set above)
+                -- Runner-up stays in their round2 position (no change)
+                local runner_up_index = find_initial_index(match.loser)
+                if runner_up_index then
+                    print("[tourney] Runner-up " .. match.loser.player_id .. " stays in position")
+                end
             end
         end
     end

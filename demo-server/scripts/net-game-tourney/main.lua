@@ -195,7 +195,7 @@ local function cleanup_ui(player_id, player_area, name, song)
     Net.set_song(player_area, song)
 end
 
--- OPTIMIZED: Enhanced function for seamless board transitions with individual mugshot animations
+-- FIXED: Enhanced function for seamless board transitions with consistent participant shuffling
 local function show_tournament_results_with_animation(player_id, tournament, round_number)
     return async(function()
         if not tournament or not tournament.board_data then
@@ -253,54 +253,55 @@ local function show_tournament_results_with_animation(player_id, tournament, rou
         if new_positions and next(new_positions) ~= nil then
             print("[tourney] Animating transitions to new positions")
             
-            -- FIXED: Enhanced winner detection for all rounds
+            -- FIXED: Enhanced winner detection for all rounds with proper round 3 champion handling
             local winners_to_move = {}
             for i, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
                 local current_pos = current_positions[i]
                 local new_pos = new_positions[i]
                 
-                -- Check if this participant's position changed AND they are a current round winner
+                -- Check if this participant's position changed
                 if current_pos and new_pos and 
                    (current_pos.x ~= new_pos.x or current_pos.y ~= new_pos.y) then
                     
-                    -- More robust winner detection - check if they won in the current round
-                    local is_current_winner = false
-                    for _, winner in ipairs(tournament.winners) do
-                        if winner.player_id == mugshot_data.player_id then
-                            is_current_winner = true
-                            break
-                        end
-                    end
+                    -- More robust winner detection
+                    local is_winner = false
                     
-                    -- Also check if they advanced from previous round (for round 2 and 3)
-                    local advanced_from_previous = false
-                    if round_number > 1 then
-                        local previous_winners = {}
-                        if round_number == 2 then
-                            previous_winners = tournament.round_results[1] or {}
-                        elseif round_number == 3 then
-                            previous_winners = tournament.round_results[2] or {}
-                        end
-                        
-                        for _, prev_result in ipairs(previous_winners) do
-                            if prev_result.winner and prev_result.winner.player_id == mugshot_data.player_id then
-                                advanced_from_previous = true
+                    if round_number == 1 then
+                        -- For round 1, check if they won their match
+                        for _, match in ipairs(tournament.matches) do
+                            if match.completed and match.winner and match.winner.player_id == mugshot_data.player_id then
+                                is_winner = true
                                 break
                             end
                         end
-                    else
-                        advanced_from_previous = true -- Round 1, all participants started
+                    elseif round_number == 2 then
+                        -- For round 2, check if they are in the winners list
+                        for _, winner in ipairs(tournament.winners) do
+                            if winner.player_id == mugshot_data.player_id then
+                                is_winner = true
+                                break
+                            end
+                        end
+                    elseif round_number == 3 then
+                        -- FIXED: For round 3, only the champion should move
+                        for _, match in ipairs(tournament.matches) do
+                            if match.completed and match.winner and match.winner.player_id == mugshot_data.player_id then
+                                is_winner = true
+                                print("[tourney] Champion detected: " .. mugshot_data.player_id)
+                                break
+                            end
+                        end
                     end
                     
-                    if is_current_winner or (round_number > 1 and advanced_from_previous) then
+                    if is_winner then
                         table.insert(winners_to_move, {
                             index = i,
                             mugshot_data = mugshot_data,
                             from_pos = current_pos,
                             to_pos = new_pos
                         })
-                        print(string.format("[tourney] Will move participant %d from (%d,%d) to (%d,%d) - winner: %s", 
-                              i, current_pos.x, current_pos.y, new_pos.x, new_pos.y, tostring(is_current_winner)))
+                        print(string.format("[tourney] Will move participant %d from (%d,%d) to (%d,%d) - round %d winner", 
+                              i, current_pos.x, current_pos.y, new_pos.x, new_pos.y, round_number))
                     end
                 end
             end
@@ -343,7 +344,7 @@ local function show_tournament_results_with_animation(player_id, tournament, rou
     end)
 end
 
--- OPTIMIZED: Enhanced tournament board display with proper state tracking
+-- FIXED: Enhanced tournament board display with consistent participant shuffling
 local function show_tournament_stage(player_id, tournament, stage_type, is_current_state)
     return async(function()
         if not tournament or not tournament.board_data then
@@ -439,7 +440,7 @@ local function show_tournament_stage(player_id, tournament, stage_type, is_curre
     end)
 end
 
--- OPTIMIZED: Enhanced battle starter with proper framework management and consistent NPC results
+-- FIXED: Enhanced battle starter with consistent participant shuffling
 local function start_battle(player1_id, player2_id, tournament_id, match_index)
     return async(function()
         local is_player1_npc = string.find(player1_id, ".zip")
@@ -553,7 +554,7 @@ local function start_battle(player1_id, player2_id, tournament_id, match_index)
     end)
 end
 
--- OPTIMIZED: Enhanced tournament battles with proper state tracking and display sequencing
+-- FIXED: Enhanced tournament battles with consistent participant shuffling
 local function run_tournament_battles(tournament_id)
     return async(function()
         local tournament = TournamentState.get_tournament(tournament_id)
@@ -880,11 +881,11 @@ end
 -- UI and Board Management Functions
 ---------------------------------------------------------------------
 
--- FIXED: Modified to preserve participant order for PvP consistency
-local function initialize_tournament_participants(participants, backfill, preserve_order)
+-- FIXED: Modified to shuffle participants once for consistency across all players and NPCs
+local function initialize_tournament_participants(participants, backfill, tournament_type)
     local final = {}
     
-    -- Add human players first, preserving their order if requested
+    -- Always preserve the original human player order for consistency
     for _, p in next, participants do 
         table.insert(final, p) 
     end
@@ -896,17 +897,17 @@ local function initialize_tournament_participants(participants, backfill, preser
         end
     end
     
-    -- Only shuffle if not preserving order (for PvP integrity)
-    if preserve_order then
-        -- Return in original order for PvP consistency
-        return final
-    else
-        -- Shuffle for single player (NPC battles can be random)
-        return TableUtils.SelectRandomItemsFromTableClamped(final, 8)
+    -- FIXED: Shuffle once for consistent random placement across all players and NPCs
+    if #final >= 8 then
+        final = TableUtils.shuffle(final)
+        print("[tourney] Shuffled participants for consistent random placement")
     end
+    
+    -- Ensure we have exactly 8 participants
+    return TableUtils.SelectRandomItemsFromTableClamped(final, 8)
 end
 
--- FIXED: Enhanced function to ensure participant consistency
+-- FIXED: Enhanced function to ensure participant consistency with shuffling
 local function create_consistent_tournament(player_id, object_id, area_id, board_background_setup_info, is_single_player)
     return async(function()
         local tournament_participants
@@ -916,7 +917,7 @@ local function create_consistent_tournament(player_id, object_id, area_id, board
             tournament_participants = initialize_tournament_participants(
                 { { player_id = player_id, player_mugshot = { mug_animation = default_mug_anim, mug_texture = mug } } }, 
                 true,  -- backfill
-                false  -- don't preserve order (single player can be random)
+                "single"  -- single player tournament type
             )
         else
             -- For multiplayer, use the existing queue and preserve order for PvP integrity
@@ -924,7 +925,7 @@ local function create_consistent_tournament(player_id, object_id, area_id, board
             tournament_participants = initialize_tournament_participants(
                 board_tournament, 
                 true,  -- backfill  
-                true   -- preserve human player order
+                "multiplayer"  -- multiplayer tournament type
             )
         end
         
@@ -1048,7 +1049,7 @@ Net:on("object_interaction", function(event)
                 if result == 0 then
                     local single = await(Async.question_player(event.player_id, "Single Player?"))
                     if single == 1 then
-                        -- FIXED: Use consistent tournament creation
+                        -- FIXED: Use consistent tournament creation with shuffling
                         local tournament_id, participants = await(create_consistent_tournament(
                             event.player_id, event.object_id, player_area, board_background_setup_info, true
                         ))
@@ -1086,7 +1087,7 @@ Net:on("object_interaction", function(event)
                         
                         TourneyEmitters.players_waiting[event.player_id] = { waiting = true, tourney_board = event.object_id }
                     elseif single == 1 then
-                        -- FIXED: Use consistent tournament creation
+                        -- FIXED: Use consistent tournament creation with shuffling
                         local tournament_id, participants = await(create_consistent_tournament(
                             event.player_id, event.object_id, player_area, board_background_setup_info, true
                         ))
@@ -1138,7 +1139,7 @@ Net:on("countdown_ended", function(event)
             local object = Net.get_object_by_id(player_area, entry.tourney_board)
             local board_background_setup_info = TournamentUtils.get_board_background_and_grid(object, TiledUtils, constants)
             
-            -- FIXED: Use consistent tournament creation
+            -- FIXED: Use consistent tournament creation with shuffling
             local tournament_id, tournament_participants = await(create_consistent_tournament(
                 event.player_id, entry.tourney_board, player_area, board_background_setup_info, false
             ))

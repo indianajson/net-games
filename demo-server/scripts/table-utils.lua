@@ -146,4 +146,16 @@ function TableUtils.shallow_copy(original)
   return copy
 end
 
+function TableUtils.shuffle(tbl)
+    local shuffled = {}
+    for i = 1, #tbl do
+        shuffled[i] = tbl[i]
+    end
+    for i = #shuffled, 2, -1 do
+        local j = math.random(i)
+        shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+    end
+    return shuffled
+end
+
 return TableUtils
