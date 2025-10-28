@@ -91,6 +91,136 @@ local function is_tournament_completed(tournament)
     return tournament.current_round >= 3 and #tournament.winners == 1
 end
 
+-- Store tournament board data for later use
+local function store_tournament_board_data(tournament_id, board_background_info, participants)
+    local tournament = TournamentState.get_tournament(tournament_id)
+    if tournament then
+        tournament.board_data = {
+            background_info = board_background_info,
+            participants = participants,
+            stored_mugshots = {}
+        }
+        
+        -- Store mugshot data for all participants
+        for i, participant in ipairs(participants) do
+            tournament.board_data.stored_mugshots[i] = {
+                player_id = participant.player_id,
+                mug_texture = participant.player_mugshot.mug_texture,
+                position = mug_pos.bottom_tier[i] or {x = 0, y = 0}
+            }
+        end
+    end
+end
+
+
+local function add_participant_mugshot(player_id, participant_number, mug_texture_path, x, y)
+    games.add_ui_element("MUG_FRAME_" .. participant_number, player_id,
+        "/server/assets/tourney/mini-mug-frame.png", "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", x, y, 2)
+    games.add_ui_element("MUG_" .. participant_number, player_id, mug_texture_path,
+        "/server/assets/tourney/mug.anim", "UI", x, y, 1, .50, .50)
+end
+
+local function setup_board_bg_elements(player_id, info)
+    games.add_ui_element("BOARD BG", player_id, info.gradient_texture,
+        constants.default_background_anim_path_bn4, "BG", board_pos.x, board_pos.y, board_pos.z)
+    games.add_ui_element("BOARD GRID", player_id, info.grid_texture,
+        constants.default_grid_anim_path_bn4, "UI", grid_pos.x, grid_pos.y, grid_pos.z)
+    games.add_ui_element("TOURNEY TREE", player_id, constants.bracket_bm_bn4,
+        constants.default_bracket_anim_path_bn4, "UI", bracket_pos.x, bracket_pos.y, bracket_pos.z)
+    games.add_ui_element("CHAMPION TOPPER", player_id, constants.champion_topper_bn4,
+        constants.champion_topper_bn4_anim, "UI", champion_topper_pos.x, champion_topper_pos.y, champion_topper_pos.z)
+    games.add_ui_element("TITLE BANNER", player_id, "/server/assets/tourney/title-banner.png",
+        "/server/assets/tourney/title-banner.anim", "RED", title_banner_pos.x, title_banner_pos.y, title_banner_pos.z)
+    games.add_ui_element("CROWN_1", player_id, "/server/assets/tourney/crown.png",
+        "/server/assets/tourney/crown.anim", "IDLE", 64, 48, 0)
+    games.add_ui_element("CROWN_2", player_id, "/server/assets/tourney/crown.png",
+        "/server/assets/tourney/crown.anim", "IDLE", 176, 48, 0)
+end
+
+local function cleanup_ui(player_id, player_area, name, song)
+    for _, element in next, frames_to_remove do games.remove_ui_element(element, player_id) end
+    Net.set_area_name(player_area, name)
+    Net.set_song(player_area, song)
+end
+
+-- Show tournament board with current state
+local function show_tournament_board(player_id, tournament)
+    return async(function()
+        if not tournament or not tournament.board_data then
+            print("[tourney] No board data stored for tournament")
+            return
+        end
+        
+        local player_area = Net.get_player_area(player_id)
+        local original_map_name = Net.get_area_name(player_area)
+        Net.set_area_name(player_area, "            ")
+        local original_map_song = Net.get_song(player_area)
+        Net.set_song(player_area, "/server/assets/tourney/music/bbn4_tournament_announcement.ogg")
+
+        games.activate_framework(player_id)
+        games.freeze_player(player_id)
+        Net.lock_player_input(player_id)
+        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, .5)
+        await(Async.sleep(.75))
+        
+        -- Setup board background
+        setup_board_bg_elements(player_id, tournament.board_data.background_info)
+        
+        -- Show participants based on current round
+        if tournament.current_round == 1 then
+            -- Show all initial participants
+            for i, mugshot_data in ipairs(tournament.board_data.stored_mugshots) do
+                add_participant_mugshot(player_id, i, mugshot_data.mug_texture, mugshot_data.position.x, mugshot_data.position.y)
+            end
+        elseif tournament.current_round == 2 then
+            -- Show winners from round 1 in middle tier positions
+            local winners = tournament.winners
+            for i, winner in ipairs(winners) do
+                local mugshot_data = nil
+                -- Find the stored mugshot for this winner
+                for _, stored in ipairs(tournament.board_data.stored_mugshots) do
+                    if stored.player_id == winner.player_id then
+                        mugshot_data = stored
+                        break
+                    end
+                end
+                
+                if mugshot_data and mug_pos.middle_tier[i] then
+                    add_participant_mugshot(player_id, i, mugshot_data.mug_texture, mug_pos.middle_tier[i].x, mug_pos.middle_tier[i].y)
+                end
+            end
+        elseif tournament.current_round >= 3 then
+            -- Show finalists in top tier
+            local winners = tournament.winners
+            for i, winner in ipairs(winners) do
+                local mugshot_data = nil
+                -- Find the stored mugshot for this winner
+                for _, stored in ipairs(tournament.board_data.stored_mugshots) do
+                    if stored.player_id == winner.player_id then
+                        mugshot_data = stored
+                        break
+                    end
+                end
+                
+                if mugshot_data and mug_pos.top_tier[i] then
+                    add_participant_mugshot(player_id, i, mugshot_data.mug_texture, mug_pos.top_tier[i].x, mug_pos.top_tier[i].y)
+                end
+            end
+        end
+        
+        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5)
+        await(Async.sleep(8.0)) -- Shorter display time for intermediate boards
+        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, .5)
+        await(Async.sleep(0.5))
+        cleanup_ui(player_id, player_area, original_map_name, original_map_song)
+        await(Async.sleep(0.1))
+        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5)
+        games.unfreeze_player(player_id)
+        Net.unlock_player_input(player_id)
+        games.deactivate_framework(player_id)
+    end)
+end
+
 -- Enhanced battle starter with proper framework management
 local function start_battle(player1_id, player2_id, tournament_id, match_index)
     return async(function()
@@ -246,6 +376,21 @@ local function run_tournament_battles(tournament_id)
                     print("[tourney] NPC match completed: " .. winner.player_id .. " defeated " .. loser.player_id)
                 end
             end
+        end
+        
+        -- Show tournament board after round 1 completion
+        if tournament.current_round == 1 and all_matches_completed then
+            print("[tourney] Showing tournament board after round 1 completion")
+            
+            -- Show board to all real players
+            for _, participant in ipairs(tournament.participants) do
+                if not string.find(participant.player_id, ".zip") then
+                    await(show_tournament_board(participant.player_id, tournament))
+                    await(Async.sleep(0.5)) -- Stagger board displays
+                end
+            end
+            
+            await(Async.sleep(2)) -- Additional pause after all boards are shown
         end
         
         -- Check if tournament is completed (after 3 rounds)
@@ -433,12 +578,6 @@ end
 -- UI and Board Management Functions
 ---------------------------------------------------------------------
 
-local function add_participant_mugshot(player_id, participant_number, mug_texture_path, x, y)
-    games.add_ui_element("MUG_FRAME_" .. participant_number, player_id,
-        "/server/assets/tourney/mini-mug-frame.png", "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", x, y, 2)
-    games.add_ui_element("MUG_" .. participant_number, player_id, mug_texture_path,
-        "/server/assets/tourney/mug.anim", "UI", x, y, 1, .50, .50)
-end
 
 local function initialize_tournament_participants(participants, backfill)
     local final = {}
@@ -448,29 +587,6 @@ local function initialize_tournament_participants(participants, backfill)
         for _, f in next, fill do table.insert(final, f) end
     end
     return TableUtils.SelectRandomItemsFromTableClamped(final, 8)
-end
-
-local function cleanup_ui(player_id, player_area, name, song)
-    for _, element in next, frames_to_remove do games.remove_ui_element(element, player_id) end
-    Net.set_area_name(player_area, name)
-    Net.set_song(player_area, song)
-end
-
-local function setup_board_bg_elements(player_id, info)
-    games.add_ui_element("BOARD BG", player_id, info.gradient_texture,
-        constants.default_background_anim_path_bn4, "BG", board_pos.x, board_pos.y, board_pos.z)
-    games.add_ui_element("BOARD GRID", player_id, info.grid_texture,
-        constants.default_grid_anim_path_bn4, "UI", grid_pos.x, grid_pos.y, grid_pos.z)
-    games.add_ui_element("TOURNEY TREE", player_id, constants.bracket_bm_bn4,
-        constants.default_bracket_anim_path_bn4, "UI", bracket_pos.x, bracket_pos.y, bracket_pos.z)
-    games.add_ui_element("CHAMPION TOPPER", player_id, constants.champion_topper_bn4,
-        constants.champion_topper_bn4_anim, "UI", champion_topper_pos.x, champion_topper_pos.y, champion_topper_pos.z)
-    games.add_ui_element("TITLE BANNER", player_id, "/server/assets/tourney/title-banner.png",
-        "/server/assets/tourney/title-banner.anim", "RED", title_banner_pos.x, title_banner_pos.y, title_banner_pos.z)
-    games.add_ui_element("CROWN_1", player_id, "/server/assets/tourney/crown.png",
-        "/server/assets/tourney/crown.anim", "IDLE", 64, 48, 0)
-    games.add_ui_element("CROWN_2", player_id, "/server/assets/tourney/crown.png",
-        "/server/assets/tourney/crown.anim", "IDLE", 176, 48, 0)
 end
 
 local function start_and_show_tourney(pid, board_bg_element_info, tourney)
@@ -584,6 +700,9 @@ Net:on("object_interaction", function(event)
                                 TournamentState.add_participant(tournament_id, participant)
                             end
                             
+                            -- Store board data for later use
+                            store_tournament_board_data(tournament_id, board_background_setup_info, tsetup)
+                            
                             if TournamentState.start_tournament(tournament_id) then
                                 -- Run battles with proper sequencing
                                 await(run_tournament_battles(tournament_id))
@@ -629,6 +748,9 @@ Net:on("object_interaction", function(event)
                             for _, participant in ipairs(tsetup) do
                                 TournamentState.add_participant(tournament_id, participant)
                             end
+                            
+                            -- Store board data for later use
+                            store_tournament_board_data(tournament_id, board_background_setup_info, tsetup)
                             
                             if TournamentState.start_tournament(tournament_id) then
                                 -- Run battles with proper sequencing
@@ -686,6 +808,9 @@ Net:on("countdown_ended", function(event)
             for _, participant in ipairs(tournament_participants) do
                 TournamentState.add_participant(tournament_id, participant)
             end
+            
+            -- Store board data for later use
+            store_tournament_board_data(tournament_id, board_background_setup_info, tournament_participants)
             
             if TournamentState.start_tournament(tournament_id) then
                 local tournament = TournamentState.get_tournament(tournament_id)

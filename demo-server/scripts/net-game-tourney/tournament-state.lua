@@ -15,7 +15,8 @@ function TournamentState.create_tournament(board_id, area_id, host_player_id)
         matches = {},
         winners = {},
         round_results = { {}, {}, {} },
-        losers = { {}, {}, {} } -- Track losers per round
+        losers = { {}, {}, {} }, -- Track losers per round
+        board_data = nil -- Will store board background info and mugshots
     }
     
     active_tournaments[tournament_id] = tournament
