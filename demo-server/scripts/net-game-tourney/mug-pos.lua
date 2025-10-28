@@ -12,19 +12,19 @@ local POSITIONS = {
     },
     -- After Round 1 - 4 winners move up
     round1_winners = {
-        [1] = { x = 50, y = 54, z = 2 },
-        [2] = { x = 170, y = 54, z = 2 },
-        [3] = { x = 78, y = 78, z = 2 },
-        [4] = { x = 142, y = 78, z = 2 }
+        [1] = { x = 22, y = 82, z = 2 },
+        [2] = { x = 78, y = 82, z = 2 },
+        [3] = { x = 142, y = 82, z = 2 },
+        [4] = { x = 198, y = 82, z = 2 }
     },
     -- After Round 2 - 2 winners move up  
     round2_winners = {
-        [1] = { x = 109, y = 34, z = 2 },
-        [2] = { x = 109, y = 54, z = 2 }
+        [1] = { x = 50, y = 56, z = 2 },
+        [2] = { x = 170, y = 56, z = 2 }
     },
     -- After Round 3 - 1 champion at the top
     champion = {
-        [1] = { x = 109, y = 34, z = 2 }
+        [1] = { x = 110, y = 34, z = 2 }
     }
 }
 
