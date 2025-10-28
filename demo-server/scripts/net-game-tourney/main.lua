@@ -393,6 +393,35 @@ local function run_tournament_battles(tournament_id)
             await(Async.sleep(2)) -- Additional pause after all boards are shown
         end
         
+        -- IMPORTANT: Check for remaining real players AFTER board display
+        -- This ensures we handle cases where the last real player was eliminated
+        
+        -- First, update who the current participants are (winners of this round)
+        local current_real_players = {}
+        for _, winner in ipairs(tournament.winners) do
+            if not string.find(winner.player_id, ".zip") then
+                table.insert(current_real_players, winner)
+            end
+        end
+        
+        -- If no real players remain after this round, end the tournament
+        if #current_real_players == 0 then
+            print("[tourney] No real players left after round " .. tournament.current_round .. ", ending tournament")
+            
+            -- Clean up all original participants
+            for _, participant in ipairs(tournament.participants) do
+                if not string.find(participant.player_id, ".zip") then
+                    games.deactivate_framework(participant.player_id)
+                    games.unfreeze_player(participant.player_id)
+                    -- Remove player from tournament tracking
+                    TournamentState.remove_player_from_tournament(participant.player_id)
+                end
+            end
+            
+            TournamentState.cleanup_tournament(tournament_id)
+            return
+        end
+        
         -- Check if tournament is completed (after 3 rounds)
         if is_tournament_completed(tournament) then
             print("[tourney] Tournament completed! Winner: " .. tournament.winners[1].player_id)
@@ -425,31 +454,13 @@ local function run_tournament_battles(tournament_id)
             return
         end
         
-        -- Check if tournament still has real players
-        if not has_real_players(tournament) then
-            print("[tourney] No real players left, ending tournament")
-            
-            -- Clean up all players
-            for _, participant in ipairs(tournament.participants) do
-                if not string.find(participant.player_id, ".zip") then
-                    games.deactivate_framework(participant.player_id)
-                    games.unfreeze_player(participant.player_id)
-                    -- Remove player from tournament tracking
-                    TournamentState.remove_player_from_tournament(participant.player_id)
-                end
-            end
-            
-            TournamentState.cleanup_tournament(tournament_id)
-            return
-        end
-        
         -- Check if current host is still in tournament and is a real player
         local current_host = tournament.host_player_id
         local host_still_in_tournament = false
         
-        -- Check if host is still in the current participants (winners of this round)
-        for _, participant in ipairs(tournament.participants) do
-            if participant.player_id == current_host then
+        -- Check if host is still in the current winners
+        for _, winner in ipairs(tournament.winners) do
+            if winner.player_id == current_host then
                 host_still_in_tournament = true
                 break
             end
@@ -457,7 +468,15 @@ local function run_tournament_battles(tournament_id)
         
         -- If host is eliminated or disconnected, assign new host from remaining real players
         if not host_still_in_tournament or not Net.is_player(current_host) or string.find(current_host, ".zip") then
-            local new_host = get_new_host(tournament)
+            local new_host = nil
+            -- Find first real player in winners to be new host
+            for _, winner in ipairs(tournament.winners) do
+                if not string.find(winner.player_id, ".zip") then
+                    new_host = winner.player_id
+                    break
+                end
+            end
+            
             if new_host then
                 tournament.host_player_id = new_host
                 print("[tourney] Host eliminated or disconnected. New host: " .. new_host)
@@ -466,6 +485,14 @@ local function run_tournament_battles(tournament_id)
                 current_host = new_host
             else
                 print("[tourney] No real players left to be host, ending tournament")
+                -- Clean up all original participants
+                for _, participant in ipairs(tournament.participants) do
+                    if not string.find(participant.player_id, ".zip") then
+                        games.deactivate_framework(participant.player_id)
+                        games.unfreeze_player(participant.player_id)
+                        TournamentState.remove_player_from_tournament(participant.player_id)
+                    end
+                end
                 TournamentState.cleanup_tournament(tournament_id)
                 return
             end
