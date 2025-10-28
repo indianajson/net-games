@@ -340,7 +340,7 @@ local function show_tournament_stage(player_id, tournament, stage_type)
         cleanup_ui(player_id, player_area, original_map_name, original_map_song)
         await(Async.sleep(0.1))
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5)
-        games.unfreeze_player(player_id)
+        --games.unfreeze_player(player_id)
         Net.unlock_player_input(player_id)
         games.deactivate_framework(player_id)
     end)
@@ -357,13 +357,13 @@ local function start_battle(player1_id, player2_id, tournament_id, match_index)
         -- Ensure players are unfrozen and framework is deactivated before battle
         local players_to_cleanup = {}
         if not is_player1_npc then 
+            --games.unfreeze_player(player1_id)
             games.deactivate_framework(player1_id)
-            games.unfreeze_player(player1_id)
             table.insert(players_to_cleanup, player1_id)
         end
         if not is_player2_npc then 
+            --games.unfreeze_player(player2_id)
             games.deactivate_framework(player2_id)
-            games.unfreeze_player(player2_id)
             table.insert(players_to_cleanup, player2_id)
         end
         
@@ -432,25 +432,25 @@ local function start_battle(player1_id, player2_id, tournament_id, match_index)
             return {player_id = winner_id, health = 100, ran = false}
         elseif is_player1_npc then
             -- Player vs NPC - notify the player
-            Net.message_player(player2_id, "Starting battle against NPC opponent!")
-            await(Async.sleep(2)) -- Wait for message to be read
+            --Net.message_player(player2_id, "Starting battle against NPC opponent!")
+            --await(Async.sleep(2)) -- Wait for message to be read
             Net.lock_player_input(player2_id)
             local result = await(Async.initiate_encounter(player2_id, player1_id))
             Net.unlock_player_input(player2_id)
             return result
         elseif is_player2_npc then
             -- Player vs NPC - notify the player
-            Net.message_player(player1_id, "Starting battle against NPC opponent!")
-            await(Async.sleep(2)) -- Wait for message to be read
+            --Net.message_player(player1_id, "Starting battle against NPC opponent!")
+            --await(Async.sleep(2)) -- Wait for message to be read
             Net.lock_player_input(player1_id)
             local result = await(Async.initiate_encounter(player1_id, player2_id))
             Net.unlock_player_input(player1_id)
             return result
         else
             -- PvP - notify both players
-            Net.message_player(player1_id, "Starting PvP battle!")
-            Net.message_player(player2_id, "Starting PvP battle!")
-            await(Async.sleep(2)) -- Wait for messages to be read
+            --Net.message_player(player1_id, "Starting PvP battle!")
+            --Net.message_player(player2_id, "Starting PvP battle!")
+            --await(Async.sleep(2)) -- Wait for messages to be read
             Net.lock_player_input(player1_id)
             Net.lock_player_input(player2_id)
             local result = await(Async.initiate_pvp(player1_id, player2_id))
@@ -479,14 +479,13 @@ local function run_tournament_battles(tournament_id)
         
         -- Show initial board for all real players
         if tournament.current_round == 1 then
-            print("[tourney] Showing initial tournament board")
-            for _, participant in ipairs(tournament.participants) do
-                if not string.find(participant.player_id, ".zip") then
-                    await(show_tournament_stage(participant.player_id, tournament, "initial"))
-                    await(Async.sleep(0.5)) -- Stagger board displays
-                end
-            end
-            await(Async.sleep(2)) -- Additional pause after all boards are shown
+        --    print("[tourney] Showing initial tournament board")
+        --    for _, participant in ipairs(tournament.participants) do
+        --        if not string.find(participant.player_id, ".zip") then
+        --            await(show_tournament_stage(participant.player_id, tournament, "initial"))
+        --            await(Async.sleep(0.5)) -- Stagger board displays
+        --        end
+        --    await(Async.sleep(2)) -- Additional pause after all boards are shown
         else
             -- For subsequent rounds, show the results of the previous round
             local previous_stage = "round" .. (tournament.current_round - 1) .. "_results"
@@ -511,7 +510,7 @@ local function run_tournament_battles(tournament_id)
         await(Async.sleep(3))
         
         -- Don't freeze all players at start - let them move around
-        TournamentUtils.notify_waiting_for_matches(tournament_id, TournamentState)
+        -- TournamentUtils.notify_waiting_for_matches(tournament_id, TournamentState)
         
         -- First, resolve all NPC vs NPC battles instantly for consistency
         for i, match in ipairs(tournament.matches) do
@@ -616,8 +615,8 @@ local function run_tournament_battles(tournament_id)
             -- Clean up all original participants
             for _, participant in ipairs(tournament.participants) do
                 if not string.find(participant.player_id, ".zip") then
+                    --games.unfreeze_player(participant.player_id)
                     games.deactivate_framework(participant.player_id)
-                    games.unfreeze_player(participant.player_id)
                     -- Remove player from tournament tracking
                     TournamentState.remove_player_from_tournament(participant.player_id)
                 end
@@ -648,8 +647,8 @@ local function run_tournament_battles(tournament_id)
             -- Clean up all players
             for _, participant in ipairs(tournament.participants) do
                 if not string.find(participant.player_id, ".zip") then
+                    --games.unfreeze_player(participant.player_id)
                     games.deactivate_framework(participant.player_id)
-                    games.unfreeze_player(participant.player_id)
                     -- Remove player from tournament tracking
                     TournamentState.remove_player_from_tournament(participant.player_id)
                 end
@@ -693,8 +692,8 @@ local function run_tournament_battles(tournament_id)
                 -- Clean up all original participants
                 for _, participant in ipairs(tournament.participants) do
                     if not string.find(participant.player_id, ".zip") then
+                        --games.unfreeze_player(participant.player_id)
                         games.deactivate_framework(participant.player_id)
-                        games.unfreeze_player(participant.player_id)
                         TournamentState.remove_player_from_tournament(participant.player_id)
                     end
                 end
@@ -736,8 +735,8 @@ local function run_tournament_battles(tournament_id)
                     -- Clean up all players
                     for _, participant in ipairs(tournament.participants) do
                         if not string.find(participant.player_id, ".zip") then
+                            --games.unfreeze_player(participant.player_id)
                             games.deactivate_framework(participant.player_id)
-                            games.unfreeze_player(participant.player_id)
                             -- Remove player from tournament tracking
                             TournamentState.remove_player_from_tournament(participant.player_id)
                         end
@@ -794,8 +793,8 @@ local function run_tournament_battles(tournament_id)
             -- Clean up all players
             for _, participant in ipairs(tournament.participants) do
                 if not string.find(participant.player_id, ".zip") then
+                    --games.unfreeze_player(participant.player_id)
                     games.deactivate_framework(participant.player_id)
-                    games.unfreeze_player(participant.player_id)
                     -- Remove player from tournament tracking
                     TournamentState.remove_player_from_tournament(participant.player_id)
                 end
@@ -906,7 +905,7 @@ local function start_and_show_tourney(pid, board_bg_element_info, tourney)
         cleanup_ui(player_id, player_area, original_map_name, original_map_song)
         await(Async.sleep(0.1))
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, .5)
-        games.unfreeze_player(player_id)
+        --games.unfreeze_player(player_id)
         Net.unlock_player_input(player_id)
         games.deactivate_framework(player_id)
         return tourney
@@ -986,7 +985,7 @@ Net:on("object_interaction", function(event)
                         
                         if tournament_id then
                             -- Show tournament board with consistent participants
-                            await(start_and_show_tourney(event.player_id, board_background_setup_info, participants))
+                            start_and_show_tourney(event.player_id, board_background_setup_info, participants)
                             await(Async.sleep(2))
                             
                             -- Run battles
@@ -1007,9 +1006,9 @@ Net:on("object_interaction", function(event)
                         join_or_create_party(event.player_id, event.object_id, false)
                         
                         -- Clean up framework before starting countdown to prevent conflicts
-                        games.deactivate_framework(event.player_id)
-                        games.unfreeze_player(event.player_id)
-                        await(Async.sleep(0.1))
+                        --games.unfreeze_player(event.player_id)
+                        --games.deactivate_framework(event.player_id)
+                        --await(Async.sleep(0.1))
                         
                         games.activate_framework(event.player_id)
                         Net.lock_player_input(event.player_id)
@@ -1028,7 +1027,7 @@ Net:on("object_interaction", function(event)
                         
                         if tournament_id then
                             -- Show tournament board with consistent participants
-                            await(start_and_show_tourney(event.player_id, board_background_setup_info, participants))
+                            start_and_show_tourney(event.player_id, board_background_setup_info, participants)
                             await(Async.sleep(2))
                             
                             -- Run battles
@@ -1046,11 +1045,12 @@ end)
 Net:on("countdown_ended", function(event)
     return async(function()
         if TourneyEmitters.players_waiting[event.player_id] == nil then
+            print("nil")
             -- Remove countdown if it exists
             if active_countdowns[event.player_id] then
-                games.remove_countdown(event.player_id)
+                --games.remove_countdown(event.player_id)
+                --games.unfreeze_player(event.player_id)
                 games.deactivate_framework(event.player_id)
-                games.unfreeze_player(event.player_id)
                 active_countdowns[event.player_id] = nil
             end
             return
@@ -1060,13 +1060,13 @@ Net:on("countdown_ended", function(event)
         local entry = TourneyEmitters.players_waiting[event.player_id]
         
         -- Always remove the countdown and clean up framework when it ends
-        games.remove_countdown(event.player_id)
+        --games.remove_countdown(event.player_id)
+        --games.unfreeze_player(event.player_id)
         games.deactivate_framework(event.player_id)
-        games.unfreeze_player(event.player_id)
         active_countdowns[event.player_id] = nil
         
         local board_info = tourney_boards[player_area][entry.tourney_board]
-        
+        print(board_info)
         Net.message_player(event.player_id,
             "There is currently " .. #board_info.active_tournaments .. "/8 in your tournament queue. What would you like to do?")
         
@@ -1085,11 +1085,11 @@ Net:on("countdown_ended", function(event)
                 -- Show tournament UI to all human players with consistent participants
                 for _, player_data in ipairs(tourney_boards[player_area][entry.tourney_board].active_tournaments) do
                     if not string.find(player_data.player_id, ".zip") then
-                        await(start_and_show_tourney(player_data.player_id, board_background_setup_info, tournament_participants))
+                        start_and_show_tourney(player_data.player_id, board_background_setup_info, tournament_participants)
                     end
                 end
                 
-                await(Async.sleep(13.85))
+                await(Async.sleep(13.9))
                 
                 -- Run battles with consistent participant order
                 await(run_tournament_battles(tournament_id))
@@ -1099,9 +1099,9 @@ Net:on("countdown_ended", function(event)
             print("[tourney] Player requested to wait for more players.")
             
             -- Clean up framework before restarting countdown
-            games.deactivate_framework(event.player_id)
-            games.unfreeze_player(event.player_id)
-            await(Async.sleep(0.1))
+            --games.unfreeze_player(event.player_id)
+            --games.deactivate_framework(event.player_id)            
+            --await(Async.sleep(0.1))
             
             -- Restart countdown with fresh framework
             games.activate_framework(event.player_id)
@@ -1117,7 +1117,7 @@ Net:on("countdown_ended", function(event)
             }
         end
         
-        TourneyEmitters.players_waiting[event.player_id] = nil
+        --TourneyEmitters.players_waiting[event.player_id] = nil
     end)
 end)
 
@@ -1230,9 +1230,6 @@ Net:on("player_disconnect", function(event)
     
     -- Remove any active countdown and clean up framework
     if active_countdowns[event.player_id] then
-        games.remove_countdown(event.player_id)
-        games.deactivate_framework(event.player_id)
-        games.unfreeze_player(event.player_id)
         active_countdowns[event.player_id] = nil
     end
     

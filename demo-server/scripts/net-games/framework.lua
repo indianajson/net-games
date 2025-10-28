@@ -214,31 +214,41 @@ end
 --purpose: configures the stunt double bot used by all functions. 
 --usage: must be activated for player before using any other framework function
 function frame.activate_framework(player_id)
-    local position = Net.get_player_position(player_id)
-    local area_id = Net.get_player_area(player_id)
-    local avatar = Net.get_player_avatar(player_id)
-    local direction = Net.get_player_direction(player_id)
-    local empty_texture = "/server/assets/net-games/empty.png"
-    local empty_animation = "/server/assets/net-games/empty.animation"
-    -- cache the player's avatar
-    avatar_cache[player_id]["texture"] = avatar.texture_path
-    avatar_cache[player_id]["animation"] = avatar.animation_path
-    -- adjust originY in animation file
-    -- disabled as not currently working
-    --local fixedOrigin = adjustOriginy(Net.read_asset(avatar.animation_path))
-    --local fixedOrigin = Net.read_asset(avatar.animation_path)
-    --Net.update_asset(avatar.animation_path.."-fixed", fixedOrigin)
-    avatar_cache[player_id]["animation-fixed"] = avatar.animation_path
-    -- create stunt double
-    Net.create_bot(player_id.."-double", { area_id=area_id, warp_in=false, texture_path=avatar.texture_path, animation_path=avatar.animation_path, x=position.x+0.001+.5, y=position.y+0.001+.5, z=position.z+1, direction=direction, solid=true})
-    -- hide player
-    Net.set_player_avatar(player_id, empty_texture, empty_animation)
-    -- create camera holder
-    Net.create_bot(player_id.."-camera", { area_id=area_id, warp_in=false, texture_path=empty_texture, animation_path=empty_animation, x=position.x+.5, y=position.y+.5, z=position.z+1, direction=direction, solid=false})
-    -- track camera to "camera" bot
-    Net.track_with_player_camera(player_id, player_id.."-camera")
-    framework_active[player_id] = true
+    local activate = false
+    if framework_active[player_id] == nil then 
+        activate = true 
+    elseif framework_active[player_id] == false then
+        activate = true 
+    end 
 
+    if activate == true then 
+        local position = Net.get_player_position(player_id)
+        local area_id = Net.get_player_area(player_id)
+        local avatar = Net.get_player_avatar(player_id)
+        local direction = Net.get_player_direction(player_id)
+        local empty_texture = "/server/assets/net-games/empty.png"
+        local empty_animation = "/server/assets/net-games/empty.animation"
+        -- cache the player's avatar
+        avatar_cache[player_id]["texture"] = avatar.texture_path
+        avatar_cache[player_id]["animation"] = avatar.animation_path
+        -- adjust originY in animation file
+        -- disabled as not currently working
+        --local fixedOrigin = adjustOriginy(Net.read_asset(avatar.animation_path))
+        --local fixedOrigin = Net.read_asset(avatar.animation_path)
+        --Net.update_asset(avatar.animation_path.."-fixed", fixedOrigin)
+        avatar_cache[player_id]["animation-fixed"] = avatar.animation_path
+        -- create stunt double
+        Net.create_bot(player_id.."-double", { area_id=area_id, warp_in=false, texture_path=avatar.texture_path, animation_path=avatar.animation_path, x=position.x+0.001+.5, y=position.y+0.001+.5, z=position.z+1, direction=direction, solid=true})
+        -- hide player
+        Net.set_player_avatar(player_id, empty_texture, empty_animation)
+        -- create camera holder
+        Net.create_bot(player_id.."-camera", { area_id=area_id, warp_in=false, texture_path=empty_texture, animation_path=empty_animation, x=position.x+.5, y=position.y+.5, z=position.z+1, direction=direction, solid=false})
+        -- track camera to "camera" bot
+        Net.track_with_player_camera(player_id, player_id.."-camera")
+        framework_active[player_id] = true
+    else
+        print("[games] Player "..player_id.." is already in the framework.")
+    end
 end
 
 --purpose: removes the stunt double bot used by the framework. 
@@ -246,7 +256,7 @@ end
 --status: Re-test bot removal code
 function frame.deactivate_framework(player_id)
     return async(function ()
-    if Net.is_bot(player_id.."-double") then
+    if framework_active[player_id] ~= nil then if framework_active[player_id] == true then 
         Net.lock_player_input(player_id)
         framework_active[player_id] = false
         local position = Net.get_bot_position(player_id.."-double") 
@@ -307,8 +317,11 @@ function frame.deactivate_framework(player_id)
         Net.track_with_player_camera(player_id,player_id)
         Net.unlock_player_input(player_id)
         frozen[player_id] = false
+        framework_active[player_id] = false
+
     else 
-        print("[games] Player is not within the framework.")
+        print("[games] Deactivate failed, player is not within the framework.")
+    end
     end
     end)
 end
