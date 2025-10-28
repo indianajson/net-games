@@ -948,40 +948,7 @@ local function create_consistent_tournament(player_id, object_id, area_id, board
     end)
 end
 
-local function start_and_show_tourney(pid, board_bg_element_info, tourney)
-    return async(function()
-        local player_id = pid
-        local player_area = Net.get_player_area(player_id)
-        local original_map_name = Net.get_area_name(player_area)
-        Net.set_area_name(player_area, "            ")
-        local original_map_song = Net.get_song(player_area)
-        Net.set_song(player_area,
-            "/server/assets/tourney/music/bbn4_tournament_announcement.ogg")
-
-        games.activate_framework(player_id)
-        games.freeze_player(player_id)
-        Net.lock_player_input(player_id)
-        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, 0.3)
-        await(Async.sleep(0.3))
-        setup_board_bg_elements(player_id, board_bg_element_info)
-        for i, p in next, tourney do
-            local pos = mug_pos.initial[i]
-            if pos then
-                add_participant_mugshot(pid, i, p.player_mugshot.mug_texture, pos.x, pos.y, pos.z)
-            end
-        end
-        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, 0.3)
-        await(Async.sleep(8.0)) -- Reduced from 12.5
-        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, 0.3)
-        await(Async.sleep(0.3))
-        cleanup_ui(player_id, player_area, original_map_name, original_map_song)
-        await(Async.sleep(0.1))
-        Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, 0.3)
-        Net.unlock_player_input(player_id)
-        games.deactivate_framework(player_id)
-        return tourney
-    end)
-end
+-- REMOVED: The start_and_show_tourney function is no longer needed since we show the initial state in run_tournament_battles
 
 ---------------------------------------------------------------------
 -- Board Initialization
@@ -1055,11 +1022,8 @@ Net:on("object_interaction", function(event)
                         ))
                         
                         if tournament_id then
-                            -- Show tournament board with consistent participants
-                            start_and_show_tourney(event.player_id, board_background_setup_info, participants)
-                            await(Async.sleep(1.0))
-                            
-                            -- Run battles
+                            -- REMOVED: No longer show initial board here - it will be shown in run_tournament_battles
+                            -- Run battles directly
                             await(run_tournament_battles(tournament_id))
                         end
                     end
@@ -1093,11 +1057,8 @@ Net:on("object_interaction", function(event)
                         ))
                         
                         if tournament_id then
-                            -- Show tournament board with consistent participants
-                            start_and_show_tourney(event.player_id, board_background_setup_info, participants)
-                            await(Async.sleep(1.0))
-                            
-                            -- Run battles
+                            -- REMOVED: No longer show initial board here - it will be shown in run_tournament_battles
+                            -- Run battles directly
                             await(run_tournament_battles(tournament_id))
                         end
                     end
@@ -1145,16 +1106,8 @@ Net:on("countdown_ended", function(event)
             ))
             
             if tournament_id then
-                -- Show tournament UI to all human players with consistent participants
-                for _, player_data in ipairs(tourney_boards[player_area][entry.tourney_board].active_tournaments) do
-                    if not string.find(player_data.player_id, ".zip") then
-                        start_and_show_tourney(player_data.player_id, board_background_setup_info, tournament_participants)
-                    end
-                end
-                
-                await(Async.sleep(9.0)) -- Reduced from 13.9
-                
-                -- Run battles with consistent participant order
+                -- REMOVED: No longer show initial board to each player - it will be shown in run_tournament_battles
+                -- Run battles directly
                 await(run_tournament_battles(tournament_id))
             end
             
