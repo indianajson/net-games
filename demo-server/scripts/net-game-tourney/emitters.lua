@@ -5,6 +5,9 @@ local change_area_emitter = Net.EventEmitter.new()
 local tourney_emitter = Net.EventEmitter.new()
 local tournament_ui_emitter = Net.EventEmitter.new()
 
+function async(p) local co = coroutine.create(p) return Async.promisify(co) end
+function await(v) return Async.await(v) end
+
 local Tourney = {
     player_history = {},
     online_players = {},
@@ -131,16 +134,6 @@ function Tourney.simulate_npc_battle(npc1_id, npc2_id, tournament_id, match_inde
         
         return battle_result
     end)
-end
-
--- Helper functions for async/await
-function async(p) 
-    local co = coroutine.create(p) 
-    return Async.promisify(co) 
-end
-
-function await(v) 
-    return Async.await(v) 
 end
 
 -- Existing functions remain but with enhanced error handling
