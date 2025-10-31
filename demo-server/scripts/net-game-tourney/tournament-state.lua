@@ -29,6 +29,10 @@ function TournamentState.create_tournament(board_id, area_id, host_player_id)
         eliminated_participants = {}, -- Track when each participant was eliminated
         round_eliminations = { {}, {}, {} }, -- Track eliminations per round
         participant_states = {}, -- Track current state (position, eliminated, etc.) for each participant
+        
+        -- NEW: Store initial participant order for consistency across all views
+        initial_participant_order = {}, -- Stores the original participant order at tournament creation
+        is_shuffled = false, -- Track if this tournament was shuffled
     }
     
     active_tournaments[tournament_id] = tournament
@@ -63,22 +67,68 @@ function TournamentState.start_tournament(tournament_id)
     
     tournament.status = "IN_PROGRESS"
     tournament.current_round = 1
-    tournament.matches = TournamentState.generate_matches(tournament.participants)
+    
+    -- Use the stored initial participant order for match generation to ensure consistency
+    local participants_for_matches = tournament.participants
+    tournament.matches = TournamentState.generate_matches(participants_for_matches)
+    
+    -- DEBUG: Print matchups for verification
+    print("[TournamentState] Generated matches for tournament " .. tournament_id)
+    for i, match in ipairs(tournament.matches) do
+        local player1_type = string.find(match.player1.player_id, ".zip") and "NPC" or "Player"
+        local player2_type = string.find(match.player2.player_id, ".zip") and "NPC" or "Player"
+        print(string.format("  Match %d: %s (%s) vs %s (%s)", 
+              i, match.player1.player_id, player1_type, match.player2.player_id, player2_type))
+    end
     
     return true
 end
 
 function TournamentState.generate_matches(participants)
     local matches = {}
-    for i = 1, #participants - 1, 2 do
+    
+    -- For round 1: pair participants sequentially (1vs2, 3vs4, 5vs6, 7vs8)
+    -- For round 2: pair winners in bracket order (1vs2, 3vs4)
+    -- For round 3: pair the final two winners
+    
+    if #participants == 8 then
+        -- Round 1: sequential pairing
+        for i = 1, #participants - 1, 2 do
+            table.insert(matches, {
+                player1 = participants[i],
+                player2 = participants[i + 1],
+                completed = false,
+                winner = nil,
+                loser = nil
+            })
+        end
+    elseif #participants == 4 then
+        -- Round 2: bracket pairing - winner of match 1 vs winner of match 2, winner of match 3 vs winner of match 4
         table.insert(matches, {
-            player1 = participants[i],
-            player2 = participants[i + 1],
+            player1 = participants[1], -- Winner of match 1
+            player2 = participants[2], -- Winner of match 2
+            completed = false,
+            winner = nil,
+            loser = nil
+        })
+        table.insert(matches, {
+            player1 = participants[3], -- Winner of match 3
+            player2 = participants[4], -- Winner of match 4
+            completed = false,
+            winner = nil,
+            loser = nil
+        })
+    elseif #participants == 2 then
+        -- Round 3: final match
+        table.insert(matches, {
+            player1 = participants[1], -- Winner of semi-final 1
+            player2 = participants[2], -- Winner of semi-final 2
             completed = false,
             winner = nil,
             loser = nil
         })
     end
+    
     return matches
 end
 
@@ -158,6 +208,34 @@ function TournamentState.get_current_round_winners(tournament_id)
     return winners
 end
 
+-- Add this function to tournament-state.lua
+function TournamentState.get_ordered_winners(tournament_id, round_number)
+    local tournament = active_tournaments[tournament_id]
+    if not tournament then return {} end
+    
+    local ordered_winners = {}
+    
+    if round_number == 1 then
+        -- For round 1, winners are in match order
+        for i = 1, #tournament.matches do
+            local match = tournament.matches[i]
+            if match.completed and match.winner then
+                table.insert(ordered_winners, match.winner)
+            end
+        end
+    elseif round_number == 2 then
+        -- For round 2, winners are in semi-final order
+        for i = 1, #tournament.matches do
+            local match = tournament.matches[i]
+            if match.completed and match.winner then
+                table.insert(ordered_winners, match.winner)
+            end
+        end
+    end
+    
+    return ordered_winners
+end
+
 function TournamentState.advance_to_next_round(tournament_id)
     local tournament = active_tournaments[tournament_id]
     if not tournament then 
@@ -179,6 +257,30 @@ function TournamentState.advance_to_next_round(tournament_id)
         return false
     end
     
+    -- Build winners list in the order they should appear in the next round
+    tournament.winners = {}
+    
+    if tournament.current_round == 1 then
+        -- For round 1, winners should be ordered by their original match positions
+        -- This ensures bracket integrity: winner1, winner2, winner3, winner4
+        for i = 1, #tournament.matches do
+            local match = tournament.matches[i]
+            if match.completed and match.winner then
+                table.insert(tournament.winners, match.winner)
+                print(string.format("[TournamentState] Round 1 winner %d: %s", i, match.winner.player_id))
+            end
+        end
+    elseif tournament.current_round == 2 then
+        -- For round 2, winners should maintain their semi-final positions
+        for i = 1, #tournament.matches do
+            local match = tournament.matches[i]
+            if match.completed and match.winner then
+                table.insert(tournament.winners, match.winner)
+                print(string.format("[TournamentState] Round 2 winner %d: %s", i, match.winner.player_id))
+            end
+        end
+    end
+    
     if #tournament.winners == 1 then
         tournament.status = "COMPLETED"
         print("[TournamentState] Tournament completed with winner: " .. tournament.winners[1].player_id)
@@ -189,7 +291,13 @@ function TournamentState.advance_to_next_round(tournament_id)
         tournament.winners = {}
         tournament.matches = TournamentState.generate_matches(tournament.participants)
         tournament.status = "IN_PROGRESS"
+        
+        -- DEBUG: Print the new matches for verification
         print("[TournamentState] Advanced to round " .. tournament.current_round)
+        print("[TournamentState] New matches:")
+        for i, match in ipairs(tournament.matches) do
+            print(string.format("  Match %d: %s vs %s", i, match.player1.player_id, match.player2.player_id))
+        end
     end
     
     return true
@@ -553,7 +661,5 @@ function TournamentState.debug_tournament_state(tournament_id)
               i, match.player1.player_id, match.player2.player_id, tostring(match.completed)))
     end
 end
-
-
 
 return TournamentState

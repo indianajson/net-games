@@ -197,6 +197,60 @@ local function cleanup_ui(player_id, player_area, name, song)
     Net.set_song(player_area, song)
 end
 
+-- NEW: Function to clear parties and waiting queues for a tournament
+local function cleanup_tournament_parties(tournament_id)
+    local tournament = TournamentState.get_tournament(tournament_id)
+    if not tournament then return end
+    
+    print("[tourney] Cleaning up parties for tournament " .. tournament_id)
+    
+    -- Clear from all area boards
+    for area_id, boards in pairs(tourney_boards) do
+        for object_id, board_data in pairs(boards) do
+            if board_data.active_tournaments then
+                local before_count = #board_data.active_tournaments
+                board_data.active_tournaments = {}
+                if before_count > 0 then
+                    print(string.format("[tourney] Cleared %d parties from board %s in area %s", 
+                          before_count, object_id, area_id))
+                end
+            end
+        end
+    end
+    
+    -- Clear players from waiting queues
+    local waiting_cleared = 0
+    for player_id, waiting_data in pairs(TourneyEmitters.players_waiting) do
+        if waiting_data and waiting_data.tourney_board then
+            TourneyEmitters.players_waiting[player_id] = nil
+            waiting_cleared = waiting_cleared + 1
+            
+            -- Also cleanup any active countdowns
+            if active_countdowns[player_id] then
+                games.deactivate_framework(player_id)
+                active_countdowns[player_id] = nil
+            end
+        end
+    end
+    
+    if waiting_cleared > 0 then
+        print("[tourney] Cleared " .. waiting_cleared .. " players from waiting queues")
+    end
+end
+
+-- NEW: Function to clear specific board parties
+local function clear_board_parties(area_id, object_id)
+    if tourney_boards[area_id] and tourney_boards[area_id][object_id] then
+        local before_count = #tourney_boards[area_id][object_id].active_tournaments
+        tourney_boards[area_id][object_id].active_tournaments = {}
+        
+        if before_count > 0 then
+            print(string.format("[tourney] Cleared %d parties from board %s in area %s", 
+                  before_count, object_id, area_id))
+        end
+    end
+end
+
 -- FIXED: Enhanced function for seamless board transitions with consistent participant shuffling
 local function show_tournament_results_with_animation(player_id, tournament, round_number)
     return async(function()
@@ -458,6 +512,7 @@ local function show_board_to_all_players(tournament, show_function, stage_type, 
         end
     end)
 end
+
 -- FIXED: Enhanced battle starter with proper NPC predetermined result handling
 local function start_battle(player1_id, player2_id, tournament_id, match_index)
     return async(function()
@@ -626,26 +681,39 @@ local function start_all_battles(tournament_id)
         print("[tourney] All battles started for round " .. tournament.current_round)
     end)
 end
--- NEW: Function to ensure all battles are completed before proceeding
+
+-- NEW: Enhanced battle waiting function that never forces player battles
 local function wait_for_all_battles_complete(tournament_id)
     return async(function()
         local tournament = TournamentState.get_tournament(tournament_id)
         if not tournament then return true end
         
-        local max_wait_time = 60 -- 60 seconds maximum wait
-        local wait_start = os.time()
+        print("[tourney] Waiting for all battles to complete naturally...")
         
-        while os.time() - wait_start < max_wait_time do
+        while true do
             local all_completed = true
             local completed_count = 0
+            local player_battles_remaining = 0
             
             for i, match in ipairs(tournament.matches) do
                 if match.completed then
                     completed_count = completed_count + 1
                 else
                     all_completed = false
-                    print(string.format("[tourney] Match %d not completed: %s vs %s", 
-                          i, match.player1.player_id, match.player2.player_id))
+                    
+                    -- Check if this is a player battle (at least one real player)
+                    local is_player1_human = not string.find(match.player1.player_id, ".zip")
+                    local is_player2_human = not string.find(match.player2.player_id, ".zip")
+                    
+                    if is_player1_human or is_player2_human then
+                        player_battles_remaining = player_battles_remaining + 1
+                        print(string.format("[tourney] Player battle pending: %s vs %s", 
+                              match.player1.player_id, match.player2.player_id))
+                    else
+                        -- NPC vs NPC battle - we can process these immediately
+                        print(string.format("[tourney] NPC battle pending: %s vs %s", 
+                              match.player1.player_id, match.player2.player_id))
+                    end
                 end
             end
             
@@ -654,16 +722,117 @@ local function wait_for_all_battles_complete(tournament_id)
                 return true
             end
             
-            print(string.format("[tourney] Waiting for battles: %d/%d completed", completed_count, #tournament.matches))
-            await(Async.sleep(2.0))
+            -- Only force NPC-vs-NPC battles, never player battles
+            if player_battles_remaining == 0 then
+                -- All remaining battles are NPC-vs-NPC, we can force them
+                print("[tourney] All player battles completed, forcing remaining NPC battles")
+                for i, match in ipairs(tournament.matches) do
+                    if not match.completed then
+                        local is_npc_battle = string.find(match.player1.player_id, ".zip") and 
+                                             string.find(match.player2.player_id, ".zip")
+                        if is_npc_battle then
+                            -- Force NPC battle result
+                            local npc1_weight = get_npc_weight(match.player1.player_id)
+                            local npc2_weight = get_npc_weight(match.player2.player_id)
+                            local winner, loser
+                            
+                            if math.random(1, npc1_weight + npc2_weight) <= npc1_weight then
+                                winner = match.player1
+                                loser = match.player2
+                            else
+                                winner = match.player2
+                                loser = match.player1
+                            end
+                            
+                            match.completed = true
+                            match.winner = winner
+                            match.loser = loser
+                            TournamentState.record_battle_result(tournament_id, i, winner, loser)
+                            print(string.format("[tourney] Forced NPC battle result: %s defeated %s", 
+                                  winner.player_id, loser.player_id))
+                        end
+                    end
+                end
+            else
+                print(string.format("[tourney] Waiting for battles: %d/%d completed, %d player battles remaining", 
+                      completed_count, #tournament.matches, player_battles_remaining))
+                
+                -- Wait longer for player battles
+                await(Async.sleep(5.0)) -- Increased from 2.0 to 5.0 seconds
+            end
             
             -- Refresh tournament data
             tournament = TournamentState.get_tournament(tournament_id)
             if not tournament then break end
         end
         
-        print("[tourney] Timeout waiting for battles to complete")
-        return false
+        return true
+    end)
+end
+
+-- NEW: Function to get battle progress details
+local function get_battle_progress(tournament_id)
+    local tournament = TournamentState.get_tournament(tournament_id)
+    if not tournament then return {} end
+    
+    local progress = {
+        total_matches = #tournament.matches,
+        completed_matches = 0,
+        player_battles = 0,
+        npc_battles = 0,
+        pending_player_battles = 0,
+        pending_npc_battles = 0
+    }
+    
+    for _, match in ipairs(tournament.matches) do
+        local is_player1_human = not string.find(match.player1.player_id, ".zip")
+        local is_player2_human = not string.find(match.player2.player_id, ".zip")
+        local is_player_battle = is_player1_human or is_player2_human
+        
+        if match.completed then
+            progress.completed_matches = progress.completed_matches + 1
+        else
+            if is_player_battle then
+                progress.pending_player_battles = progress.pending_player_battles + 1
+            else
+                progress.pending_npc_battles = progress.pending_npc_battles + 1
+            end
+        end
+        
+        if is_player_battle then
+            progress.player_battles = progress.player_battles + 1
+        else
+            progress.npc_battles = progress.npc_battles + 1
+        end
+    end
+    
+    return progress
+end
+
+-- NEW: Protected battle starter that ensures players are ready
+local function start_battle_with_protection(player1_id, player2_id, tournament_id, match_index)
+    return async(function()
+        local tournament = TournamentState.get_tournament(tournament_id)
+        if not tournament then return nil end
+        
+        local is_player1_human = not string.find(player1_id, ".zip")
+        local is_player2_human = not string.find(player2_id, ".zip")
+        
+        -- For player battles, ensure both players are ready and connected
+        if is_player1_human or is_player2_human then
+            if is_player1_human and not Net.is_player(player1_id) then
+                print("[tourney] Player 1 disconnected, cannot start battle")
+                return nil
+            end
+            if is_player2_human and not Net.is_player(player2_id) then
+                print("[tourney] Player 2 disconnected, cannot start battle")
+                return nil
+            end
+            
+            print(string.format("[tourney] Starting protected player battle: %s vs %s", player1_id, player2_id))
+        end
+        
+        return await(start_battle(player1_id, player2_id, tournament_id, match_index))
     end)
 end
 
@@ -777,11 +946,14 @@ local function run_tournament_battles(tournament_id)
                         TournamentState.record_battle_result(tournament_id, i, winner, loser)
                         print(string.format("[tourney] Forced NPC battle result: %s defeated %s", winner.player_id, loser.player_id))
                     else
-                        -- For player battles, mark first player as winner by default
-                        match.completed = true
-                        match.winner = match.player1
-                        match.loser = match.player2
-                        TournamentState.record_battle_result(tournament_id, i, match.player1, match.player2)
+                        -- PLAYER BATTLES ARE NEVER FORCED - they must complete naturally
+                        print(string.format("[tourney] NOT forcing player battle: %s vs %s - waiting for natural completion", 
+                              match.player1.player_id, match.player2.player_id))
+                              print("[tourney] Round " .. tournament.current_round .. " winners:")
+                        for i, winner in ipairs(tournament.winners) do
+                        print(string.format("  Winner %d: %s", i, winner.player_id))
+                        end
+                        -- Do not force player battles - they will complete naturally
                     end
                 end
             end
@@ -817,104 +989,106 @@ local function run_tournament_battles(tournament_id)
             await(show_board_to_all_players(tournament, show_tournament_results_with_animation, nil, nil, round_number))
             await(Async.sleep(2.0)) -- Additional pause after all boards are shown
         end
-local current_real_players = {}
-for _, winner in ipairs(tournament.winners) do
-    if not string.find(winner.player_id, ".zip") and Net.is_player(winner.player_id) then
-        table.insert(current_real_players, winner)
-    end
-end
 
--- FIXED: Don't end tournament if no real players remain - let NPCs finish and show results
--- Instead, check if we should continue with NPC-only tournament
-if #current_real_players == 0 then
-    print("[tourney] No real players left after round " .. tournament.current_round .. ", continuing with NPCs")
-    
-    -- Check if tournament is completed (after 3 rounds)
-    if is_tournament_completed(tournament) then
-        print("[tourney] Tournament completed with NPCs only! Winner: " .. tournament.winners[1].player_id)
-        
-        -- Announce winner to any real players who might still be watching (spectators)
-        local winner = tournament.winners[1]
-        local winner_name = winner.player_id
-        if not string.find(winner.player_id, ".zip") and Net.is_player(winner.player_id) then
-            winner_name = Net.get_player_name(winner.player_id) or winner.player_id
-        else
-            -- Extract NPC name for display
-            local npc_name = string.match(winner.player_id, "([^/]+)/[^/]+$") or winner.player_id
-            winner_name = npc_name
-        end
-        
-        -- Show final results to all original participants who are still connected
-        for _, participant in ipairs(tournament.participants) do
-            if not string.find(participant.player_id, ".zip") and Net.is_player(participant.player_id) then
-                Net.message_player(participant.player_id, "Tournament completed! Winner: " .. winner_name)
-                await(Async.sleep(0.1)) -- Small delay between messages
+        local current_real_players = {}
+        for _, winner in ipairs(tournament.winners) do
+            if not string.find(winner.player_id, ".zip") and Net.is_player(winner.player_id) then
+                table.insert(current_real_players, winner)
             end
         end
-        
-        -- Clean up all players and remove tournament
-        for _, participant in ipairs(tournament.participants) do
-            if not string.find(participant.player_id, ".zip") and Net.is_player(participant.player_id) then
-                games.deactivate_framework(participant.player_id)
-                TournamentState.remove_player_from_tournament(participant.player_id)
-            end
-        end
-        
-        TournamentState.cleanup_tournament(tournament_id)
-        print("[tourney] Tournament " .. tournament_id .. " completed with NPC winner")
-        return
-    else
-        -- Tournament not completed yet, continue with NPCs
-        print("[tourney] Continuing tournament with NPCs only for round " .. tournament.current_round)
-        -- The tournament will continue normally, just without real players
-    end
-end
 
--- Check if tournament is completed (after 3 rounds)
-if is_tournament_completed(tournament) then
-    print("[tourney] Tournament completed! Winner: " .. tournament.winners[1].player_id)
+        -- FIXED: Don't end tournament if no real players remain - let NPCs finish and show results
+        -- Instead, check if we should continue with NPC-only tournament
+        if #current_real_players == 0 then
+            print("[tourney] No real players left after round " .. tournament.current_round .. ", continuing with NPCs")
+            
+            -- Check if tournament is completed (after 3 rounds)
+            if is_tournament_completed(tournament) then
+                print("[tourney] Tournament completed with NPCs only! Winner: " .. tournament.winners[1].player_id)
+                
+                -- Announce winner to any real players who might still be watching (spectators)
+                local winner = tournament.winners[1]
+                local winner_name = winner.player_id
+                if not string.find(winner.player_id, ".zip") and Net.is_player(winner.player_id) then
+                    winner_name = Net.get_player_name(winner.player_id) or winner.player_id
+                else
+                    -- Extract NPC name for display
+                    local npc_name = string.match(winner.player_id, "([^/]+)/[^/]+$") or winner.player_id
+                    winner_name = npc_name
+                end
+                
+                -- Show final results to all original participants who are still connected
+                for _, participant in ipairs(tournament.participants) do
+                    if not string.find(participant.player_id, ".zip") and Net.is_player(participant.player_id) then
+                        Net.message_player(participant.player_id, "Tournament completed! Winner: " .. winner_name)
+                        await(Async.sleep(0.1)) -- Small delay between messages
+                    end
+                end
+                
+                -- Clean up all players and remove tournament
+                for _, participant in ipairs(tournament.participants) do
+                    if not string.find(participant.player_id, ".zip") and Net.is_player(participant.player_id) then
+                        games.deactivate_framework(participant.player_id)
+                        TournamentState.remove_player_from_tournament(participant.player_id)
+                    end
+                end
+                 cleanup_tournament_parties(tournament_id)
     
-    -- Announce winner to all players AFTER the final board has closed
-    local winner = tournament.winners[1]
-    local winner_name = winner.player_id
-    if not string.find(winner.player_id, ".zip") and Net.is_player(winner.player_id) then
-        winner_name = Net.get_player_name(winner.player_id) or winner.player_id
-    else
-        -- Extract NPC name for display
-        local npc_name = string.match(winner.player_id, "([^/]+)/[^/]+$") or winner.player_id
-        winner_name = npc_name
-    end
-    
-    -- Show final results to all original participants who are still connected
-    for _, participant in ipairs(tournament.participants) do
-        if not string.find(participant.player_id, ".zip") and Net.is_player(participant.player_id) then
-            Net.message_player(participant.player_id, "Tournament completed! Winner: " .. winner_name)
-            await(Async.sleep(0.1)) -- Small delay between messages
+    TournamentState.cleanup_tournament(tournament_id)
+    print("[tourney] Tournament " .. tournament_id .. " completed with NPC winner")
+    return
+end
         end
-    end
-    
-    -- FIXED: Clean up ALL real players from tournament tracking, regardless of when they were eliminated
-    print("[tourney] Cleaning up all real players from tournament " .. tournament_id)
-    local players_cleaned_up = {}
-    for _, participant in ipairs(tournament.participants) do
-        if not string.find(participant.player_id, ".zip") then
-            if Net.is_player(participant.player_id) then
-                games.deactivate_framework(participant.player_id)
-                Net.message_player(participant.player_id, "The tournament has ended. You are now free to join other tournaments.")
+
+        -- Check if tournament is completed (after 3 rounds)
+        if is_tournament_completed(tournament) then
+            print("[tourney] Tournament completed! Winner: " .. tournament.winners[1].player_id)
+            
+            -- Announce winner to all players AFTER the final board has closed
+            local winner = tournament.winners[1]
+            local winner_name = winner.player_id
+            if not string.find(winner.player_id, ".zip") and Net.is_player(winner.player_id) then
+                winner_name = Net.get_player_name(winner.player_id) or winner.player_id
+            else
+                -- Extract NPC name for display
+                local npc_name = string.match(winner.player_id, "([^/]+)/[^/]+$") or winner.player_id
+                winner_name = npc_name
             end
-            -- Remove from tournament tracking even if player is disconnected
-            TournamentState.remove_player_from_tournament(participant.player_id)
-            table.insert(players_cleaned_up, participant.player_id)
-        end
-    end
-    
-    print("[tourney] Cleaned up " .. #players_cleaned_up .. " players: " .. table.concat(players_cleaned_up, ", "))
+            
+            -- Show final results to all original participants who are still connected
+            for _, participant in ipairs(tournament.participants) do
+                if not string.find(participant.player_id, ".zip") and Net.is_player(participant.player_id) then
+                    Net.message_player(participant.player_id, "Tournament completed! Winner: " .. winner_name)
+                    await(Async.sleep(0.1)) -- Small delay between messages
+                end
+            end
+            
+            -- FIXED: Clean up ALL real players from tournament tracking, regardless of when they were eliminated
+            print("[tourney] Cleaning up all real players from tournament " .. tournament_id)
+            local players_cleaned_up = {}
+            for _, participant in ipairs(tournament.participants) do
+                if not string.find(participant.player_id, ".zip") then
+                    if Net.is_player(participant.player_id) then
+                        games.deactivate_framework(participant.player_id)
+                        Net.message_player(participant.player_id, "The tournament has ended. You are now free to join other tournaments.")
+                    end
+                    -- Remove from tournament tracking even if player is disconnected
+                    TournamentState.remove_player_from_tournament(participant.player_id)
+                    table.insert(players_cleaned_up, participant.player_id)
+                end
+            end
+            
+            print("[tourney] Cleaned up " .. #players_cleaned_up .. " players: " .. table.concat(players_cleaned_up, ", "))
+            
+   -- NEW: Clean up parties and waiting queues
+    cleanup_tournament_parties(tournament_id)
     
     -- NEW: Force cleanup of the tournament regardless of NPC win
     TournamentState.cleanup_tournament(tournament_id)
     print("[tourney] Tournament " .. tournament_id .. " completely removed after completion (NPC winner)")
     return
-end
+    end
+
         -- Ask host if they want to start next round
         local start_next_round = await(TournamentUtils.ask_host_about_next_round(tournament_id, TournamentState))
         
@@ -999,48 +1173,65 @@ end
                 end
             end
         else
-            -- Host chose not to continue, end tournament
-            print("[tourney] Host chose to end tournament after round " .. tournament.current_round)
-            
-            -- Clean up all players
-            for _, participant in ipairs(tournament.participants) do
-                if not string.find(participant.player_id, ".zip") then
-                    games.deactivate_framework(participant.player_id)
-                    -- Remove player from tournament tracking
-                    TournamentState.remove_player_from_tournament(participant.player_id)
-                end
-            end
-            
-            TournamentState.cleanup_tournament(tournament_id)
+    -- Host chose not to continue, end tournament
+    print("[tourney] Host chose to end tournament after round " .. tournament.current_round)
+    
+    -- Clean up all players
+    for _, participant in ipairs(tournament.participants) do
+        if not string.find(participant.player_id, ".zip") then
+            games.deactivate_framework(participant.player_id)
+            -- Remove player from tournament tracking
+            TournamentState.remove_player_from_tournament(participant.player_id)
         end
-    end)
+    end
+    
+    -- NEW: Clean up parties
+    cleanup_tournament_parties(tournament_id)
+    
+    TournamentState.cleanup_tournament(tournament_id)
+    end
+end)
 end
 
 ---------------------------------------------------------------------
 -- UI and Board Management Functions
 ---------------------------------------------------------------------
 
--- FIXED: Modified to shuffle participants once for consistency across all players and NPCs with proper isolation
-local function initialize_tournament_participants(participants, backfill, tournament_type)
+-- FIXED: Modified to shuffle participants ONLY ONCE when tournament is created
+local function initialize_tournament_participants(participants, backfill, tournament_type, preserve_order)
     local final = {}
     
-    -- Always preserve the original human player order for consistency
-    -- FIXED: Create deep copies to avoid shared references
-    for _, p in next, participants do 
-        local participant_copy = {
-            player_id = p.player_id,
-            player_mugshot = {
-                mug_texture = p.player_mugshot.mug_texture,
-                mug_animation = p.player_mugshot.mug_animation
+    -- Always preserve the original human player order for consistency if requested
+    if preserve_order then
+        -- Use the participants in the order they were provided (for consistent multiplayer tournaments)
+        for _, p in next, participants do 
+            local participant_copy = {
+                player_id = p.player_id,
+                player_mugshot = {
+                    mug_texture = p.player_mugshot.mug_texture,
+                    mug_animation = p.player_mugshot.mug_animation
+                }
             }
-        }
-        table.insert(final, participant_copy)
+            table.insert(final, participant_copy)
+        end
+    else
+        -- For single player or when order doesn't matter, create copies
+        for _, p in next, participants do 
+            local participant_copy = {
+                player_id = p.player_id,
+                player_mugshot = {
+                    mug_texture = p.player_mugshot.mug_texture,
+                    mug_animation = p.player_mugshot.mug_animation
+                }
+            }
+            table.insert(final, participant_copy)
+        end
     end
     
     if backfill and #final < 8 then
         local fill = TableUtils.SelectRandomItemsFromTableClamped(npc_paths, 8 - #final)
         for _, f in next, fill do 
-            -- FIXED: Create deep copies of NPC data to avoid shared references
+            -- Create deep copies of NPC data to avoid shared references
             local npc_copy = {
                 player_id = f.player_id,
                 player_mugshot = {
@@ -1052,17 +1243,19 @@ local function initialize_tournament_participants(participants, backfill, tourna
         end
     end
     
-    -- FIXED: Shuffle once for consistent random placement across all players and NPCs
-    if #final >= 8 then
+    -- FIXED: Only shuffle if we have 8 participants AND we're not preserving order for multiplayer
+    if #final >= 8 and not preserve_order then
         final = TableUtils.shuffle(final)
-        print("[tourney] Shuffled participants for consistent random placement")
+        print("[tourney] Shuffled participants for single player tournament")
+    elseif preserve_order then
+        print("[tourney] Preserving participant order for multiplayer tournament consistency")
     end
     
     -- Ensure we have exactly 8 participants
     return TableUtils.SelectRandomItemsFromTableClamped(final, 8)
 end
 
--- FIXED: Enhanced function to ensure participant consistency with shuffling
+-- FIXED: Enhanced function to ensure participant consistency with single randomization
 local function create_consistent_tournament(player_id, object_id, area_id, board_background_setup_info, is_single_player)
     return async(function()
         local tournament_participants
@@ -1072,22 +1265,34 @@ local function create_consistent_tournament(player_id, object_id, area_id, board
             tournament_participants = initialize_tournament_participants(
                 { { player_id = player_id, player_mugshot = { mug_animation = default_mug_anim, mug_texture = mug } } }, 
                 true,  -- backfill
-                "single"  -- single player tournament type
+                "single",  -- single player tournament type
+                false  -- DO shuffle for single player
             )
         else
-            -- For multiplayer, use the existing queue and preserve order for PvP integrity
+            -- For multiplayer, use the existing queue and DO NOT shuffle to preserve PvP integrity
             local board_tournament = tourney_boards[area_id][object_id].active_tournaments
             tournament_participants = initialize_tournament_participants(
                 board_tournament, 
                 true,  -- backfill  
-                "multiplayer"  -- multiplayer tournament type
+                "multiplayer",  -- multiplayer tournament type
+                true  -- PRESERVE order for multiplayer consistency
             )
         end
         
         -- Create tournament
         local tournament_id = TournamentState.create_tournament(object_id, area_id, player_id)
         
-        -- Add participants in consistent order
+        -- Store the initial participant order in tournament state for consistency
+        local tournament = TournamentState.get_tournament(tournament_id)
+        tournament.initial_participant_order = {}
+        for i, participant in ipairs(tournament_participants) do
+            tournament.initial_participant_order[i] = {
+                player_id = participant.player_id,
+                initial_index = i
+            }
+        end
+        
+        -- Add participants in the consistent order (whether shuffled or preserved)
         for _, participant in ipairs(tournament_participants) do
             TournamentState.add_participant(tournament_id, participant)
         end
@@ -1095,8 +1300,15 @@ local function create_consistent_tournament(player_id, object_id, area_id, board
         -- NEW: Initialize participant states
         TournamentState.initialize_participant_states(tournament_id)
         
-        -- Store board data with the same participant order
+        -- Store board data with the consistent participant order
         store_tournament_board_data(tournament_id, board_background_setup_info, tournament_participants)
+        
+        -- DEBUG: Print the final participant order for verification
+        print("[tourney] Final tournament participant order:")
+        for i, participant in ipairs(tournament_participants) do
+            local player_type = string.find(participant.player_id, ".zip") and "NPC" or "Player"
+            print(string.format("  Position %d: %s (%s)", i, participant.player_id, player_type))
+        end
         
         if TournamentState.start_tournament(tournament_id) then
             return tournament_id, tournament_participants
@@ -1105,9 +1317,6 @@ local function create_consistent_tournament(player_id, object_id, area_id, board
         return nil, nil
     end)
 end
-
--- REMOVED: The start_and_show_tourney function is no longer needed since we show the initial state in run_tournament_battles
-
 ---------------------------------------------------------------------
 -- Board Initialization
 ---------------------------------------------------------------------
@@ -1379,6 +1588,43 @@ TourneyEmitters.tourney_emitter:on("battle_completed", function(event)
     end)
 end)
 
+
+-- NEW: Function to cleanup orphaned parties (parties that don't have active tournaments)
+local function cleanup_orphaned_parties()
+    local parties_cleared = 0
+    local waiting_cleared = 0
+    
+    -- Clear all board parties (they should be recreated as needed)
+    for area_id, boards in pairs(tourney_boards) do
+        for object_id, board_data in pairs(boards) do
+            if board_data.active_tournaments and #board_data.active_tournaments > 0 then
+                local had_parties = #board_data.active_tournaments
+                board_data.active_tournaments = {}
+                parties_cleared = parties_cleared + had_parties
+            end
+        end
+    end
+    
+    -- Clear waiting players
+    for player_id, waiting_data in pairs(TourneyEmitters.players_waiting) do
+        if waiting_data then
+            TourneyEmitters.players_waiting[player_id] = nil
+            waiting_cleared = waiting_cleared + 1
+            
+            -- Cleanup any active countdowns
+            if active_countdowns[player_id] then
+                games.deactivate_framework(player_id)
+                active_countdowns[player_id] = nil
+            end
+        end
+    end
+    
+    if parties_cleared > 0 or waiting_cleared > 0 then
+        print(string.format("[tourney] Cleanup: Cleared %d orphaned parties and %d waiting players", 
+              parties_cleared, waiting_cleared))
+    end
+end
+
 -- NEW: Function to periodically check for and clean up stuck tournaments
 local function cleanup_stuck_tournaments()
     print("[tourney] Running stuck tournament cleanup check...")
@@ -1396,10 +1642,16 @@ local function cleanup_stuck_tournaments()
                 end
             end
             
+            -- NEW: Clean up parties
+            cleanup_tournament_parties(tournament_id)
+            
             TournamentState.cleanup_tournament(tournament_id)
             tournaments_cleaned = tournaments_cleaned + 1
         end
     end
+    
+    -- NEW: Also cleanup orphaned parties (parties without active tournaments)
+    cleanup_orphaned_parties()
     
     if tournaments_cleaned > 0 then
         print("[tourney] Cleaned up " .. tournaments_cleaned .. " stuck tournaments")
@@ -1410,7 +1662,7 @@ end
 Net:on("on_tick", function(event)
     local timer = 0
     timer = timer + event.delta
-    if event.delta % (60 * 5) == 0 then -- Every 5 minutes
+    if timer % (60 * 5) == 0 then -- Every 5 minutes
         cleanup_stuck_tournaments()
         timer = 0
     end
@@ -1457,5 +1709,3 @@ end)
 TourneyEmitters.tournament_ui_emitter:on("ui_animation_changed", function(event)
     print("[Tournament UI] Animation changed for " .. event.element .. ": " .. event.animation)
 end)
-
-print("[tourney] Tournament system initialized and ready")

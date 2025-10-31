@@ -94,7 +94,7 @@ end
 -- NPC vs NPC battle simulation - now properly records results
 function Tourney.simulate_npc_battle(npc1_id, npc2_id, tournament_id, match_index)
     return async(function()
-        -- Simulate battle duration
+        -- Simulate battle duration (no timeout for player battles)
         await(Async.sleep(math.random(3, 8)))
         
         -- Simple random winner selection (can be enhanced with NPC stats)
