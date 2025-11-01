@@ -59,3 +59,27 @@ frame duration="0.067" x="66" y="96" w="66" h="18" originx="13" originy="-2" fli
 
 animation state="P2_3_TO_4_N"
 frame duration="0" x="132" y="96" w="66" h="18" originx="13" originy="-2" flipx="1" flipy="0"
+
+animation state="IDLE_DR"
+
+animation state="IDLE_DL"
+
+animation state="IDLE_UR"
+
+animation state="IDLE_UL"
+
+animation state="WALK_DR"
+
+animation state="WALK_DL"
+
+animation state="WALK_UR"
+
+animation state="WALK_UL"
+
+animation state="RUN_DR"
+
+animation state="RUN_DL"
+
+animation state="RUN_UR"
+
+animation state="RUN_UL"

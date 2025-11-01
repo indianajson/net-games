@@ -35,6 +35,8 @@ local games = require("scripts/net-games/framework")
 local TournamentState = require("scripts/net-game-tourney/tournament-state")
 local TournamentUtils = require("scripts/net-game-tourney/tournament-utils")
 local TourneyEmitters = require("scripts/net-game-tourney/emitters")
+local TableUtils = require("scripts/table-utils")
+
 
 -- API Events for external consumers
 TournamentAPI.events = {
@@ -195,7 +197,7 @@ function TournamentAPI.start_tournament(tournament_id)
                     tourney.board_data.stored_mugshots[i] = {
                         player_id = participant.player_id,
                         mug_texture = participant.player_mugshot.mug_texture,
-                        position = {x = 0, y = 0, z = 2} -- Will be set by position system
+                        position = {x = 0, y = 0, z = 3} -- Will be set by position system
                     }
                 end
             end

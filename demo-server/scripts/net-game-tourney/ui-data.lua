@@ -61,6 +61,13 @@ local UI_DATA = {
             z = 1,
         }
     },
+    -- 14 different spots for the progress bars to be placed.
+    progress_bars = {
+
+    },
+    progress_bar_overlays = {
+
+    }
 }
 
 return UI_DATA

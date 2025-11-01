@@ -68,3 +68,27 @@ frame duration="0.1" x="66" y="127" w="66" h="34" originx="65" originy="0" flipx
 frame duration="0.1" x="132" y="127" w="66" h="34" originx="65" originy="0" flipx="1" flipy="0"
 frame duration="0.1" x="198" y="127" w="66" h="34" originx="65" originy="0" flipx="1" flipy="0"
 frame duration="0.1" x="264" y="127" w="66" h="34" originx="65" originy="0" flipx="1" flipy="0"
+
+animation state="IDLE_DR"
+
+animation state="IDLE_DL"
+
+animation state="IDLE_UR"
+
+animation state="IDLE_UL"
+
+animation state="WALK_DR"
+
+animation state="WALK_DL"
+
+animation state="WALK_UR"
+
+animation state="WALK_UL"
+
+animation state="RUN_DR"
+
+animation state="RUN_DL"
+
+animation state="RUN_UR"
+
+animation state="RUN_UL"

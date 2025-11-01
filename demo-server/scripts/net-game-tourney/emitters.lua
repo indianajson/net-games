@@ -1,5 +1,6 @@
 local debug = require("scripts/debug-utils")
 local TournamentState = require("scripts/net-game-tourney/tournament-state")
+local TourneyUtils = require("scripts/net-game-tourney/tournament-utils")
 
 local change_area_emitter = Net.EventEmitter.new()
 local tourney_emitter = Net.EventEmitter.new()
@@ -36,6 +37,10 @@ function Tourney.set_ui_animation(element_name, animation_state)
     Tourney.ui_animations[element_name] = animation_state
     tournament_ui_emitter:emit("ui_animation_changed", {element = element_name, animation = animation_state})
 end
+
+--function Tourney.closed_tourney_board(tournament_id)
+--    tournament_ui_emitter:emit("closed_tourney_board", {tournament_id = tournament_id})
+--end
 
 -- Enhanced battle result handling
 function Tourney.handle_battle_result(event)
@@ -168,6 +173,15 @@ end)
 tournament_ui_emitter:on("ui_animation_changed", function(event)
     print("[Tournament UI] Animation changed for " .. event.element .. ": " .. event.animation)
 end)
+
+--tournament_ui_emitter:on("closed_tourney_board", function(event)
+--    local tourney_id = event.tournament_id
+--    local tournament = TournamentState.get_tournament(tourney_id)
+--    local state = tournament.state
+--    local start_next_round = TourneyUtils.ask_host_about_next_round(event.tournament_id, state)
+--    
+--    print(event)
+--end)
 
 -- Existing event handlers remain...
 Net:on("player_transfer_area", function(event)

@@ -25,12 +25,15 @@ local active_countdowns = {} -- Track active countdowns to fix the timer issue
 local default_mug_anim = constants.default_mug_anim
 local frames_to_remove = ui_data.frame_names
 local ui_data_pos = ui_data.unmoving_ui_pos
+
 local board_pos = ui_data_pos.bg
 local grid_pos = ui_data_pos.grid
 local bracket_pos = ui_data_pos.bracket
 local title_banner_pos = ui_data_pos.title_banner
 local champion_topper_pos = ui_data_pos.champion_topper_bn4
-local duration = 60
+local crown1_pos = ui_data_pos.crown1
+local crown2_pos = ui_data_pos.crown2
+local duration = 10
 
 -- NPC weight lookup table
 local NPC_WEIGHTS = {
@@ -109,6 +112,14 @@ local function get_new_host(tournament)
     return nil
 end
 
+local function quit_party(player_area, object_id)
+    -- local found = false
+    for i, party in next, tourney_boards[player_area][object_id]["active_tournaments"] do
+        print(party)
+    end
+    --if not found then start_party(player_id, player_area, object_id) end
+end
+
 -- Check if tournament is completed (3 rounds have passed)
 local function is_tournament_completed(tournament)
     return tournament.current_round >= 3 and #tournament.winners == 1
@@ -129,7 +140,7 @@ local function store_tournament_board_data(tournament_id, board_background_info,
             tournament.board_data.stored_mugshots[i] = {
                 player_id = participant.player_id,
                 mug_texture = participant.player_mugshot.mug_texture,
-                position = mug_pos.initial[i] or {x = 0, y = 0, z = 2}
+                position = mug_pos.initial[i] or {x = 0, y = 0, z = 3}
             }
         end
         
@@ -186,9 +197,9 @@ local function setup_board_bg_elements(player_id, info)
     games.add_ui_element("TITLE BANNER", player_id, "/server/assets/tourney/title-banner.png",
         "/server/assets/tourney/title-banner.anim", "RED", title_banner_pos.x, title_banner_pos.y, title_banner_pos.z)
     games.add_ui_element("CROWN_1", player_id, "/server/assets/tourney/crown.png",
-        "/server/assets/tourney/crown.anim", "IDLE", 64, 48, 0)
+        "/server/assets/tourney/crown.anim", "IDLE", crown1_pos.x, crown1_pos.y, crown1_pos.z)
     games.add_ui_element("CROWN_2", player_id, "/server/assets/tourney/crown.png",
-        "/server/assets/tourney/crown.anim", "IDLE", 176, 48, 0)
+        "/server/assets/tourney/crown.anim", "IDLE", crown2_pos.x, crown2_pos.y, crown2_pos.z)
 end
 
 local function cleanup_ui(player_id, player_area, name, song)
@@ -397,6 +408,7 @@ local function show_tournament_results_with_animation(player_id, tournament, rou
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, 0.3)
         Net.unlock_player_input(player_id)
         games.deactivate_framework(player_id)
+        return true
     end)
 end
 
@@ -484,7 +496,7 @@ local function show_tournament_stage(player_id, tournament, stage_type, is_curre
         end
         
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, 0.3)
-        await(Async.sleep(2.0)) -- Show positions
+        await(Async.sleep(12.5)) -- Show positions
         
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, 0.3)
         await(Async.sleep(0.3))
@@ -497,20 +509,17 @@ local function show_tournament_stage(player_id, tournament, stage_type, is_curre
 end
 
 local function show_board_to_all_players(tournament, show_function, stage_type, is_current_state, round_number)
-    return async(function()
+
         -- Show board to all real players sequentially, including those who were eliminated
         for _, participant in ipairs(tournament.participants) do
             if not string.find(participant.player_id, ".zip") and Net.is_player(participant.player_id) then
                 if show_function == show_tournament_results_with_animation then
-                    await(show_function(participant.player_id, tournament, round_number))
+                    show_function(participant.player_id, tournament, round_number)
                 else
-                    await(show_function(participant.player_id, tournament, stage_type, is_current_state))
+                    show_function(participant.player_id, tournament, stage_type, is_current_state)
                 end
-                -- Small delay between showing to different players
-                await(Async.sleep(0.1))
             end
         end
-    end)
 end
 
 -- FIXED: Enhanced battle starter with proper NPC predetermined result handling
@@ -859,6 +868,7 @@ local function verify_tournament_state(tournament_id, round_number)
         if match.completed then
             print(string.format("[tourney]   Winner: %s, Loser: %s", 
                   match.winner.player_id, match.loser.player_id))
+        local tourney = TournamentState.get_tournament(tournament_id)
         end
     end
     
@@ -882,12 +892,12 @@ local function run_tournament_battles(tournament_id)
         -- FIRST: Show current state of the board before any battles to all players
         if tournament.current_round == 1 then
             print("[tourney] Showing initial tournament board to all players")
-            await(show_board_to_all_players(tournament, show_tournament_stage, "initial", false))
+            show_board_to_all_players(tournament, show_tournament_stage, "initial", false)
             await(Async.sleep(2.0)) -- Additional pause after all boards are shown
         else
             -- For subsequent rounds, show the CURRENT STATE (positions from previous round)
             print("[tourney] Showing CURRENT STATE before round " .. tournament.current_round .. " battles to all players")
-            await(show_board_to_all_players(tournament, show_tournament_stage, "current_state", true))
+            show_board_to_all_players(tournament, show_tournament_stage, "current_state", true)
             await(Async.sleep(2.0)) -- Additional pause after all boards are shown
         end
         
@@ -986,8 +996,8 @@ local function run_tournament_battles(tournament_id)
             elseif results_stage == "champion" then round_number = 3 end
             
             -- Use the new animation function for seamless transitions
-            await(show_board_to_all_players(tournament, show_tournament_results_with_animation, nil, nil, round_number))
-            await(Async.sleep(2.0)) -- Additional pause after all boards are shown
+            show_board_to_all_players(tournament, show_tournament_results_with_animation, nil, nil, round_number)
+            await(Async.sleep(5.0)) -- Additional pause after all boards are shown
         end
 
         local current_real_players = {}
@@ -1034,10 +1044,10 @@ local function run_tournament_battles(tournament_id)
                 end
                  cleanup_tournament_parties(tournament_id)
     
-    TournamentState.cleanup_tournament(tournament_id)
-    print("[tourney] Tournament " .. tournament_id .. " completed with NPC winner")
-    return
-end
+        TournamentState.cleanup_tournament(tournament_id)
+            print("[tourney] Tournament " .. tournament_id .. " completed with NPC winner")
+            return
+            end
         end
 
         -- Check if tournament is completed (after 3 rounds)
@@ -1080,15 +1090,15 @@ end
             
             print("[tourney] Cleaned up " .. #players_cleaned_up .. " players: " .. table.concat(players_cleaned_up, ", "))
             
-   -- NEW: Clean up parties and waiting queues
-    cleanup_tournament_parties(tournament_id)
-    
-    -- NEW: Force cleanup of the tournament regardless of NPC win
-    TournamentState.cleanup_tournament(tournament_id)
-    print("[tourney] Tournament " .. tournament_id .. " completely removed after completion (NPC winner)")
-    return
-    end
+        -- NEW: Clean up parties and waiting queues
+         cleanup_tournament_parties(tournament_id)
 
+         -- NEW: Force cleanup of the tournament regardless of NPC win
+         TournamentState.cleanup_tournament(tournament_id)
+         print("[tourney] Tournament " .. tournament_id .. " completely removed after completion (NPC winner)")
+        end
+
+        await(Async.sleep(2.0))
         -- Ask host if they want to start next round
         local start_next_round = await(TournamentUtils.ask_host_about_next_round(tournament_id, TournamentState))
         
@@ -1349,6 +1359,41 @@ local function gather_boards()
 end
 gather_boards()
 
+-- NEW: Function to cleanup orphaned parties (parties that don't have active tournaments)
+local function cleanup_orphaned_parties()
+    local parties_cleared = 0
+    local waiting_cleared = 0
+    
+    -- Clear all board parties (they should be recreated as needed)
+    for area_id, boards in pairs(tourney_boards) do
+        for object_id, board_data in pairs(boards) do
+            if board_data.active_tournaments and #board_data.active_tournaments > 0 then
+                local had_parties = #board_data.active_tournaments
+                board_data.active_tournaments = {}
+                parties_cleared = parties_cleared + had_parties
+            end
+        end
+    end
+    
+    -- Clear waiting players
+    for player_id, waiting_data in pairs(TourneyEmitters.players_waiting) do
+        if waiting_data then
+            TourneyEmitters.players_waiting[player_id] = nil
+            waiting_cleared = waiting_cleared + 1
+            
+            -- Cleanup any active countdowns
+            if active_countdowns[player_id] then
+                games.deactivate_framework(player_id)
+                active_countdowns[player_id] = nil
+            end
+        end
+    end
+    
+    if parties_cleared > 0 or waiting_cleared > 0 then
+        print(string.format("[tourney] Cleanup: Cleared %d orphaned parties and %d waiting players", 
+              parties_cleared, waiting_cleared))
+    end
+end
 
 
 ---------------------------------------------------------------------
@@ -1388,59 +1433,67 @@ Net:on("object_interaction", function(event)
             local board_tournament = tourney_boards[player_area][event.object_id].active_tournaments
             if #board_tournament < 8 and #board_tournament >= 1 then
                 local manager = Net.get_player_name(board_tournament[1].player_id)
-                local result = await(Async.question_player(event.player_id,
-                    "Would you like to join " .. manager .. "'s tournament?"))
+                await(Async.message_player(event.player_id, "Would you like to join " .. manager .. "'s tournament?"))
+                local result = await(Async.quiz_player(event.player_id,
+                    "Join", "Start New", "Quit"))
                 if result == 0 then
-                    local single = await(Async.question_player(event.player_id, "Single Player?"))
-                    if single == 1 then
-                        -- FIXED: Use consistent tournament creation with shuffling
-                        local tournament_id, participants = await(create_consistent_tournament(
-                            event.player_id, event.object_id, player_area, board_background_setup_info, true
-                        ))
-                        
-                        if tournament_id then
-                            -- REMOVED: No longer show initial board here - it will be shown in run_tournament_battles
-                            -- Run battles directly
-                            await(run_tournament_battles(tournament_id))
-                        end
-                    end
-                elseif result == 1 then
-                    local mug = Net.get_player_mugshot(event.player_id).texture_path
+                  local mug = Net.get_player_mugshot(event.player_id).texture_path
                     local pos = #board_tournament + 1
                     tourney_boards[player_area][event.object_id].active_tournaments[pos] =
                         { player_id = event.player_id, player_mugshot = { mug_animation = default_mug_anim, mug_texture = mug } }
-                end
-            else
-                local result = await(Async.question_player(event.player_id, "Would you like to start a tournament?"))
-                if result == 1 then
-                    local single = await(Async.question_player(event.player_id, "Single Player?"))
-                    if single == 0 then
+                elseif result == 1 then
+                   await(Async.message_player(event.player_id, "Would you like to start a tournament?"))
+                    local new_result = await(Async.quiz_player(event.player_id, "Multi-player", "Single Player", "Quit" ))
+                    if new_result == 0 then
                         join_or_create_party(event.player_id, event.object_id, false)
-                        
                         -- Clean up framework before starting countdown to prevent conflicts
                         games.activate_framework(event.player_id)
                         Net.lock_player_input(event.player_id)
-                        
                         -- Track this countdown
                         active_countdowns[event.player_id] = true
                         games.spawn_countdown(event.player_id, 100, 20, 10, duration)
                         games.start_countdown(event.player_id)
-                        
                         TourneyEmitters.players_waiting[event.player_id] = { waiting = true, tourney_board = event.object_id }
-                    elseif single == 1 then
-                        -- FIXED: Use consistent tournament creation with shuffling
+                    elseif new_result == 1 then
                         local tournament_id, participants = await(create_consistent_tournament(
-                            event.player_id, event.object_id, player_area, board_background_setup_info, true
-                        ))
-                        
+                                event.player_id, event.object_id, player_area, board_background_setup_info, true
+                            ))
                         if tournament_id then
                             -- REMOVED: No longer show initial board here - it will be shown in run_tournament_battles
                             -- Run battles directly
                             await(run_tournament_battles(tournament_id))
+                        end    
+                    else  
+                        print("Player chose to quit")
                         end
                     end
+            else
+                    await(Async.message_player(event.player_id, "Would you like to start a tournament?"))
+                    local new_result = await(Async.quiz_player(event.player_id, "Multi-player", "Single Player", "Quit" ))
+                    if new_result == 0 then
+                        join_or_create_party(event.player_id, event.object_id, false)
+                        -- Clean up framework before starting countdown to prevent conflicts
+                        games.activate_framework(event.player_id)
+                        Net.lock_player_input(event.player_id)
+                        -- Track this countdown
+                        active_countdowns[event.player_id] = true
+                        games.spawn_countdown(event.player_id, 100, 20, 10, duration)
+                        games.start_countdown(event.player_id)
+                        TourneyEmitters.players_waiting[event.player_id] = { waiting = true, tourney_board = event.object_id }
+                    elseif new_result == 1 then
+                        local tournament_id, participants = await(create_consistent_tournament(
+                                event.player_id, event.object_id, player_area, board_background_setup_info, true
+                            ))
+
+                        if tournament_id then
+                            -- REMOVED: No longer show initial board here - it will be shown in run_tournament_battles
+                            -- Run battles directly
+                            await(run_tournament_battles(tournament_id))
+                        end    
+                    else 
+                        print("Player chose to quit")
+                    end
                 end
-            end
         end)
         cleanup()
         if not success then print("[tourney ERROR] " .. tostring(err)) end
@@ -1471,7 +1524,7 @@ Net:on("countdown_ended", function(event)
         Net.message_player(event.player_id,
             "There is currently " .. #board_info.active_tournaments .. "/8 in your tournament queue. What would you like to do?")
         
-        local result = await(Async.quiz_player(event.player_id, "Backfill", "Wait"))
+        local result = await(Async.quiz_player(event.player_id, "Backfill", "Wait", "Quit"))
         
         if result == 0 then -- Backfill
             local object = Net.get_object_by_id(player_area, entry.tourney_board)
@@ -1503,6 +1556,9 @@ Net:on("countdown_ended", function(event)
                 waiting = true,
                 tourney_board = entry.tourney_board
             }
+        elseif result == 2 then
+            board_info.active_tournaments = {}
+            return
         end
     end)
 end)
@@ -1589,41 +1645,6 @@ TourneyEmitters.tourney_emitter:on("battle_completed", function(event)
 end)
 
 
--- NEW: Function to cleanup orphaned parties (parties that don't have active tournaments)
-local function cleanup_orphaned_parties()
-    local parties_cleared = 0
-    local waiting_cleared = 0
-    
-    -- Clear all board parties (they should be recreated as needed)
-    for area_id, boards in pairs(tourney_boards) do
-        for object_id, board_data in pairs(boards) do
-            if board_data.active_tournaments and #board_data.active_tournaments > 0 then
-                local had_parties = #board_data.active_tournaments
-                board_data.active_tournaments = {}
-                parties_cleared = parties_cleared + had_parties
-            end
-        end
-    end
-    
-    -- Clear waiting players
-    for player_id, waiting_data in pairs(TourneyEmitters.players_waiting) do
-        if waiting_data then
-            TourneyEmitters.players_waiting[player_id] = nil
-            waiting_cleared = waiting_cleared + 1
-            
-            -- Cleanup any active countdowns
-            if active_countdowns[player_id] then
-                games.deactivate_framework(player_id)
-                active_countdowns[player_id] = nil
-            end
-        end
-    end
-    
-    if parties_cleared > 0 or waiting_cleared > 0 then
-        print(string.format("[tourney] Cleanup: Cleared %d orphaned parties and %d waiting players", 
-              parties_cleared, waiting_cleared))
-    end
-end
 
 -- NEW: Function to periodically check for and clean up stuck tournaments
 local function cleanup_stuck_tournaments()
