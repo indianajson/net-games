@@ -24,9 +24,6 @@ function TextDisplay:init()
         anim_path = nil
     }
     
-    -- Marquee wrapping gap (pixels of blank space when text wraps)
-    self.marquee_wrap_gap = 40
-    
     Net:on("player_join", function(event)
         self:setupPlayerTextDisplays(event.player_id)
     end)
@@ -150,34 +147,45 @@ function TextDisplay:drawMarqueeText(player_id, marquee_id, text, y, font_name, 
         bounds_right = bounds_right,
         bounds_width = bounds_width,
         character_objects = {},
-        individual_chars = {}, -- Store individual character data for wrapping
-        wrap_gap = self.marquee_wrap_gap, -- Store the wrap gap for this marquee
-        last_wrap_time = 0, -- Track when we last wrapped to prevent rapid wrapping
-        wrap_cooldown = 0.5 -- Minimum time between wraps (seconds)
+        individual_chars = {} -- Store individual character data for wrapping
     }
     
-    -- Pre-calculate character positions for individual wrapping
-    self:setupIndividualCharacters(marquee_data)
+    -- Pre-calculate character positions for proper marquee behavior
+    self:setupMarqueeCharacters(marquee_data)
     
     -- Draw backdrop if specified
     if backdrop then
         self:drawBackdrop(player_id, marquee_id, marquee_data, backdrop)
     end
     
-    -- Draw initial marquee text with individual character tracking
+    -- Draw initial marquee text
     self:drawMarqueeCharacters(player_id, marquee_id, marquee_data)
     
     player_data.active_texts[marquee_id] = marquee_data
     return marquee_id
 end
 
-function TextDisplay:setupIndividualCharacters(marquee_data)
+function TextDisplay:setupMarqueeCharacters(marquee_data)
     local font_name = marquee_data.font
     local char_widths = self.font_system.char_widths[font_name] or self.font_system.char_widths.THICK
     local current_x = marquee_data.current_x
     
     marquee_data.individual_chars = {}
     
+    -- Calculate total text width including spacing
+    local total_width = 0
+    for i = 1, #marquee_data.text do
+        local char = marquee_data.text:sub(i, i)
+        local char_width = (char_widths[char] or char_widths[" "]) * marquee_data.scale
+        total_width = total_width + char_width + 1
+    end
+    if #marquee_data.text > 0 then
+        total_width = total_width - 1 -- Remove trailing space
+    end
+    marquee_data.total_text_width = total_width
+    
+    -- Setup individual character data with relative positions
+    local relative_x = 0
     for i = 1, #marquee_data.text do
         local char = marquee_data.text:sub(i, i)
         local char_width = (char_widths[char] or char_widths[" "]) * marquee_data.scale
@@ -185,18 +193,13 @@ function TextDisplay:setupIndividualCharacters(marquee_data)
         table.insert(marquee_data.individual_chars, {
             char = char,
             width = char_width,
-            original_x = current_x,
-            current_x = current_x,
+            relative_x = relative_x, -- Position relative to start of text
             obj_id = nil,
-            anim_state = font_name .. "_" .. char,  -- Build animation state name
-            index = i  -- Store original position for consistent spacing
+            anim_state = font_name .. "_" .. char
         })
         
-        current_x = current_x + char_width + 1 -- Add consistent spacing
+        relative_x = relative_x + char_width + 1 -- Add consistent spacing
     end
-    
-    -- Store total text width for proper wrapping
-    marquee_data.total_text_width = current_x - marquee_data.current_x - 1
 end
 
 function TextDisplay:drawMarqueeCharacters(player_id, marquee_id, marquee_data)
@@ -209,9 +212,12 @@ function TextDisplay:drawMarqueeCharacters(player_id, marquee_id, marquee_data)
     
     -- Draw each character that's within bounds
     for i, char_data in ipairs(marquee_data.individual_chars) do
+        -- Calculate absolute position
+        local char_x = marquee_data.current_x + char_data.relative_x
+        
         -- Check if character is visible within bounds
-        if char_data.current_x + char_data.width >= marquee_data.bounds_left and 
-           char_data.current_x <= marquee_data.bounds_right then
+        if char_x + char_data.width >= marquee_data.bounds_left and 
+           char_x <= marquee_data.bounds_right then
             
             local char_obj_id = marquee_id .. "_char_" .. i
             
@@ -220,12 +226,12 @@ function TextDisplay:drawMarqueeCharacters(player_id, marquee_id, marquee_data)
                 marquee_data.font,  -- Use font name as sprite ID
                 {
                     id = char_obj_id,
-                    x = char_data.current_x,
+                    x = char_x,
                     y = marquee_data.y,
                     z = marquee_data.z_order,
                     sx = marquee_data.scale,
                     sy = marquee_data.scale,
-                    anim_state = char_data.anim_state  -- Use the pre-built animation state
+                    anim_state = char_data.anim_state
                 }
             )
             
@@ -281,69 +287,20 @@ function TextDisplay:updateMarquees(delta)
 end
 
 function TextDisplay:updateMarquee(player_id, text_id, text_data, delta)
-    -- Update wrap cooldown
-    text_data.last_wrap_time = text_data.last_wrap_time + delta
-    
-    -- Calculate movement for all characters
+    -- Calculate movement for the entire text
     local movement = text_data.speed * delta
     
-    -- Track if entire text needs to wrap
-    local needs_wrap = false
-    local leftmost_char = nil
+    -- Update the text position
+    text_data.current_x = text_data.current_x - movement
     
-    -- Find the leftmost character to check if entire text has left the screen
-    for _, char_data in ipairs(text_data.individual_chars) do
-        if not leftmost_char or char_data.current_x < leftmost_char.current_x then
-            leftmost_char = char_data
-        end
-    end
-    
-    -- Check if the entire text has moved past the left boundary
-    if leftmost_char and leftmost_char.current_x + text_data.total_text_width < text_data.bounds_left then
-        needs_wrap = true
-    end
-    
-    -- Update each character's position
-    for _, char_data in ipairs(text_data.individual_chars) do
-        char_data.current_x = char_data.current_x - movement
-    end
-    
-    -- Handle text wrapping if needed and cooldown has passed
-    if needs_wrap and text_data.last_wrap_time >= text_data.wrap_cooldown then
-        self:wrapMarqueeText(text_data)
-        text_data.last_wrap_time = 0
+    -- Check if the entire text has moved completely out of bounds
+    if text_data.current_x + text_data.total_text_width < text_data.bounds_left then
+        -- Reset to start at the right side again
+        text_data.current_x = text_data.bounds_right
     end
     
     -- Redraw characters at new positions
     self:drawMarqueeCharacters(player_id, text_id, text_data)
-end
-
-function TextDisplay:wrapMarqueeText(text_data)
-    -- Find the rightmost character position
-    local rightmost_x = -9999
-    for _, char_data in ipairs(text_data.individual_chars) do
-        if char_data.current_x > rightmost_x then
-            rightmost_x = char_data.current_x
-        end
-    end
-    
-    -- Wrap the entire text as a unit to maintain monospacing
-    local wrap_position = rightmost_x + text_data.wrap_gap
-    
-    -- Calculate the offset needed to move the entire text
-    local leftmost_x = 9999
-    for _, char_data in ipairs(text_data.individual_chars) do
-        if char_data.current_x < leftmost_x then
-            leftmost_x = char_data.current_x
-        end
-    end
-    
-    local offset = wrap_position - leftmost_x
-    
-    -- Move all characters by the same offset to maintain relative positions
-    for _, char_data in ipairs(text_data.individual_chars) do
-        char_data.current_x = char_data.current_x + offset
-    end
 end
 
 function TextDisplay:removeText(player_id, text_id)
@@ -414,7 +371,7 @@ function TextDisplay:updateText(player_id, text_id, new_text)
                 end
                 
                 -- Reset character positions
-                self:setupIndividualCharacters(text_data)
+                self:setupMarqueeCharacters(text_data)
             end
             
             -- Redraw backdrop if it exists
@@ -510,7 +467,7 @@ function TextDisplay:addBackdrop(player_id, text_id, backdrop_config)
                 text_data.bounds_width = text_data.bounds_right - text_data.bounds_left
                 
                 -- Reset character positions
-                self:setupIndividualCharacters(text_data)
+                self:setupMarqueeCharacters(text_data)
             end
         end
     end
@@ -532,19 +489,8 @@ function TextDisplay:removeBackdrop(player_id, text_id)
                 text_data.bounds_width = self.screen_width
                 
                 -- Reset character positions
-                self:setupIndividualCharacters(text_data)
+                self:setupMarqueeCharacters(text_data)
             end
-        end
-    end
-end
-
--- Set marquee wrap gap (can be called to adjust the gap for specific marquees)
-function TextDisplay:setMarqueeWrapGap(player_id, text_id, gap_pixels)
-    local player_data = self.player_texts[player_id]
-    if player_data then
-        local text_data = player_data.active_texts[text_id]
-        if text_data and text_data.type == "marquee" then
-            text_data.wrap_gap = gap_pixels or self.marquee_wrap_gap
         end
     end
 end
