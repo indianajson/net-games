@@ -1,12 +1,12 @@
 imagePath=""
 
 animation state="INACTIVE"
-frame duration="0.117" x="0" y="0" w="18" h="17" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.117" x="0" y="0" w="18" h="17" originx="8" originy="16" flipx="0" flipy="0"
 
 animation state="ACTIVE"
-frame duration="0.117" x="0" y="0" w="18" h="17" originx="0" originy="0" flipx="0" flipy="0"
-frame duration="0.133" x="0" y="17" w="18" h="17" originx="0" originy="0" flipx="0" flipy="0"
-frame duration="0.15" x="0" y="34" w="18" h="17" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.117" x="0" y="0" w="18" h="17" originx="8" originy="16" flipx="0" flipy="0"
+frame duration="0.133" x="0" y="17" w="18" h="17" originx="8" originy="16" flipx="0" flipy="0"
+frame duration="0.15" x="0" y="34" w="18" h="17" originx="8" originy="16" flipx="0" flipy="0"
 
 animation state="IDLE_DR"
 

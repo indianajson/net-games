@@ -174,9 +174,9 @@ end
 local function add_participant_mugshot(player_id, mugshot_id, mug_texture_path, x, y, z)
     local z_pos = z or 2  -- Default to 2 if z is not provided
     games.add_ui_element("MUG_FRAME_" .. mugshot_id, player_id,
-        "/server/assets/tourney/mini-mug-frame.png", "/server/assets/tourney/mini-mug-frame.anim", "ACTIVE", x, y, z_pos + 1)  -- Frame above mugshot
+        "/server/assets/tourney/tourney-board-elements/mini-mug-frame.png", "/server/assets/tourney/tourney-board-elements/mini-mug-frame.anim", "ACTIVE", x, y, z_pos + 1)  -- Frame above mugshot
     games.add_ui_element("MUG_" .. mugshot_id, player_id, mug_texture_path,
-        "/server/assets/tourney/mug.anim", "UI", x, y, z_pos, .50, .50)
+        default_mug_anim, "UI", x, y, z_pos, .50, .50)
 end
 
 -- Enhanced function to remove specific participant mugshot
@@ -196,10 +196,10 @@ local function setup_board_bg_elements(player_id, info)
         constants.champion_topper_bn4_anim, "UI", champion_topper_pos.x, champion_topper_pos.y, champion_topper_pos.z)
     games.add_ui_element("TITLE BANNER", player_id, "/server/assets/tourney/title-banner.png",
         "/server/assets/tourney/title-banner.anim", "RED", title_banner_pos.x, title_banner_pos.y, title_banner_pos.z)
-    games.add_ui_element("CROWN_1", player_id, "/server/assets/tourney/crown.png",
-        "/server/assets/tourney/crown.anim", "IDLE", crown1_pos.x, crown1_pos.y, crown1_pos.z)
-    games.add_ui_element("CROWN_2", player_id, "/server/assets/tourney/crown.png",
-        "/server/assets/tourney/crown.anim", "IDLE", crown2_pos.x, crown2_pos.y, crown2_pos.z)
+    games.add_ui_element("CROWN_1", player_id, constants.crown_texture_path,
+        constants.crown_anim_path, "INACTIVE", crown1_pos.x, crown1_pos.y, crown1_pos.z)
+    games.add_ui_element("CROWN_2", player_id, constants.crown_texture_path,
+        constants.crown_anim_path, "INACTIVE", crown2_pos.x, crown2_pos.y, crown2_pos.z)
 end
 
 local function cleanup_ui(player_id, player_area, name, song)
@@ -269,7 +269,7 @@ local function show_tournament_results_with_animation(player_id, tournament, rou
             print("[tourney] No board data stored for tournament")
             return
         end
-        
+        Net.toggle_player_hud(player_id)
         local player_area = Net.get_player_area(player_id)
         local original_map_name = Net.get_area_name(player_area)
         Net.set_area_name(player_area, "            ")
@@ -400,6 +400,7 @@ local function show_tournament_results_with_animation(player_id, tournament, rou
             await(Async.sleep(2.0))
         end
         
+        Net.toggle_player_hud(player_id)
         -- Clean up (only after everything is complete)
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, 0.3)
         await(Async.sleep(0.3))
@@ -420,6 +421,7 @@ local function show_tournament_stage(player_id, tournament, stage_type, is_curre
             return
         end
         
+        Net.toggle_player_hud(player_id)
         local player_area = Net.get_player_area(player_id)
         local original_map_name = Net.get_area_name(player_area)
         Net.set_area_name(player_area, "            ")
@@ -501,6 +503,7 @@ local function show_tournament_stage(player_id, tournament, stage_type, is_curre
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 255 }, 0.3)
         await(Async.sleep(0.3))
         cleanup_ui(player_id, player_area, original_map_name, original_map_song)
+        Net.toggle_player_hud(player_id)
         await(Async.sleep(0.1))
         Net.fade_player_camera(player_id, { r = 0, g = 0, b = 0, a = 0 }, 0.3)
         Net.unlock_player_input(player_id)

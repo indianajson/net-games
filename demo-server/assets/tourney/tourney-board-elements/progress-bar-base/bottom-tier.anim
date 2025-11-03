@@ -1,0 +1,21 @@
+imagePath="D:/ONB/Teblat Wonterk Server/resources/mods/assets/progress.png"
+
+animation state="L1_MOVE"
+frame duration="0.067" x="0" y="0" w="18" h="52" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.067" x="18" y="0" w="18" h="52" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.067" x="36" y="0" w="18" h="52" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.067" x="54" y="0" w="18" h="52" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.067" x="72" y="0" w="18" h="52" originx="0" originy="0" flipx="0" flipy="0"
+
+animation state="L1_ELIMINATED"
+frame duration="0" x="90" y="0" w="18" h="52" originx="0" originy="0" flipx="0" flipy="0"
+
+animation state="R1_MOVE"
+frame duration="0.067" x="0" y="0" w="18" h="52" originx="0" originy="0" flipx="1" flipy="0"
+frame duration="0.067" x="18" y="0" w="18" h="52" originx="0" originy="0" flipx="1" flipy="0"
+frame duration="0.067" x="36" y="0" w="18" h="52" originx="0" originy="0" flipx="1" flipy="0"
+frame duration="0.067" x="54" y="0" w="18" h="52" originx="0" originy="0" flipx="1" flipy="0"
+frame duration="0.067" x="72" y="0" w="18" h="52" originx="0" originy="0" flipx="1" flipy="0"
+
+animation state="R1_ELIMINATED"
+frame duration="0" x="90" y="0" w="18" h="52" originx="0" originy="0" flipx="1" flipy="0"

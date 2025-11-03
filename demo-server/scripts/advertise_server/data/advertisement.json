@@ -1,0 +1,19 @@
+{
+    "listservers": {
+        "main": "http://onb.keristero.com/server_list/"
+    },
+    "advertisements": [
+        {
+            "unique_server_id": "TournamentTest",
+            "name": "DEV Tournament",
+            "description": "WIP development on server side net-game for tournaments. Expect bugs, and please dont press escape in battles as it will ruin the fun for everyone.",
+            "tags": [],
+            "address": "143.198.61.124:9999",
+            "data": "",
+            "icon": "advertisement.png",
+            "color": "rgb(255,255,255)",
+            "advertise_map": true,
+            "default_area_id": "default"
+        }
+    ]
+}

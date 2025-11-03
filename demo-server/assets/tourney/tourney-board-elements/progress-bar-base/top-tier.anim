@@ -1,0 +1,19 @@
+animation state="L3_MOVE"
+frame duration="0.067" x="0" y="0" w="66" h="18" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.067" x="66" y="0" w="66" h="18" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.067" x="132" y="0" w="66" h="18" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.067" x="0" y="18" w="66" h="18" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.067" x="66" y="18" w="66" h="18" originx="0" originy="0" flipx="0" flipy="0"
+
+animation state="L3_ELIMINATED"
+frame duration="0" x="132" y="18" w="66" h="18" originx="0" originy="0" flipx="0" flipy="0"
+
+animation state="R3_MOVE"
+frame duration="0.067" x="0" y="0" w="66" h="18" originx="0" originy="0" flipx="1" flipy="0"
+frame duration="0.067" x="66" y="0" w="66" h="18" originx="0" originy="0" flipx="1" flipy="0"
+frame duration="0.067" x="132" y="0" w="66" h="18" originx="0" originy="0" flipx="1" flipy="0"
+frame duration="0.067" x="0" y="18" w="66" h="18" originx="0" originy="0" flipx="1" flipy="0"
+frame duration="0.067" x="66" y="18" w="66" h="18" originx="0" originy="0" flipx="1" flipy="0"
+
+animation state="R3_ELIMINATED"
+frame duration="0" x="132" y="18" w="66" h="18" originx="0" originy="0" flipx="1" flipy="0"

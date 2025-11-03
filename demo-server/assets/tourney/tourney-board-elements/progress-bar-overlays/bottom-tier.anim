@@ -1,0 +1,94 @@
+imagePath="D:/ONB/Teblat Wonterk Server/resources/mods/assets/progress-none.png"
+
+animation state="P1_1_TO_2"
+frame duration="0.1" x="0" y="0" w="18" h="52" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="18" y="0" w="18" h="52" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="36" y="0" w="18" h="52" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="54" y="0" w="18" h="52" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="72" y="0" w="18" h="52" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="90" y="0" w="18" h="52" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="108" y="0" w="18" h="52" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="126" y="0" w="18" h="52" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="144" y="0" w="18" h="52" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="162" y="0" w="18" h="52" originx="0" originy="0" flipx="0" flipy="0"
+
+animation state="P1_1_TO_2_R"
+frame duration="0.1" x="0" y="0" w="18" h="51" originx="17" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="18" y="0" w="18" h="51" originx="17" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="36" y="0" w="18" h="51" originx="17" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="54" y="0" w="18" h="51" originx="17" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="72" y="0" w="18" h="51" originx="17" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="90" y="0" w="18" h="51" originx="17" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="108" y="0" w="18" h="51" originx="17" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="126" y="0" w="18" h="51" originx="17" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="144" y="0" w="18" h="51" originx="17" originy="0" flipx="1" flipy="0"
+
+animation state="2_TO_3_L"
+frame duration="0.1" x="0" y="51" w="34" h="42" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="34" y="51" w="34" h="42" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="68" y="51" w="34" h="42" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="102" y="51" w="34" h="42" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="136" y="51" w="34" h="42" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="170" y="51" w="34" h="42" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="204" y="51" w="34" h="42" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="238" y="51" w="34" h="42" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="272" y="51" w="34" h="42" originx="0" originy="0" flipx="0" flipy="0"
+
+animation state="2_TO_3_R"
+frame duration="0.1" x="0" y="51" w="34" h="42" originx="33" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="34" y="51" w="34" h="42" originx="33" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="68" y="51" w="34" h="42" originx="33" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="102" y="51" w="34" h="42" originx="33" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="136" y="51" w="34" h="42" originx="33" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="170" y="51" w="34" h="42" originx="33" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="204" y="51" w="34" h="42" originx="33" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="238" y="51" w="34" h="42" originx="33" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="272" y="51" w="34" h="42" originx="33" originy="0" flipx="1" flipy="0"
+
+animation state="3_TO_E_L"
+frame duration="0.1" x="0" y="93" w="66" h="34" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="66" y="93" w="66" h="34" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="132" y="93" w="66" h="34" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="198" y="93" w="66" h="34" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="264" y="93" w="66" h="34" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="0" y="127" w="66" h="34" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="66" y="127" w="66" h="34" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="132" y="127" w="66" h="34" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="198" y="127" w="66" h="34" originx="0" originy="0" flipx="0" flipy="0"
+frame duration="0.1" x="264" y="127" w="66" h="34" originx="0" originy="0" flipx="0" flipy="0"
+
+animation state="3_TO_E_R"
+frame duration="0.1" x="0" y="93" w="66" h="34" originx="65" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="66" y="93" w="66" h="34" originx="65" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="132" y="93" w="66" h="34" originx="65" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="198" y="93" w="66" h="34" originx="65" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="264" y="93" w="66" h="34" originx="65" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="0" y="127" w="66" h="34" originx="65" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="66" y="127" w="66" h="34" originx="65" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="132" y="127" w="66" h="34" originx="65" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="198" y="127" w="66" h="34" originx="65" originy="0" flipx="1" flipy="0"
+frame duration="0.1" x="264" y="127" w="66" h="34" originx="65" originy="0" flipx="1" flipy="0"
+
+animation state="IDLE_DR"
+
+animation state="IDLE_DL"
+
+animation state="IDLE_UR"
+
+animation state="IDLE_UL"
+
+animation state="WALK_DR"
+
+animation state="WALK_DL"
+
+animation state="WALK_UR"
+
+animation state="WALK_UL"
+
+animation state="RUN_DR"
+
+animation state="RUN_DL"
+
+animation state="RUN_UR"
+
+animation state="RUN_UL"
