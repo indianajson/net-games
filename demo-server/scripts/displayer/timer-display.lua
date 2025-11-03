@@ -7,6 +7,9 @@ function TimerDisplay:init()
     self.global_displays = {}
     self.font_system = require("scripts/displayer/font-system")
     
+    -- Use very high base IDs for timer displays to avoid conflicts
+    self.timer_sprite_base_id = 10000
+    
     self.display_configs = {
         default = {
             font = "THICK",
@@ -253,15 +256,20 @@ function TimerDisplay:updateDisplay(player_id, display, value)
         self.font_system:eraseTextDisplay(player_id, display.display_id)
     end
     
-    -- Draw new display
-    local new_display_id = self.font_system:drawText(
-        player_id, 
+    -- Use high ID for timer displays to avoid conflicts with other systems
+    local display_suffix = display.timer_id or display.countdown_id or "timer"
+    local high_id_display_id = "timer_" .. self.timer_sprite_base_id .. "_" .. display_suffix
+    
+    -- Draw new display with high ID
+    local new_display_id = self.font_system:drawTextWithId(
+        player_id,
         display_string, 
         display.x, 
         display.y, 
         display.font, 
         display.scale,
-        display.z_order
+        display.z_order,
+        high_id_display_id  -- Pass the high ID to ensure no conflicts
     )
     display.display_id = new_display_id
 end

@@ -38,7 +38,7 @@ Net:on("player_join", function(event)
     -- Hide default HUD
     displayer:hidePlayerHUD(player_id)
     -- In the player_join handler, change the global timer display creation to:
-    displayer.TimerDisplay:createGlobalTimerDisplay("global_timer", 10, 10, "large")
+    displayer.TimerDisplay:createGlobalTimerDisplay("global_timer", 10, 10, "default")
 
     -- And ensure the scrolling list has a lower z-order:
     displayer.ScrollingText:createList(player_id, "fullscreen_display", 0, 0, 480, 320, {

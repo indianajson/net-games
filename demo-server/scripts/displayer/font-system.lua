@@ -92,7 +92,7 @@ end
 function FontSystem:setupPlayerFonts(player_id)
     self.player_fonts[player_id] = {
         active_displays = {},
-        next_obj_id = 1
+        next_obj_id = 10000  -- Start with high ID to avoid conflicts
     }
     
     -- Provide assets and allocate sprites for each font type
@@ -121,6 +121,69 @@ function FontSystem:cleanupPlayerFonts(player_id)
         
         self.player_fonts[player_id] = nil
     end
+end
+
+-- NEW FUNCTION: Draw text with a specific display ID to avoid conflicts
+function FontSystem:drawTextWithId(player_id, text, x, y, font_name, scale, z_order, display_id)
+    font_name = font_name or "THICK"
+    scale = scale or 1.0
+    z_order = z_order or 100
+    
+    local player_data = self.player_fonts[player_id]
+    if not player_data then return nil end
+    
+    -- Use the provided display_id instead of generating one
+    local display_data = {
+        font = font_name,
+        x = x,
+        y = y,
+        scale = scale,
+        z_order = z_order,
+        character_objects = {},
+        text = text
+    }
+    
+    local current_x = x
+    local char_widths = self.char_widths[font_name] or self.char_widths.THICK
+    
+    -- FIXED: Calculate spacing that scales properly to preserve monospace
+    local base_spacing = 1  -- Base spacing at scale 1.0
+    local scaled_spacing = base_spacing * scale
+    
+    for i = 1, #text do
+        local char = text:sub(i, i)
+        -- Use a default width if character not found
+        local char_width = char_widths[char] or char_widths["A"] or 6
+        local scaled_width = char_width * scale
+        
+        -- Use very high character IDs to avoid conflicts
+        local obj_id = display_id .. "_char_" .. (10000 + i)
+        
+        Net.player_draw_sprite(
+            player_id,
+            font_name,
+            {
+                id = obj_id,
+                x = current_x,
+                y = y,
+                z = z_order,
+                sx = scale,
+                sy = scale,
+                anim_state = font_name .. "_" .. char
+            }
+        )
+        
+        table.insert(display_data.character_objects, {
+            obj_id = obj_id,
+            width = scaled_width
+        })
+        
+        -- FIXED: Use scaled spacing to preserve monospace at different scales
+        current_x = current_x + scaled_width + scaled_spacing
+    end
+    
+    player_data.active_displays[display_id] = display_data
+    return display_id
 end
 
 function FontSystem:drawText(player_id, text, x, y, font_name, scale, z_order)

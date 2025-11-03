@@ -377,6 +377,16 @@ end
 -- Font System API (for advanced use)
 Displayer.Font = {}
 
+function Displayer.Font:drawTextWithId(player_id, text, x, y, font_name, scale, z_order, display_id)
+    if not FontSystem or not FontSystem.drawTextWithId then return nil end
+    if not player_id then print("Error: player_id is required") return nil end
+    if not text then print("Error: text is required") return nil end
+    if not display_id then print("Error: display_id is required") return nil end
+    x = x or 0
+    y = y or 0
+    return FontSystem:drawTextWithId(player_id, text, x, y, font_name or "THICK", scale or 1.0, z_order or 100, display_id)
+end
+
 function Displayer.Font:drawText(player_id, text, x, y, font_name, scale, z_order)
     if not FontSystem or not FontSystem.drawText then return nil end
     if not player_id then print("Error: player_id is required") return nil end
