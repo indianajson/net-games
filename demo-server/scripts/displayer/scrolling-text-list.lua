@@ -157,6 +157,7 @@ function ScrollingTextList:drawListBackdrop(player_id, list_id, config)
     return backdrop_id
 end
 
+-- FIXED: Use direct font system drawing instead of relying on display IDs that might conflict
 function ScrollingTextList:drawListEntry(player_id, list_id, entry_index, list_data)
     local config = list_data.config
     local entry_state = config.entry_states[entry_index]
@@ -171,6 +172,9 @@ function ScrollingTextList:drawListEntry(player_id, list_id, entry_index, list_d
     
     -- Only draw if within visible bounds
     if text_y + (10 * config.scale) >= config.bounds_top and text_y <= config.bounds_bottom then
+        -- Use a unique ID for this specific entry to avoid conflicts
+        local unique_display_id = list_id .. "_entry_" .. entry_index
+        
         local display_id = self.font_system:drawText(
             player_id,
             entry_state.text,
@@ -183,7 +187,8 @@ function ScrollingTextList:drawListEntry(player_id, list_id, entry_index, list_d
         
         table.insert(entry_state.display_objects, {
             type = "text",
-            id = display_id
+            id = display_id,
+            unique_id = unique_display_id
         })
     end
 end

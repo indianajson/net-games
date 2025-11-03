@@ -31,29 +31,26 @@ Net:on("player_join", function(event)
         join_time = os.clock(),
         scrolling_list_created = false,
         scrolling_list_timer = 0,
-        countdown_text_id = nil
+        countdown_text_id = nil,
+        fullscreen_scroll_created = false
     }
     
     -- Hide default HUD
     displayer:hidePlayerHUD(player_id)
-    
-    -- Enhanced UI Layout with scrolling text areas:
-    -- Top-left: Global timer (10, 10)
-    -- Top-center: Marquee area (10, 30)
-    -- Left: Player timers (10, 50-80)
-    -- Center-left: System messages (10, 90+) - WILL APPEAR AFTER 10 SECONDS
-    -- Center: Player character (120, 80)
-    -- Center-right: News feed (180, 40)
-    -- Right: Notifications (150, 80+)
-    -- Bottom: Text boxes (20, 160+)
-    
-    -- Create global timer display (top-left)
+    -- In the player_join handler, change the global timer display creation to:
     displayer.TimerDisplay:createGlobalTimerDisplay("global_timer", 10, 10, "large")
+
+    -- And ensure the scrolling list has a lower z-order:
+    displayer.ScrollingText:createList(player_id, "fullscreen_display", 0, 0, 480, 320, {
+        -- ... other config
+        z_order = 50,  -- Lower than timer display's 100
+        -- ... other config
+    })
     displayer.TimerDisplay:updateGlobalTimerDisplay("global_timer", global_timer.elapsed_time)
     
     -- Create news marquee (top-center)
     displayer.Text:drawMarqueeText(player_id, "news_ticker", 
-        "Welcome to the Tournament! Important messages will appear on the left in 10 seconds!", 
+        "Welcome! Fullscreen display will appear in 5 seconds!", 
         30, "THICK", 1.0, 100, "slow", {
             x = 10, y = 25, width = 220, height = 15,
             padding_x = 8, padding_y = 2
@@ -68,42 +65,13 @@ Net:on("player_join", function(event)
     displayer.Text:drawText(player_id, "MISSION TIMER", 12, 60, "THICK", 0.7, 100)
     
     -- Create initial countdown text
-    player_data[player_id].countdown_text_id = displayer.Text:drawText(player_id, "Messages in: 10", 12, 90, "THICK", 0.7, 100)
-    
-    -- Create live news feed (center-right)
-    local initial_news = {
-        "Live: Welcome to the arena!",
-        "Update: Game version 1.0",
-        "Event: Tournament starting soon",
-        "Tip: Watch for system messages",
-        "Alert: Important info in 10s"
-    }
-    
-    displayer.ScrollingText:createList(player_id, "news_feed", 180, 40, 50, 100, {
-        texts = initial_news,
-        scroll_speed = 12,
-        entry_delay = 4.0,
-        font = "THICK",
-        scale = 0.6,
-        loop = true,
-        backdrop = {
-            x = 175, y = 35, width = 60, height = 110,
-            padding_x = 4,
-            padding_y = 4
-        },
-        destroy_when_finished = false
-    })
-    
-    -- Create welcome message (bottom)
-    displayer.Text:createTextBox(player_id, "welcome", 
-        "Welcome! System messages will appear on the left side in 10 seconds. Watch the countdown above!", 
-        20, 210, 200, 40, "THICK", 1.0, 100, {
-            x = 15, y = 205, width = 210, height = 50,
-            padding_x = 8, padding_y = 6
-        }, 25)
+    player_data[player_id].countdown_text_id = displayer.Text:drawText(player_id, "Fullscreen in: 5", 12, 90, "THICK", 0.7, 100)
     
     -- Mark for delayed start
     player_data[player_id].waiting_for_start = true
+    
+    -- DEBUG: Create a simple test text to verify display is working
+    displayer.Text:drawText(player_id, "DEBUG: Display working", 10, 110, "THICK", 0.7, 100)
 end)
 
 -- Player disconnect handler
@@ -124,68 +92,75 @@ Net:on("tick", function(event)
     
     -- Handle delayed starts for players and scrolling list creation
     for player_id, data in pairs(player_data) do
-        -- Update scrolling list timer and countdown display
-        if not data.scrolling_list_created then
+        -- Create fullscreen 3x scale scrolling list after 5 seconds
+        if not data.fullscreen_scroll_created and data.scrolling_list_timer >= 5.0 then
+            data.fullscreen_scroll_created = true
+            
+            -- Remove countdown text
+            if data.countdown_text_id then
+                displayer.Text:removeText(player_id, data.countdown_text_id)
+                data.countdown_text_id = nil
+            end
+            
+            -- Create fullscreen 3x scale scrolling text list
+            local fullscreen_messages = {
+                "=== FULLSCREEN DISPLAY ===",
+                "Scale: 3.0x",
+                "Backdrop: Full Screen",
+                "Text: Large and Clear",
+                "Perfect for announcements",
+                "or important messages!",
+                "This text is scaled 3x",
+                "Monospace preserved!",
+                "Character spacing maintained",
+                "Easy to read from distance",
+                "Great for titles and headers",
+                "Backdrop covers entire screen",
+                "Using marquee-backdrop.png",
+                "Dimensions: 240x160",
+                "Position: 0,0",
+                "Enjoy the enhanced visibility!",
+                "======================"
+            }
+            
+            -- FIXED: Create the fullscreen scrolling list with proper configuration
+            local success = displayer.ScrollingText:createList(player_id, "fullscreen_display", 0, 0, 480, 320, {
+                texts = fullscreen_messages,
+                scroll_speed = 40,  -- Increased speed for large text
+                entry_delay = 2.0,
+                font = "THICK",    -- Use BATTLE font for better visibility at large scale
+                scale = 2.0,        -- 3x scale
+                z_order = 50,       -- Lower z-order to ensure it's visible
+                loop = true,
+                backdrop = {
+                    x = 0, y = 0, width = 480, height = 320,
+                    padding_x = 0,  -- Increased padding for large text
+                    padding_y = 0
+                },
+                destroy_when_finished = false
+            })
+            
+            if success then
+                print("Fullscreen 3x scale scrolling list created successfully for player " .. player_id)
+                
+                -- DEBUG: Add a test message to verify the list is working
+                displayer.ScrollingText:addText(player_id, "fullscreen_display", "DEBUG: List is working!")
+            else
+                print("ERROR: Failed to create fullscreen scrolling list for player " .. player_id)
+                
+                -- Show error message
+                displayer.Text:drawText(player_id, "ERROR: Fullscreen failed", 10, 120, "THICK", 0.7, 100)
+            end
+        end
+        
+        -- Update scrolling list timer
+        if not data.fullscreen_scroll_created then
             data.scrolling_list_timer = data.scrolling_list_timer + delta
-            local time_remaining = math.max(0, 10 - data.scrolling_list_timer)
+            local time_remaining = math.max(0, 5 - data.scrolling_list_timer)
             
             -- Update countdown text using the stored text ID
             if data.countdown_text_id then
-                displayer.Text:updateText(player_id, data.countdown_text_id, "Messages in: " .. math.ceil(time_remaining))
-            end
-            
-            -- Create scrolling list after 10 seconds
-            if data.scrolling_list_timer >= 10.0 and not data.scrolling_list_created then
-                data.scrolling_list_created = true
-                
-                -- Remove countdown text
-                if data.countdown_text_id then
-                    displayer.Text:removeText(player_id, data.countdown_text_id)
-                    data.countdown_text_id = nil
-                end
-                
-                -- Create system messages scroller (center-left)
-                local system_messages = {
-                    "=== SYSTEM MESSAGES ===",
-                    "Player " .. player_id .. " connected",
-                    "Session time: " .. os.date("%H:%M:%S"),
-                    "Game status: ACTIVE",
-                    "Tournament: STARTING SOON",
-                    "Objectives:",
-                    "- Survive 5 minutes",
-                    "- Defeat 50 enemies", 
-                    "- Collect 10 power-ups",
-                    "Current rank: ROOKIE",
-                    "Next rank: APPRENTICE",
-                    "Tips:",
-                    "- Watch your health",
-                    "- Manage abilities carefully",
-                    "- Use cover strategically",
-                    "- Team up with others",
-                    "Good luck, operator!",
-                    "======================"
-                }
-                
-                displayer.ScrollingText:createList(player_id, "system_messages", 10, 90, 100, 80, {
-                    texts = system_messages,
-                    scroll_speed = 15,
-                    entry_delay = 1.0,
-                    font = "THICK",
-                    scale = 0.6,
-                    backdrop = {
-                        x = 5, y = 85, width = 110, height = 90,
-                        padding_x = 4,
-                        padding_y = 4
-                    },
-                    destroy_when_finished = false
-                })
-                
-                -- Show notification that messages started
-                displayer.Text:createTextBox(player_id, "messages_started", 
-                    "System messages activated! Check left panel.", 
-                    150, 80, 80, 30, "THICK", 0.8, 100, nil, 35)
-                    
-                print("Scrolling list created for player " .. player_id)
+                displayer.Text:updateText(player_id, data.countdown_text_id, "Fullscreen in: " .. math.ceil(time_remaining))
             end
         end
         
@@ -196,7 +171,7 @@ Net:on("tick", function(event)
                 data.countdown_running = true
                 data.waiting_for_start = false
                 displayer.Text:createTextBox(player_id, "start_msg", 
-                    "Mission started! Defeat enemies before time runs out!", 
+                    "Mission started! Defeat enemies!", 
                     150, 100, 80, 40, "THICK", 0.9, 100, {
                         x = 145, y = 95, width = 90, height = 50,
                         padding_x = 4, padding_y = 4
@@ -220,7 +195,7 @@ Net:on("tick", function(event)
                 if data.countdown_time <= 0 then
                     data.countdown_running = false
                     displayer.Text:createTextBox(player_id, "countdown_complete", 
-                        "Time's up! Mission complete! Score: 1500", 
+                        "Time's up! Mission complete!", 
                         150, 120, 80, 40, "THICK", 0.9, 100, {
                             x = 145, y = 115, width = 90, height = 50,
                             padding_x = 4, padding_y = 4
@@ -229,6 +204,88 @@ Net:on("tick", function(event)
             end
         end
     end
+end)
+
+-- NEW COMMAND: Create fullscreen 3x scale scrolling list on demand (DEBUG VERSION)
+Net:on("create_fullscreen", function(event)
+    local player_id = event.player_id
+    
+    local messages = {
+        "=== FULLSCREEN 3X SCALE ===",
+        "Created on demand!",
+        "Scale: 3.0x", 
+        "Backdrop: Full Screen",
+        "Position: 0,0",
+        "Size: 240x160",
+        "Font: BATTLE",
+        "Monospace preserved!",
+        "Perfect for announcements!",
+        "======================"
+    }
+    
+    -- Remove any existing fullscreen list first
+    displayer.ScrollingText:removeList(player_id, "manual_fullscreen")
+    
+    local success = displayer.ScrollingText:createList(player_id, "manual_fullscreen", 120, 80, 240, 160, {
+        texts = messages,
+        scroll_speed = 40,
+        entry_delay = 2.0,
+        font = "THICK",
+        scale = 3.0,
+        z_order = 50,
+        loop = true,
+        backdrop = {
+            x = 0, y = 0, width = 240, height = 160,
+            padding_x = 20,
+            padding_y = 20
+        },
+        destroy_when_finished = false
+    })
+    
+    if success then
+        displayer.Text:createTextBox(player_id, "fullscreen_created", 
+            "Fullscreen 3x display created successfully!", 
+            10, 130, 120, 30, "THICK", 0.8, 100, nil, 40)
+        print("Manual fullscreen display created for player " .. player_id)
+    else
+        displayer.Text:createTextBox(player_id, "fullscreen_error", 
+            "ERROR: Failed to create fullscreen!", 
+            10, 130, 120, 30, "THICK", 0.8, 100, nil, 40)
+        print("ERROR: Failed to create manual fullscreen display for player " .. player_id)
+    end
+end)
+
+-- DEBUG COMMAND: Check if scrolling text list system is working
+Net:on("debug_scroll", function(event)
+    local player_id = event.player_id
+    
+    -- Test with a simple small scrolling list first
+    local test_messages = {
+        "DEBUG: Small test",
+        "This should work",
+        "If this appears,",
+        "system is working!",
+        "Scale: 1.0",
+        "Position: 10,140"
+    }
+    
+    displayer.ScrollingText:createList(player_id, "debug_list", 10, 140, 100, 50, {
+        texts = test_messages,
+        scroll_speed = 20,
+        entry_delay = 1.0,
+        font = "THICK",
+        scale = 1.0,
+        z_order = 100,
+        loop = true,
+        backdrop = {
+            x = 5, y = 135, width = 110, height = 60,
+            padding_x = 8,
+            padding_y = 8
+        },
+        destroy_when_finished = false
+    })
+    
+    displayer.Text:drawText(player_id, "DEBUG: Test list created", 10, 200, "THICK", 0.7, 100)
 end)
 
 -- Simple commands for testing
@@ -250,191 +307,18 @@ Net:on("add_text", function(event)
         150, 160, 80, 30, "THICK", 0.8, 100, nil, 35)
 end)
 
-Net:on("marquee", function(event)
+Net:on("clear_all", function(event)
     local player_id = event.player_id
-    local text = event.text or "This is a scrolling marquee message!"
-    displayer.Text:drawMarqueeText(player_id, "test_marquee", text, 
-        50, "THICK", 1.0, 100, "medium", {
-            x = 10, y = 45, width = 220, height = 15,
-            padding_x = 8, padding_y = 2
-        })
+    -- Remove all scrolling lists
+    displayer.ScrollingText:removeList(player_id, "fullscreen_display")
+    displayer.ScrollingText:removeList(player_id, "manual_fullscreen") 
+    displayer.ScrollingText:removeList(player_id, "debug_list")
+    
+    displayer.Text:createTextBox(player_id, "cleared", "All displays cleared!", 
+        150, 180, 80, 30, "THICK", 0.8, 100, nil, 40)
 end)
 
-Net:on("story", function(event)
-    local player_id = event.player_id
-    local story_text = "In the year 210X, the digital world has become intertwined with our reality. " ..
-                      "As a net operator, you have been chosen to participate in the annual tournament. " ..
-                      "Your mission is to survive against waves of digital creatures and other operators. " ..
-                      "Use your abilities wisely and remember: timing is everything!"
-    
-    displayer.Text:createTextBox(player_id, "story_box", story_text, 
-        20, 50, 200, 80, "THICK", 1.0, 100, {
-            x = 15, y = 45, width = 210, height = 90,
-            padding_x = 8, padding_y = 6
-        }, 20)
-end)
-
-Net:on("score", function(event)
-    local player_id = event.player_id
-    local score = event.score or "1000"
-    displayer.Text:drawText(player_id, "SCORE: " .. score, 180, 10, "BATTLE", 1.2, 100)
-    displayer.Text:addBackdrop(player_id, "score_display", {
-        x = 175, y = 5, width = 60, height = 20,
-        padding_x = 4, padding_y = 2
-    })
-end)
-
--- Scrolling Text List usage examples
-Net:on("create_credits", function(event)
-    local player_id = event.player_id
-    
-    local credits = {
-        "PRODUCED BY",
-        "YOUR STUDIO NAME",
-        "",
-        "DIRECTOR",
-        "Lead Developer",
-        "",
-        "PROGRAMMING",
-        "Senior Programmer",
-        "Gameplay Programmer",
-        "UI Programmer",
-        "",
-        "ART",
-        "Lead Artist",
-        "Character Artist",
-        "Environment Artist",
-        "",
-        "MUSIC & SOUND",
-        "Composer",
-        "Sound Designer",
-        "",
-        "SPECIAL THANKS",
-        "All Our Playtesters",
-        "The Community",
-        "",
-        "THANK YOU FOR PLAYING!"
-    }
-    
-    displayer.ScrollingText:createList(player_id, "credits", 60, 160, 120, 120, {
-        texts = credits,
-        scroll_speed = 20,
-        entry_delay = 0.5,
-        font = "BATTLE",
-        scale = 0.8,
-        backdrop = {
-            x = 55, y = 155, width = 130, height = 130,
-            padding_x = 10,
-            padding_y = 10
-        },
-        destroy_when_finished = true
-    })
-end)
-
-Net:on("create_tutorial_steps", function(event)
-    local player_id = event.player_id
-    
-    local tutorial_steps = {
-        "Step 1: Move with WASD",
-        "Step 2: Jump with SPACE",
-        "Step 3: Attack with MOUSE CLICK",
-        "Step 4: Use abilities with 1-4",
-        "Step 5: Collect power-ups",
-        "Step 6: Avoid red enemies",
-        "Step 7: Complete objectives",
-        "Step 8: Survive as long as possible!"
-    }
-    
-    displayer.ScrollingText:createList(player_id, "tutorial", 20, 40, 100, 80, {
-        texts = tutorial_steps,
-        scroll_speed = 25,
-        entry_delay = 2.0,
-        font = "THICK",
-        scale = 0.7,
-        backdrop = {
-            x = 15, y = 35, width = 110, height = 90,
-            padding_x = 8,
-            padding_y = 6
-        },
-        destroy_when_finished = true
-    })
-end)
-
-Net:on("add_news_item", function(event)
-    local player_id = event.player_id
-    local news_text = event.text or "New event occurred!"
-    
-    displayer.ScrollingText:addText(player_id, "news_feed", news_text)
-    
-    displayer.Text:createTextBox(player_id, "news_added", 
-        "News item added to feed!", 
-        150, 160, 80, 30, "THICK", 0.8, 100, nil, 40)
-end)
-
-Net:on("update_leaderboard", function(event)
-    local player_id = event.player_id
-    
-    local leaderboard = {
-        "=== LEADERBOARD ===",
-        "1. Operator_42 - 15,000",
-        "2. NetRunner - 12,500", 
-        "3. CyberNinja - 11,200",
-        "4. DataStorm - 10,800",
-        "5. ByteMaster - 9,750",
-        "6. CodeWarrior - 8,900",
-        "7. PixelPioneer - 7,600",
-        "8. BinaryHero - 6,800",
-        "==================="
-    }
-    
-    displayer.ScrollingText:createList(player_id, "leaderboard", 100, 160, 120, 120, {
-        texts = leaderboard,
-        scroll_speed = 18,
-        entry_delay = 0.3,
-        font = "BATTLE",
-        scale = 0.7,
-        backdrop = {
-            x = 95, y = 155, width = 130, height = 130,
-            padding_x = 8,
-            padding_y = 8
-        },
-        destroy_when_finished = true
-    })
-end)
-
-Net:on("control_scroll", function(event)
-    local player_id = event.player_id
-    local action = event.action
-    
-    if action == "pause" then
-        displayer.ScrollingText:pause(player_id, "news_feed")
-        displayer.Text:createTextBox(player_id, "scroll_paused", 
-            "News feed paused", 150, 80, 80, 30, "THICK", 0.8, 100, nil, 40)
-    elseif action == "resume" then
-        displayer.ScrollingText:resume(player_id, "news_feed")
-        displayer.Text:createTextBox(player_id, "scroll_resumed", 
-            "News feed resumed", 150, 80, 80, 30, "THICK", 0.8, 100, nil, 40)
-    elseif action == "faster" then
-        displayer.ScrollingText:setSpeed(player_id, "news_feed", 30)
-        displayer.Text:createTextBox(player_id, "scroll_faster", 
-            "Scroll speed increased", 150, 80, 80, 30, "THICK", 0.8, 100, nil, 40)
-    elseif action == "slower" then
-        displayer.ScrollingText:setSpeed(player_id, "news_feed", 10)
-        displayer.Text:createTextBox(player_id, "scroll_slower", 
-            "Scroll speed decreased", 150, 80, 80, 30, "THICK", 0.8, 100, nil, 40)
-    end
-end)
-
-Net:on("check_scroll_state", function(event)
-    local player_id = event.player_id
-    local list_id = event.list_id or "news_feed"
-    
-    local state = displayer.ScrollingText:getState(player_id, list_id)
-    if state then
-        displayer.Text:createTextBox(player_id, "scroll_state", 
-            "State: " .. state.state .. ", Entries: " .. state.total_entries, 
-            150, 100, 80, 30, "THICK", 0.8, 100, nil, 40)
-    end
-end)
-
-print("Enhanced Displayer example with delayed scrolling list loaded and ready!")
+print("Enhanced Displayer example with fullscreen 3x scale display loaded and ready!")
+print("Use 'create_fullscreen' command to test manually")
+print("Use 'debug_scroll' command to test with small list")
+print("Use 'clear_all' command to remove all displays")

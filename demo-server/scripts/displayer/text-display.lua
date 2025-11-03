@@ -179,14 +179,21 @@ function TextDisplay:drawTextBoxBackdrop(player_id, box_id, box_data)
     box_data.backdrop_width = box_data.width
     box_data.backdrop_height = box_data.height
 end
-
+-- In the wrapTextToPages function, update the character spacing calculation:
 function TextDisplay:wrapTextToPages(text, font_name, scale, max_width, max_height)
     local char_widths = self.font_system.char_widths[font_name] or self.font_system.char_widths.THICK
-    local char_width = (char_widths["A"] or char_widths[" "]) * scale
+    -- FIXED: Use a default character for width calculation
+    local default_char_width = char_widths["A"] or char_widths["0"] or 6
+    local char_width = default_char_width * scale
+    
+    -- FIXED: Scale the character spacing properly
+    local base_spacing = self.text_box_settings.char_spacing or 1
+    local scaled_spacing = base_spacing * scale
+    
     local line_height = self.text_box_settings.line_height * scale
     
     -- Calculate maximum characters per line and lines per page
-    local chars_per_pixel = (char_width + self.text_box_settings.char_spacing)
+    local chars_per_pixel = (char_width + scaled_spacing)
     local max_chars_per_line = math.floor(max_width / chars_per_pixel)
     local max_lines_per_page = math.floor(max_height / line_height)
     
@@ -352,12 +359,17 @@ function TextDisplay:drawTextBoxCharacter(player_id, box_id, box_data)
     -- Calculate position for this character - ALWAYS use the inner coordinates from box_data
     local line_y = box_data.inner_y + ((box_data.current_line - 1) * self.text_box_settings.line_height * box_data.scale)
     
-    -- Calculate X position using monospace character widths
+    -- Calculate character widths with proper scaling
     local char_widths = self.font_system.char_widths[box_data.font] or self.font_system.char_widths.THICK
-    local char_width = (char_widths[char] or char_widths[" "]) * box_data.scale
+    local default_char_width = char_widths["A"] or char_widths["0"] or 6
+    local char_width = default_char_width * box_data.scale
     
-    -- Calculate X position based on character index with consistent spacing
-    local current_x = box_data.inner_x + (box_data.current_char - 1) * (char_width + self.text_box_settings.char_spacing)
+    -- FIXED: Scale the character spacing properly
+    local base_spacing = self.text_box_settings.char_spacing or 1
+    local scaled_spacing = base_spacing * box_data.scale
+    
+    -- Calculate X position based on character index with consistent scaled spacing
+    local current_x = box_data.inner_x + (box_data.current_char - 1) * (char_width + scaled_spacing)
     
     local char_obj_id = box_id .. "_line_" .. box_data.current_line .. "_char_" .. box_data.current_char
     
@@ -604,41 +616,38 @@ function TextDisplay:drawMarqueeText(player_id, marquee_id, text, y, font_name, 
     player_data.active_texts[marquee_id] = marquee_data
     return marquee_id
 end
-
 function TextDisplay:setupMarqueeCharacters(marquee_data)
     local font_name = marquee_data.font
     local char_widths = self.font_system.char_widths[font_name] or self.font_system.char_widths.THICK
-    local current_x = marquee_data.current_x
+    local default_char_width = char_widths["A"] or char_widths["0"] or 6
+    local scale = marquee_data.scale
     
+    -- FIXED: Scale spacing properly
+    local base_spacing = 1
+    local scaled_spacing = base_spacing * scale
+    local advance = (default_char_width + scaled_spacing) * scale
+
     marquee_data.individual_chars = {}
-    
-    -- Calculate total text width including spacing
-    local total_width = 0
-    for i = 1, #marquee_data.text do
-        local char = marquee_data.text:sub(i, i)
-        local char_width = (char_widths[char] or char_widths[" "]) * marquee_data.scale
-        total_width = total_width + char_width + 1
-    end
-    if #marquee_data.text > 0 then
-        total_width = total_width - 1 -- Remove trailing space
-    end
-    marquee_data.total_text_width = total_width
-    
+
+    -- Total text width calculation with proper scaling
+    local n = #marquee_data.text
+    marquee_data.total_text_width = (n * default_char_width * scale) + (math.max(0, n - 1) * scaled_spacing)
+
     -- Setup individual character data with relative positions
     local relative_x = 0
-    for i = 1, #marquee_data.text do
+    for i = 1, n do
         local char = marquee_data.text:sub(i, i)
-        local char_width = (char_widths[char] or char_widths[" "]) * marquee_data.scale
+        local char_width = default_char_width * scale
         
         table.insert(marquee_data.individual_chars, {
             char = char,
             width = char_width,
-            relative_x = relative_x, -- Position relative to start of text
+            relative_x = relative_x,
             obj_id = nil,
             anim_state = font_name .. "_" .. char
         })
         
-        relative_x = relative_x + char_width + 1 -- Add consistent spacing
+        relative_x = relative_x + char_width + scaled_spacing
     end
 end
 
