@@ -35,6 +35,7 @@ Z-Order Management: Proper layering of UI elements
 Quick Start Guide
 Basic Setup
 lua
+
 -- Initialize the API
 local Displayer = require("scripts/displayer/displayer")
 local displayer = Displayer:init()
@@ -53,7 +54,19 @@ Net:on("player_join", function(event)
     displayer.Text:createTextBox(player_id, "welcome", 
         "Welcome to the game! Enjoy your adventure.", 
         20, 140, 200, 50, "THICK", 1.0, 100, nil, 25)
+    
+    -- Create a simple scrolling list
+    displayer.ScrollingList:createList(player_id, "main_menu", {
+        "Start Game",
+        "Options",
+        "Credits",
+        "Exit"
+    }, 80, 60, 120, 80, "THICK", 1.0, 100, {
+        x = 75, y = 55, width = 130, height = 90,
+        padding_x = 8, padding_y = 4
+    })
 end)
+
 Core Systems Deep Dive
 1. Timer System
 The timer system provides both global (server-wide) and player-specific timers with callbacks and automatic updates.
@@ -508,6 +521,664 @@ function showHint(player_id, hint_type)
         shown_hints[player_id][hint_type] = true
     end
 end
+
+5. Scrolling List System
+The scrolling list system provides flexible, interactive lists for menus, inventories, and selection interfaces. Lists support both vertical and horizontal layouts with smooth scrolling and selection callbacks.
+
+Basic List Creation
+lua
+-- Simple vertical list
+displayer.ScrollingList:createList(player_id, "weapon_select", {
+    "Sword",
+    "Bow",
+    "Staff",
+    "Dagger",
+    "Axe",
+    "Wand"
+}, 100, 50, 100, 120, "THICK", 1.0, 100, {
+    x = 95, y = 45, width = 110, height = 130,
+    padding_x = 6, padding_y = 4
+})
+
+-- Horizontal list for quick actions
+displayer.ScrollingList:createList(player_id, "quick_actions", {
+    "Attack", "Defend", "Item", "Flee"
+}, 20, 160, 200, 25, "THICK", 0.9, 100, nil, "horizontal")
+
+-- List with custom selection handler
+displayer.ScrollingList:createList(player_id, "game_modes", {
+    "Story Mode",
+    "Survival",
+    "Time Attack",
+    "Multiplayer"
+}, 60, 80, 140, 80, "BATTLE", 1.0, 100, {
+    x = 55, y = 75, width = 150, height = 90,
+    padding_x = 8, padding_y = 4
+}, "vertical", function(player_id, list_id, selected_index, selected_item)
+    print("Player " .. player_id .. " selected: " .. selected_item)
+    
+    -- Show confirmation or transition to selected mode
+    displayer.Text:createTextBox(player_id, "mode_selected",
+        "Selected: " .. selected_item, 60, 170, 140, 30, "THICK", 0.9, 100, nil, 30)
+end)
+Advanced List Features
+lua
+-- List with custom item formatting
+displayer.ScrollingList:createList(player_id, "inventory", {
+    "Health Potion x3",
+    "Mana Potion x2", 
+    "Iron Sword",
+    "Leather Armor",
+    "Magic Ring",
+    "Scroll of Fire"
+}, 40, 40, 160, 100, "THICK", 0.9, 100, {
+    x = 35, y = 35, width = 170, height = 110,
+    padding_x = 6, padding_y = 3
+}, "vertical", function(player_id, list_id, index, item)
+    -- Use the item
+    displayer.Text:createTextBox(player_id, "item_used",
+        "Used: " .. item, 40, 150, 160, 25, "THICK", 0.9, 100, nil, 35)
+end, {
+    visible_items = 4,  -- Show 4 items at once
+    scroll_speed = 1,   -- Items to scroll per input
+    wrap_around = true  -- Wrap from last to first item
+})
+
+-- Dynamic list with item data
+local player_abilities = {
+    { name = "Fireball", cost = 10, cooldown = 5 },
+    { name = "Ice Shard", cost = 8, cooldown = 3 },
+    { name = "Lightning", cost = 15, cooldown = 8 },
+    { name = "Heal", cost = 12, cooldown = 10 }
+}
+
+displayer.ScrollingList:createList(player_id, "abilities", 
+    player_abilities, 140, 60, 80, 80, "THICK", 0.8, 100, {
+        x = 135, y = 55, width = 90, height = 90,
+        padding_x = 4, padding_y = 2
+    }, "vertical", function(player_id, list_id, index, ability_data)
+        -- Cast the selected ability
+        displayer.Text:createTextBox(player_id, "ability_cast",
+            "Casting " .. ability_data.name .. "! (" .. ability_data.cost .. " MP)",
+            140, 150, 80, 25, "THICK", 0.8, 100, nil, 40)
+    end, nil, function(item_data)
+        -- Custom formatter for ability items
+        return item_data.name .. " (" .. item_data.cost .. " MP)"
+    end
+)
+List Management and Control
+lua
+-- Update list items dynamically
+displayer.ScrollingList:updateListItems(player_id, "inventory", {
+    "Health Potion x2",  -- Updated quantity
+    "Mana Potion x1",
+    "Iron Sword",
+    "Steel Armor",      -- Upgraded item
+    "Magic Ring",
+    "Scroll of Ice"     -- Changed item
+})
+
+-- Add single item to list
+displayer.ScrollingList:addListItem(player_id, "inventory", "Golden Key")
+
+-- Remove item by index
+displayer.ScrollingList:removeListItem(player_id, "inventory", 3) -- Remove 3rd item
+
+-- Get current selection
+local selected_index, selected_item = displayer.ScrollingList:getSelection(player_id, "main_menu")
+
+-- Programmatically change selection
+displayer.ScrollingList:setSelection(player_id, "weapon_select", 2) -- Select 2nd item
+
+-- Show/hide lists
+displayer.ScrollingList:showList(player_id, "main_menu")
+displayer.ScrollingList:hideList(player_id, "inventory")
+
+-- Remove list completely
+displayer.ScrollingList:removeList(player_id, "quick_actions")
+List Styling and Appearance
+lua
+-- List with custom colors and selection indicator
+displayer.ScrollingList:createList(player_id, "settings", {
+    "Music: ON",
+    "SFX: ON", 
+    "Fullscreen: OFF",
+    "Difficulty: Normal"
+}, 50, 70, 150, 80, "GRADIENT", 1.0, 100, {
+    x = 45, y = 65, width = 160, height = 90,
+    padding_x = 8, padding_y = 4,
+    color = {r = 0, g = 100, b = 200},  -- Blue backdrop
+    alpha = 200
+}, "vertical", function(player_id, list_id, index, item)
+    -- Toggle settings
+    local new_items = displayer.ScrollingList:getListItems(player_id, "settings")
+    if index == 1 then
+        new_items[1] = "Music: " .. (string.find(item, "ON") and "OFF" or "ON")
+    elseif index == 2 then
+        new_items[2] = "SFX: " .. (string.find(item, "ON") and "OFF" or "ON")
+    end
+    displayer.ScrollingList:updateListItems(player_id, "settings", new_items)
+end, {
+    selection_color = {r = 255, g = 255, b = 0},  -- Yellow selection
+    selection_alpha = 150,
+    selection_indicator = "▶"  -- Custom indicator
+})
+
+-- Multi-column list for inventories
+displayer.ScrollingList:createList(player_id, "large_inventory", {
+    "Sword", "Shield", "Potion", "Key",
+    "Armor", "Ring", "Scroll", "Gem",
+    "Bow", "Arrow", "Food", "Coin"
+}, 20, 40, 200, 120, "THICK", 0.8, 100, {
+    x = 15, y = 35, width = 210, height = 130,
+    padding_x = 6, padding_y = 4
+}, "vertical", function(player_id, list_id, index, item)
+    displayer.Text:createTextBox(player_id, "item_info",
+        "Selected: " .. item, 60, 170, 120, 25, "THICK", 0.9, 100, nil, 35)
+end, {
+    columns = 3,        -- 3-column layout
+    column_width = 60,  -- Width per column
+    visible_rows = 4    -- Show 4 rows at once
+})
+Advanced Usage Examples
+Complete Game UI with Scrolling Lists
+lua
+local Displayer = require("scripts/displayer/displayer")
+local displayer = Displayer:init()
+
+-- Game state
+local game_state = {
+    current_screen = "main_menu",
+    players = {}
+}
+
+-- Main menu system
+function showMainMenu(player_id)
+    displayer.ScrollingList:createList(player_id, "main_menu", {
+        "New Game",
+        "Load Game",
+        "Multiplayer",
+        "Options",
+        "Credits",
+        "Exit"
+    }, 80, 60, 120, 120, "BATTLE", 1.2, 100, {
+        x = 75, y = 55, width = 130, height = 130,
+        padding_x = 8, padding_y = 6
+    }, "vertical", function(player_id, list_id, index, item)
+        handleMainMenuSelection(player_id, index, item)
+    end, {
+        selection_color = {r = 255, g = 200, b = 0},
+        selection_alpha = 120
+    })
+    
+    -- Title
+    displayer.Text:drawText(player_id, "ADVENTURE QUEST", 40, 20, "BATTLE", 1.5, 99)
+end
+
+function handleMainMenuSelection(player_id, index, item)
+    if index == 1 then -- New Game
+        showCharacterSelection(player_id)
+    elseif index == 2 then -- Load Game
+        showLoadGameMenu(player_id)
+    elseif index == 3 then -- Multiplayer
+        showMultiplayerMenu(player_id)
+    elseif index == 4 then -- Options
+        showOptionsMenu(player_id)
+    elseif index == 5 then -- Credits
+        showCredits(player_id)
+    elseif index == 6 then -- Exit
+        -- Handle exit
+    end
+end
+
+function showCharacterSelection(player_id)
+    -- Clear main menu
+    displayer.ScrollingList:removeList(player_id, "main_menu")
+    
+    local characters = {
+        "Knight - Strong and durable",
+        "Archer - Ranged specialist", 
+        "Mage - Powerful spells",
+        "Rogue - Stealth and speed"
+    }
+    
+    displayer.ScrollingList:createList(player_id, "character_select", characters, 
+        30, 50, 180, 100, "THICK", 1.0, 100, {
+            x = 25, y = 45, width = 190, height = 110,
+            padding_x = 8, padding_y = 4
+        }, "vertical", function(player_id, list_id, index, item)
+            -- Show character details
+            local descriptions = {
+                "STR: 15 | DEX: 8 | INT: 5",
+                "STR: 7 | DEX: 16 | INT: 9", 
+                "STR: 4 | DEX: 10 | INT: 18",
+                "STR: 9 | DEX: 17 | INT: 6"
+            }
+            
+            displayer.Text:createTextBox(player_id, "char_details",
+                descriptions[index], 30, 160, 180, 40, "THICK", 0.9, 100, {
+                    x = 25, y = 155, width = 190, height = 50,
+                    padding_x = 6, padding_y = 4
+                }, 30)
+                
+            -- Confirm selection button
+            if not displayer.ScrollingList:listExists(player_id, "confirm_select") then
+                displayer.ScrollingList:createList(player_id, "confirm_select", 
+                    {"Select Character"}, 70, 210, 100, 25, "THICK", 1.0, 100, nil, 
+                    "horizontal", function(player_id, list_id, index, item)
+                        startGame(player_id, index) -- index is character class
+                    end)
+            end
+        end)
+        
+    -- Back button
+    displayer.ScrollingList:createList(player_id, "back_button", 
+        {"Back"}, 10, 210, 50, 25, "THICK", 0.9, 100, nil, 
+        "horizontal", function(player_id, list_id, index, item)
+            displayer.ScrollingList:removeList(player_id, "character_select")
+            displayer.ScrollingList:removeList(player_id, "confirm_select")
+            displayer.ScrollingList:removeList(player_id, "back_button")
+            displayer.Text:removeTextBox(player_id, "char_details")
+            showMainMenu(player_id)
+        end)
+end
+
+-- Player join with full UI
+Net:on("player_join", function(event)
+    local player_id = event.player_id
+    
+    -- Hide default HUD
+    displayer:hidePlayerHUD(player_id)
+    
+    -- Initialize player state
+    game_state.players[player_id] = {
+        in_game = false,
+        current_menu = "main_menu"
+    }
+    
+    -- Show main menu
+    showMainMenu(player_id)
+end)
+
+-- Input handling for list navigation
+Net:on("player_input", function(event)
+    local player_id = event.player_id
+    local input = event.input
+    
+    if input == "up" then
+        displayer.ScrollingList:navigate(player_id, nil, -1) -- Navigate up
+    elseif input == "down" then
+        displayer.ScrollingList:navigate(player_id, nil, 1)  -- Navigate down
+    elseif input == "action" then
+        displayer.ScrollingList:selectCurrent(player_id, nil) -- Select current item
+    elseif input == "back" then
+        -- Handle back navigation based on current screen
+        handleBackButton(player_id)
+    end
+end)
+Dynamic Inventory System
+lua
+-- Advanced inventory with categories and filtering
+function createInventorySystem(player_id)
+    local inventory = {
+        weapons = {
+            "Iron Sword",
+            "Steel Axe", 
+            "Magic Staff",
+            "Long Bow"
+        },
+        armor = {
+            "Leather Helm",
+            "Chainmail Chest",
+            "Plate Leggings",
+            "Magic Robe"
+        },
+        consumables = {
+            "Health Potion x5",
+            "Mana Potion x3",
+            "Antidote x2",
+            "Strength Elixir"
+        },
+        quest_items = {
+            "Ancient Key",
+            "Dragon Scale",
+            "Mysterious Map"
+        }
+    }
+    
+    local current_category = "weapons"
+    
+    function showInventoryCategories()
+        displayer.ScrollingList:createList(player_id, "inv_categories", {
+            "Weapons",
+            "Armor",
+            "Consumables", 
+            "Quest Items"
+        }, 20, 40, 80, 100, "THICK", 1.0, 100, {
+            x = 15, y = 35, width = 90, height = 110,
+            padding_x = 6, padding_y = 4
+        }, "vertical", function(player_id, list_id, index, item)
+            local categories = {"weapons", "armor", "consumables", "quest_items"}
+            current_category = categories[index]
+            showInventoryItems(current_category)
+        end, {
+            selection_color = {r = 0, g = 150, b = 255}
+        })
+    end
+    
+    function showInventoryItems(category)
+        -- Remove existing items list if any
+        if displayer.ScrollingList:listExists(player_id, "inv_items") then
+            displayer.ScrollingList:removeList(player_id, "inv_items")
+        end
+        
+        local items = inventory[category] or {}
+        displayer.ScrollingList:createList(player_id, "inv_items", items,
+            110, 40, 120, 100, "THICK", 0.9, 100, {
+                x = 105, y = 35, width = 130, height = 110,
+                padding_x = 6, padding_y = 4
+            }, "vertical", function(player_id, list_id, index, item)
+                showItemDetails(category, index, item)
+            end)
+            
+        -- Item actions
+        displayer.ScrollingList:createList(player_id, "item_actions", {
+            "Use", "Equip", "Drop", "Info"
+        }, 110, 150, 120, 25, "THICK", 0.8, 100, nil, "horizontal",
+        function(player_id, list_id, index, action)
+            local selected_index = displayer.ScrollingList:getSelection(player_id, "inv_items")
+            if selected_index then
+                local selected_item = inventory[current_category][selected_index]
+                handleItemAction(action, selected_item, selected_index)
+            end
+        end)
+    end
+    
+    function showItemDetails(category, index, item)
+        local details = "Item: " .. item .. "\nCategory: " .. category
+        displayer.Text:createTextBox(player_id, "item_details",
+            details, 20, 150, 80, 50, "THICK", 0.8, 100, {
+                x = 15, y = 145, width = 90, height = 60,
+                padding_x = 4, padding_y = 3
+            }, 40)
+    end
+    
+    function handleItemAction(action, item, index)
+        if action == "Use" then
+            useItem(item, index)
+        elseif action == "Equip" then
+            equipItem(item)
+        elseif action == "Drop" then
+            dropItem(item, index)
+        elseif action == "Info" then
+            showItemInfo(item)
+        end
+    end
+    
+    function useItem(item, index)
+        displayer.Text:createTextBox(player_id, "action_feedback",
+            "Used: " .. item, 80, 180, 80, 25, "THICK", 0.9, 100, nil, 35)
+        
+        -- Remove from inventory if consumable
+        if string.find(item, "Potion") or string.find(item, "Elixir") then
+            table.remove(inventory[current_category], index)
+            showInventoryItems(current_category)
+        end
+    end
+    
+    -- Initialize inventory
+    showInventoryCategories()
+end
+
+-- Usage in game
+Net:on("player_join", function(event)
+    local player_id = event.player_id
+    createInventorySystem(player_id)
+end)
+Interactive Dialogue System with Choices
+lua
+function createDialogueSystem(player_id)
+    local dialogue_tree = {
+        {
+            speaker = "Guard",
+            message = "Halt! Who goes there?",
+            choices = {
+                { text = "I'm a friendly traveler", next = 1 },
+                { text = "None of your business!", next = 2 },
+                { text = "I seek the ancient treasure", next = 3 }
+            }
+        },
+        {
+            speaker = "Guard", 
+            message = "Well met, traveler. You may pass.",
+            choices = {
+                { text = "Thank you, I'll be on my way", next = 4 },
+                { text = "Actually, I need directions", next = 5 }
+            }
+        },
+        {
+            speaker = "Guard",
+            message = "That's no way to speak to the city guard! Move along!",
+            choices = {
+                { text = "Sorry, I didn't mean it", next = 1 },
+                { text = "Make me!", next = 6 }
+            }
+        }
+        -- ... more dialogue nodes
+    }
+    
+    local current_node = 1
+    
+    function showDialogue(node_index)
+        local node = dialogue_tree[node_index]
+        if not node then return end
+        
+        -- Display speaker and message
+        displayer.Text:createTextBox(player_id, "dialogue_speaker",
+            node.speaker, 20, 40, 200, 20, "BATTLE", 1.1, 100, nil, 30)
+            
+        displayer.Text:createTextBox(player_id, "dialogue_message",
+            node.message, 20, 65, 200, 50, "THICK", 1.0, 100, {
+                x = 15, y = 60, width = 210, height = 60,
+                padding_x = 8, padding_y = 6
+            }, 25)
+        
+        -- Display choices as scrolling list
+        local choice_texts = {}
+        for i, choice in ipairs(node.choices) do
+            table.insert(choice_texts, choice.text)
+        end
+        
+        displayer.ScrollingList:createList(player_id, "dialogue_choices", 
+            choice_texts, 20, 120, 200, 60, "THICK", 0.9, 100, {
+                x = 15, y = 115, width = 210, height = 70,
+                padding_x = 8, padding_y = 4
+            }, "vertical", function(player_id, list_id, index, choice)
+                local next_node = node.choices[index].next
+                displayer.ScrollingList:removeList(player_id, "dialogue_choices")
+                displayer.Text:removeTextBox(player_id, "dialogue_speaker")
+                displayer.Text:removeTextBox(player_id, "dialogue_message")
+                showDialogue(next_node)
+            end, {
+                selection_color = {r = 255, g = 255, b = 100},
+                selection_alpha = 180
+            })
+    end
+    
+    -- Start the dialogue
+    showDialogue(current_node)
+end
+Best Practices for Scrolling Lists
+1. Memory Management with Lists
+lua
+-- Clean up lists on player disconnect
+Net:on("player_disconnect", function(event)
+    local player_id = event.player_id
+    
+    -- Remove all player lists
+    displayer.ScrollingList:removeAllPlayerLists(player_id)
+    
+    -- Alternative: Remove specific lists
+    local lists_to_remove = {"main_menu", "inventory", "dialogue_choices"}
+    for _, list_id in ipairs(lists_to_remove) do
+        if displayer.ScrollingList:listExists(player_id, list_id) then
+            displayer.ScrollingList:removeList(player_id, list_id)
+        end
+    end
+end)
+2. Performance Optimization
+lua
+-- Batch list updates
+Net:on("tick", function(event)
+    local delta = event.delta_time or 0
+    
+    -- Only update visible lists
+    for player_id, player_data in pairs(game_state.players) do
+        if player_data.inventory_open then
+            -- Update inventory list if items changed
+            if player_data.inventory_dirty then
+                updateInventoryList(player_id)
+                player_data.inventory_dirty = false
+            end
+        end
+    end
+end)
+
+-- Use list visibility toggling instead of create/remove for frequently used lists
+function toggleInventory(player_id)
+    local player_data = game_state.players[player_id]
+    if displayer.ScrollingList:listExists(player_id, "inventory") then
+        if displayer.ScrollingList:isListVisible(player_id, "inventory") then
+            displayer.ScrollingList:hideList(player_id, "inventory")
+        else
+            displayer.ScrollingList:showList(player_id, "inventory")
+        end
+    else
+        createInventorySystem(player_id)
+    end
+end
+3. Error Prevention with Lists
+lua
+-- Safe list operations
+function safeListCreate(player_id, list_id, items, x, y, width, height, font, scale, z, backdrop, layout, callback, config, formatter)
+    local success, result = pcall(function()
+        return displayer.ScrollingList:createList(player_id, list_id, items, x, y, width, height, font, scale, z, backdrop, layout, callback, config, formatter)
+    end)
+    
+    if not success then
+        print("Error creating list " .. list_id .. ": " .. tostring(result))
+        return false
+    end
+    return true
+end
+
+-- Check list existence before operations
+function updatePlayerList(player_id, list_id, new_items)
+    if displayer.ScrollingList:listExists(player_id, list_id) then
+        displayer.ScrollingList:updateListItems(player_id, list_id, new_items)
+    else
+        print("List " .. list_id .. " doesn't exist for player " .. player_id)
+    end
+end
+Common Patterns with Scrolling Lists
+1. State-Driven Menu System
+lua
+function updateMenuSystem(player_id, game_state)
+    -- Clear existing menus
+    displayer.ScrollingList:removeAllPlayerLists(player_id)
+    
+    if game_state.menu == "main" then
+        showMainMenu(player_id)
+    elseif game_state.menu == "pause" then
+        showPauseMenu(player_id)
+    elseif game_state.menu == "inventory" then
+        showInventoryMenu(player_id)
+    elseif game_state.menu == "settings" then
+        showSettingsMenu(player_id)
+    end
+end
+
+function showPauseMenu(player_id)
+    displayer.ScrollingList:createList(player_id, "pause_menu", {
+        "Resume Game",
+        "Save Game",
+        "Load Game",
+        "Options",
+        "Exit to Menu",
+        "Quit Game"
+    }, 80, 60, 120, 120, "THICK", 1.0, 100, {
+        x = 75, y = 55, width = 130, height = 130,
+        padding_x = 8, padding_y = 6
+    }, "vertical", function(player_id, list_id, index, item)
+        if index == 1 then
+            resumeGame(player_id)
+        elseif index == 2 then
+            saveGame(player_id)
+        elseif index == 6 then
+            quitGame(player_id)
+        end
+    end)
+end
+2. Progressive List Complexity
+lua
+-- Simple list for early game
+function showBasicInventory(player_id)
+    displayer.ScrollingList:createList(player_id, "basic_inv", {
+        "Sword",
+        "Potion",
+        "Key"
+    }, 100, 80, 80, 60, "THICK", 1.0, 100, nil, "vertical",
+    function(player_id, list_id, index, item)
+        useBasicItem(player_id, item)
+    end)
+end
+
+-- Advanced list for later game
+function showAdvancedInventory(player_id)
+    local categorized_items = {
+        "Weapons (5)",
+        "Armor (3)",
+        "Consumables (8)", 
+        "Materials (12)",
+        "Keys (2)",
+        "Quest Items (4)"
+    }
+    
+    displayer.ScrollingList:createList(player_id, "advanced_inv", 
+        categorized_items, 40, 50, 160, 120, "THICK", 0.9, 100, {
+            x = 35, y = 45, width = 170, height = 130,
+            padding_x = 6, padding_y = 4
+        }, "vertical", function(player_id, list_id, index, category)
+            showCategoryItems(player_id, category)
+        end, {
+            columns = 2,
+            visible_items = 6
+        })
+end
+Conclusion
+The Displayer API now provides a comprehensive foundation for building rich, interactive UI systems with the addition of the powerful Scrolling List system. This new capability enables:
+
+Dynamic Menus: Create complex menu systems with nested navigation
+
+Interactive Inventories: Build sophisticated inventory management interfaces
+
+Dialogue Systems: Implement branching dialogue trees with player choices
+
+Data Display: Present large datasets in scrollable, selectable formats
+
+Key Strengths Enhanced:
+Unified API: Single interface for all display needs including lists
+
+Extensible Architecture: Easy to create custom list types and behaviors
+
+Production Ready: Robust error handling and memory management for lists
+
+Performance Focused: Efficient list rendering and update mechanisms
+
+Developer Friendly: Intuitive list creation and management patterns
+
+The Scrolling List system integrates seamlessly with existing timer, text, and font systems, providing a complete UI toolkit for virtually any game interface requirement.
+
 Conclusion
 The Displayer API provides a comprehensive foundation for building rich, interactive UI systems. Its modular design allows for both simple implementations and complex, custom extensions. Whether you're building a simple timer display or a full-featured game UI with tutorials, notifications, and interactive elements, the Displayer API provides the tools you need with robust error handling and performance optimization.
 

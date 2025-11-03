@@ -10,7 +10,6 @@ local TimerSystem = nil
 local TimerDisplaySystem = nil
 local TextDisplaySystem = nil
 local FontSystem = nil
-
 function Displayer:init()
     -- Load all subsystems with error handling
     local success, err = pcall(function()
@@ -18,14 +17,16 @@ function Displayer:init()
         TimerDisplaySystem = require("scripts/displayer/timer-display")
         TextDisplaySystem = require("scripts/displayer/text-display")
         FontSystem = require("scripts/displayer/font-system")
+        ScrollingTextListSystem = require("scripts/displayer/scrolling-text-list") -- ADD THIS LINE
         
         -- Initialize subsystems
         if TimerSystem and TimerSystem.init then TimerSystem:init() end
         if TimerDisplaySystem and TimerDisplaySystem.init then TimerDisplaySystem:init() end
         if TextDisplaySystem and TextDisplaySystem.init then TextDisplaySystem:init() end
         if FontSystem and FontSystem.init then FontSystem:init() end
+        if ScrollingTextListSystem and ScrollingTextListSystem.init then ScrollingTextListSystem:init() end -- ADD THIS LINE
     end)
-    
+
     if not success then
         print("Error initializing Displayer API: " .. tostring(err))
         return nil
@@ -455,6 +456,82 @@ function Displayer:setupPlayerDefaultUI(player_id, options)
             options.textbox_width or 200, options.textbox_height or 50,
             "THICK", 1.0, 100, options.backdrop_config, options.text_speed or 25)
     end
+end
+
+-- Scrolling Text List System API
+Displayer.ScrollingText = {}
+
+function Displayer.ScrollingText:createList(player_id, list_id, x, y, width, height, config)
+    if not ScrollingTextListSystem or not ScrollingTextListSystem.createScrollingList then return nil end
+    if not player_id then print("Error: player_id is required") return nil end
+    if not list_id then print("Error: list_id is required") return nil end
+    x = x or 0
+    y = y or 0
+    width = width or 200
+    height = height or 100
+    config = config or {}
+    return ScrollingTextListSystem:createScrollingList(player_id, list_id, x, y, width, height, config)
+end
+
+function Displayer.ScrollingText:addText(player_id, list_id, text)
+    if not ScrollingTextListSystem or not ScrollingTextListSystem.addTextToList then return false end
+    if not player_id then print("Error: player_id is required") return false end
+    if not list_id then print("Error: list_id is required") return false end
+    if not text then print("Error: text is required") return false end
+    return ScrollingTextListSystem:addTextToList(player_id, list_id, text)
+end
+
+function Displayer.ScrollingText:setTexts(player_id, list_id, texts)
+    if not ScrollingTextListSystem or not ScrollingTextListSystem.setListTexts then return false end
+    if not player_id then print("Error: player_id is required") return false end
+    if not list_id then print("Error: list_id is required") return false end
+    texts = texts or {}
+    return ScrollingTextListSystem:setListTexts(player_id, list_id, texts)
+end
+
+function Displayer.ScrollingText:getState(player_id, list_id)
+    if not ScrollingTextListSystem or not ScrollingTextListSystem.getListState then return nil end
+    if not player_id then print("Error: player_id is required") return nil end
+    if not list_id then print("Error: list_id is required") return nil end
+    return ScrollingTextListSystem:getListState(player_id, list_id)
+end
+
+function Displayer.ScrollingText:pause(player_id, list_id)
+    if not ScrollingTextListSystem or not ScrollingTextListSystem.pauseList then return false end
+    if not player_id then print("Error: player_id is required") return false end
+    if not list_id then print("Error: list_id is required") return false end
+    return ScrollingTextListSystem:pauseList(player_id, list_id)
+end
+
+function Displayer.ScrollingText:resume(player_id, list_id)
+    if not ScrollingTextListSystem or not ScrollingTextListSystem.resumeList then return false end
+    if not player_id then print("Error: player_id is required") return false end
+    if not list_id then print("Error: list_id is required") return false end
+    return ScrollingTextListSystem:resumeList(player_id, list_id)
+end
+
+function Displayer.ScrollingText:setSpeed(player_id, list_id, speed)
+    if not ScrollingTextListSystem or not ScrollingTextListSystem.setListSpeed then return false end
+    if not player_id then print("Error: player_id is required") return false end
+    if not list_id then print("Error: list_id is required") return false end
+    speed = speed or 30
+    return ScrollingTextListSystem:setListSpeed(player_id, list_id, speed)
+end
+
+function Displayer.ScrollingText:removeList(player_id, list_id)
+    if not ScrollingTextListSystem or not ScrollingTextListSystem.removeScrollingList then return nil end
+    if not player_id then print("Error: player_id is required") return nil end
+    if not list_id then print("Error: list_id is required") return nil end
+    return ScrollingTextListSystem:removeScrollingList(player_id, list_id)
+end
+
+function Displayer.ScrollingText:setPosition(player_id, list_id, x, y)
+    if not ScrollingTextListSystem or not ScrollingTextListSystem.setListPosition then return false end
+    if not player_id then print("Error: player_id is required") return false end
+    if not list_id then print("Error: list_id is required") return false end
+    x = x or 0
+    y = y or 0
+    return ScrollingTextListSystem:setListPosition(player_id, list_id, x, y)
 end
 
 -- Export the API
