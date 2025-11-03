@@ -24,6 +24,13 @@ function TextDisplay:init()
         anim_path = nil
     }
     
+    -- Text box settings
+    self.text_box_settings = {
+        default_speed = 30, -- Characters per second
+        line_height = 12,   -- Increased from 10 to 12 for better spacing
+        char_spacing = 1,   -- Consistent with font system
+    }
+    
     Net:on("player_join", function(event)
         self:setupPlayerTextDisplays(event.player_id)
     end)
@@ -32,9 +39,10 @@ function TextDisplay:init()
         self:cleanupPlayerTextDisplays(event.player_id)
     end)
     
-    -- Update marquees every tick
+    -- Update marquees and text boxes every tick
     Net:on("tick", function(event)
         self:updateMarquees(event.delta_time)
+        self:updateTextBoxes(event.delta_time)
     end)
     
     return self
@@ -44,7 +52,8 @@ function TextDisplay:setupPlayerTextDisplays(player_id)
     self.player_texts[player_id] = {
         active_texts = {},
         next_obj_id = 1,
-        allocated_backdrop = false
+        allocated_backdrop = false,
+        active_text_boxes = {}
     }
     
     -- Allocate backdrop sprite for this player
@@ -63,6 +72,11 @@ function TextDisplay:cleanupPlayerTextDisplays(player_id)
             self:removeText(player_id, text_id)
         end
         
+        -- Remove all active text boxes
+        for box_id, box_data in pairs(player_data.active_text_boxes) do
+            self:removeTextBox(player_id, box_id)
+        end
+        
         -- Deallocate backdrop sprite
         if player_data.allocated_backdrop then
             Net.player_dealloc_sprite(player_id, self.backdrop_sprite.sprite_id)
@@ -72,6 +86,432 @@ function TextDisplay:cleanupPlayerTextDisplays(player_id)
     end
 end
 
+-- MegaMan Battle Network Style Text Box System
+function TextDisplay:createTextBox(player_id, box_id, text, x, y, width, height, font_name, scale, z_order, backdrop_config, speed)
+    font_name = font_name or "THICK"
+    scale = scale or 1.0
+    z_order = z_order or 100
+    speed = speed or self.text_box_settings.default_speed
+    
+    local player_data = self.player_texts[player_id]
+    if not player_data then return nil end
+    
+    -- Use backdrop config if provided, otherwise create default
+    local actual_backdrop_config = backdrop_config or {
+        x = x, y = y, width = width, height = height,
+        padding_x = 8, padding_y = 6
+    }
+    
+    -- Calculate text bounds within the box - ALWAYS use the backdrop config for positioning
+    local padding_x = actual_backdrop_config.padding_x or 8
+    local padding_y = actual_backdrop_config.padding_y or 6
+    local inner_x = actual_backdrop_config.x + padding_x
+    local inner_y = actual_backdrop_config.y + padding_y
+    local inner_width = actual_backdrop_config.width - (padding_x * 2)
+    local inner_height = actual_backdrop_config.height - (padding_y * 2)
+    
+    -- Process text into pages with word wrapping
+    local pages = self:wrapTextToPages(text, font_name, scale, inner_width, inner_height)
+    
+    -- Calculate character delay based on speed (characters per second)
+    local char_delay = 1.0 / speed
+    
+    local text_box_data = {
+        type = "text_box",
+        box_id = box_id,
+        x = actual_backdrop_config.x, -- Use backdrop x as reference
+        y = actual_backdrop_config.y, -- Use backdrop y as reference
+        width = actual_backdrop_config.width,
+        height = actual_backdrop_config.height,
+        inner_x = inner_x,
+        inner_y = inner_y,
+        inner_width = inner_width,
+        inner_height = inner_height,
+        font = font_name,
+        scale = scale,
+        z_order = z_order,
+        speed = speed,
+        char_delay = char_delay,
+        pages = pages,
+        current_page = 1,
+        current_line = 1,
+        current_char = 0,
+        timer = 0,
+        display_lines = {},
+        backdrop = actual_backdrop_config, -- Store the actual backdrop config
+        backdrop_id = nil,
+        state = "printing", -- printing, waiting, completed
+        wait_timer = 0,
+        padding_x = padding_x,
+        padding_y = padding_y
+    }
+    
+    -- Draw backdrop
+    self:drawTextBoxBackdrop(player_id, box_id, text_box_data)
+    
+    player_data.active_text_boxes[box_id] = text_box_data
+    return box_id
+end
+
+-- Separate backdrop drawing function for text boxes to maintain consistency
+function TextDisplay:drawTextBoxBackdrop(player_id, box_id, box_data)
+    -- Remove old backdrop if it exists
+    if box_data.backdrop_id then
+        Net.player_erase_sprite(player_id, box_data.backdrop_id)
+    end
+    
+    local backdrop_id = box_id .. "_backdrop"
+    
+    Net.player_draw_sprite(
+        player_id,
+        self.backdrop_sprite.sprite_id,
+        {
+            id = backdrop_id,
+            x = box_data.x, -- Use box_data.x (which is backdrop x)
+            y = box_data.y, -- Use box_data.y (which is backdrop y)
+            z = box_data.z_order - 1, -- Behind the text
+            sx = box_data.width,
+            sy = box_data.height
+        }
+    )
+    
+    box_data.backdrop_id = backdrop_id
+    box_data.backdrop_width = box_data.width
+    box_data.backdrop_height = box_data.height
+end
+
+function TextDisplay:wrapTextToPages(text, font_name, scale, max_width, max_height)
+    local char_widths = self.font_system.char_widths[font_name] or self.font_system.char_widths.THICK
+    local char_width = (char_widths["A"] or char_widths[" "]) * scale
+    local line_height = self.text_box_settings.line_height * scale
+    
+    -- Calculate maximum characters per line and lines per page
+    local chars_per_pixel = (char_width + self.text_box_settings.char_spacing)
+    local max_chars_per_line = math.floor(max_width / chars_per_pixel)
+    local max_lines_per_page = math.floor(max_height / line_height)
+    
+    local pages = {}
+    local current_page = {}
+    local current_line = ""
+    local current_line_chars = 0
+    
+    -- Split text into words
+    local words = {}
+    for word in text:gmatch("%S+") do
+        table.insert(words, word)
+    end
+    
+    -- Add spaces between words (we'll handle them manually)
+    local word_index = 1
+    while word_index <= #words do
+        local word = words[word_index]
+        local word_length = #word
+        
+        -- Check if word fits on current line (with space if not first word)
+        local space_needed = (current_line_chars > 0) and 1 or 0
+        local total_chars = current_line_chars + space_needed + word_length
+        
+        if total_chars <= max_chars_per_line then
+            -- Word fits, add it to current line
+            if current_line_chars > 0 then
+                current_line = current_line .. " " .. word
+                current_line_chars = current_line_chars + 1 + word_length
+            else
+                current_line = word
+                current_line_chars = word_length
+            end
+            word_index = word_index + 1
+        else
+            -- Word doesn't fit
+            if current_line_chars > 0 then
+                -- Start new line with current word
+                table.insert(current_page, current_line)
+                if #current_page >= max_lines_per_page then
+                    table.insert(pages, current_page)
+                    current_page = {}
+                end
+                current_line = ""
+                current_line_chars = 0
+            else
+                -- Word is too long for a single line, break it
+                local chars_to_take = max_chars_per_line
+                local part = word:sub(1, chars_to_take)
+                table.insert(current_page, part)
+                if #current_page >= max_lines_per_page then
+                    table.insert(pages, current_page)
+                    current_page = {}
+                end
+                
+                -- Update word with remaining characters
+                words[word_index] = word:sub(chars_to_take + 1)
+                if #words[word_index] == 0 then
+                    word_index = word_index + 1
+                end
+                current_line = ""
+                current_line_chars = 0
+            end
+        end
+    end
+    
+    -- Add the last line if it exists
+    if current_line_chars > 0 then
+        table.insert(current_page, current_line)
+    end
+    
+    -- Add the last page if it exists
+    if #current_page > 0 then
+        table.insert(pages, current_page)
+    end
+    
+    return pages
+end
+
+function TextDisplay:updateTextBoxes(delta)
+    for player_id, player_data in pairs(self.player_texts) do
+        for box_id, box_data in pairs(player_data.active_text_boxes) do
+            if box_data.state == "printing" then
+                self:updateTextBoxPrinting(player_id, box_id, box_data, delta)
+            elseif box_data.state == "waiting" then
+                self:updateTextBoxWaiting(player_id, box_id, box_data, delta)
+            end
+        end
+    end
+end
+
+function TextDisplay:updateTextBoxPrinting(player_id, box_id, box_data, delta)
+    box_data.timer = box_data.timer + delta
+    
+    local current_page = box_data.pages[box_data.current_page]
+    if not current_page then
+        box_data.state = "completed"
+        return
+    end
+    
+    local current_line_text = current_page[box_data.current_line]
+    if not current_line_text then
+        -- Move to next page or complete
+        box_data.current_page = box_data.current_page + 1
+        if box_data.current_page > #box_data.pages then
+            box_data.state = "completed"
+        else
+            box_data.current_line = 1
+            box_data.current_char = 0
+            self:clearTextBoxDisplay(player_id, box_id, box_data)
+        end
+        return
+    end
+    
+    local chars_to_add = math.floor(box_data.timer / box_data.char_delay)
+    if chars_to_add > 0 then
+        box_data.timer = box_data.timer - (chars_to_add * box_data.char_delay)
+        
+        for i = 1, chars_to_add do
+            box_data.current_char = box_data.current_char + 1
+            
+            if box_data.current_char > #current_line_text then
+                -- Move to next line
+                box_data.current_line = box_data.current_line + 1
+                box_data.current_char = 0
+                
+                -- Check if we've exceeded the current page
+                if box_data.current_line > #current_page then
+                    box_data.state = "waiting"
+                    box_data.wait_timer = 0
+                    break
+                end
+            else
+                -- Add the next character
+                self:drawTextBoxCharacter(player_id, box_id, box_data)
+            end
+        end
+    end
+end
+
+function TextDisplay:updateTextBoxWaiting(player_id, box_id, box_data, delta)
+    box_data.wait_timer = box_data.wait_timer + delta
+    
+    -- Wait for 2 seconds before advancing to next page
+    if box_data.wait_timer >= 2.0 then
+        box_data.current_page = box_data.current_page + 1
+        if box_data.current_page > #box_data.pages then
+            box_data.state = "completed"
+        else
+            box_data.current_line = 1
+            box_data.current_char = 0
+            box_data.state = "printing"
+            self:clearTextBoxDisplay(player_id, box_id, box_data)
+        end
+    end
+end
+
+function TextDisplay:drawTextBoxCharacter(player_id, box_id, box_data)
+    local current_page = box_data.pages[box_data.current_page]
+    local current_line_text = current_page[box_data.current_line]
+    local char = current_line_text:sub(box_data.current_char, box_data.current_char)
+    
+    -- Calculate position for this character - ALWAYS use the inner coordinates from box_data
+    local line_y = box_data.inner_y + ((box_data.current_line - 1) * self.text_box_settings.line_height * box_data.scale)
+    
+    -- Calculate X position using monospace character widths
+    local char_widths = self.font_system.char_widths[box_data.font] or self.font_system.char_widths.THICK
+    local char_width = (char_widths[char] or char_widths[" "]) * box_data.scale
+    
+    -- Calculate X position based on character index with consistent spacing
+    local current_x = box_data.inner_x + (box_data.current_char - 1) * (char_width + self.text_box_settings.char_spacing)
+    
+    local char_obj_id = box_id .. "_line_" .. box_data.current_line .. "_char_" .. box_data.current_char
+    
+    Net.player_draw_sprite(
+        player_id,
+        box_data.font,
+        {
+            id = char_obj_id,
+            x = current_x,
+            y = line_y,
+            z = box_data.z_order,
+            sx = box_data.scale,
+            sy = box_data.scale,
+            anim_state = box_data.font .. "_" .. char
+        }
+    )
+    
+    -- Store reference to this character object
+    if not box_data.display_lines[box_data.current_line] then
+        box_data.display_lines[box_data.current_line] = {}
+    end
+    box_data.display_lines[box_data.current_line][box_data.current_char] = char_obj_id
+end
+
+function TextDisplay:clearTextBoxDisplay(player_id, box_id, box_data)
+    -- Remove all character objects
+    for line_num, line_chars in pairs(box_data.display_lines) do
+        for char_num, obj_id in pairs(line_chars) do
+            Net.player_erase_sprite(player_id, obj_id)
+        end
+    end
+    box_data.display_lines = {}
+end
+
+function TextDisplay:removeTextBox(player_id, box_id)
+    local player_data = self.player_texts[player_id]
+    if player_data then
+        local box_data = player_data.active_text_boxes[box_id]
+        if box_data then
+            -- Remove backdrop
+            if box_data.backdrop_id then
+                Net.player_erase_sprite(player_id, box_data.backdrop_id)
+            end
+            
+            -- Remove all character objects
+            self:clearTextBoxDisplay(player_id, box_id, box_data)
+            
+            player_data.active_text_boxes[box_id] = nil
+        end
+    end
+end
+
+function TextDisplay:advanceTextBox(player_id, box_id)
+    local player_data = self.player_texts[player_id]
+    if player_data then
+        local box_data = player_data.active_text_boxes[box_id]
+        if box_data then
+            if box_data.state == "waiting" then
+                -- Immediately advance to next page
+                box_data.current_page = box_data.current_page + 1
+                if box_data.current_page > #box_data.pages then
+                    box_data.state = "completed"
+                else
+                    box_data.current_line = 1
+                    box_data.current_char = 0
+                    box_data.state = "printing"
+                    self:clearTextBoxDisplay(player_id, box_id, box_data)
+                end
+            elseif box_data.state == "printing" then
+                -- Instantly complete current page
+                local current_page = box_data.pages[box_data.current_page]
+                if current_page then
+                    -- Draw all remaining characters in current page instantly
+                    for line = box_data.current_line, #current_page do
+                        local line_text = current_page[line]
+                        local start_char = (line == box_data.current_line) and box_data.current_char + 1 or 1
+                        
+                        for char_pos = start_char, #line_text do
+                            box_data.current_line = line
+                            box_data.current_char = char_pos
+                            self:drawTextBoxCharacter(player_id, box_id, box_data)
+                        end
+                    end
+                    
+                    box_data.state = "waiting"
+                    box_data.wait_timer = 0
+                end
+            end
+        end
+    end
+end
+
+-- NEW FUNCTION: Set text box position (moves both backdrop and text together)
+function TextDisplay:setTextBoxPosition(player_id, box_id, x, y)
+    local player_data = self.player_texts[player_id]
+    if player_data then
+        local box_data = player_data.active_text_boxes[box_id]
+        if box_data then
+            -- Update the main position
+            box_data.x = x
+            box_data.y = y
+            
+            -- Update backdrop config position
+            if box_data.backdrop then
+                box_data.backdrop.x = x
+                box_data.backdrop.y = y
+            end
+            
+            -- Recalculate inner coordinates based on new position
+            box_data.inner_x = x + box_data.padding_x
+            box_data.inner_y = y + box_data.padding_y
+            
+            -- Redraw backdrop at new position
+            self:drawTextBoxBackdrop(player_id, box_id, box_data)
+            
+            -- Clear and redraw all text at new positions
+            self:clearTextBoxDisplay(player_id, box_id, box_data)
+            
+            -- Redraw all characters that should be visible
+            if box_data.state == "printing" or box_data.state == "waiting" then
+                local current_page = box_data.pages[box_data.current_page]
+                if current_page then
+                    for line = 1, box_data.current_line do
+                        local line_text = current_page[line]
+                        if line_text then
+                            local max_char = (line == box_data.current_line) and box_data.current_char or #line_text
+                            for char_pos = 1, max_char do
+                                -- Temporarily set current line/char for drawing
+                                local temp_line = box_data.current_line
+                                local temp_char = box_data.current_char
+                                box_data.current_line = line
+                                box_data.current_char = char_pos
+                                self:drawTextBoxCharacter(player_id, box_id, box_data)
+                                box_data.current_line = temp_line
+                                box_data.current_char = temp_char
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+function TextDisplay:isTextBoxCompleted(player_id, box_id)
+    local player_data = self.player_texts[player_id]
+    if player_data then
+        local box_data = player_data.active_text_boxes[box_id]
+        return box_data and box_data.state == "completed"
+    end
+    return true
+end
+
+-- [Rest of the existing functions for marquee and static text remain unchanged]
 function TextDisplay:drawText(player_id, text, x, y, font_name, scale, z_order)
     font_name = font_name or "THICK"
     scale = scale or 1.0

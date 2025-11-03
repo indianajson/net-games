@@ -14,9 +14,10 @@ function Timer:init()
         self:handlePlayerJoin(event.player_id)
     end)
     
-    -- Handle timer updates every tick
+    -- Handle timer updates every tick - FIXED: Add proper error handling
     Net:on("tick", function(event)
-        self:updateTimers(event.delta)
+        local delta = event.delta_time or 0
+        self:updateTimers(delta)
     end)
     
     -- Handle player leaving
@@ -50,11 +51,16 @@ function Timer:handlePlayerLeave(player_id)
 end
 
 function Timer:updateTimers(delta)
+    -- Add safety check for nil or invalid delta
+    if delta == nil or delta <= 0 then
+        return
+    end
+    
     -- Update player-specific timers
     for player_id, player_timers in pairs(self.timers) do
         for timer_id, timer_data in pairs(player_timers) do
-            if not timer_data.paused then
-                timer_data.elapsed = timer_data.elapsed + delta
+            if timer_data and not timer_data.paused then
+                timer_data.elapsed = (timer_data.elapsed or 0) + delta
                 timer_data.current = timer_data.elapsed
                 
                 -- Check for timer completion
@@ -75,8 +81,8 @@ function Timer:updateTimers(delta)
     -- Update player-specific countdowns
     for player_id, player_countdowns in pairs(self.countdowns) do
         for countdown_id, countdown_data in pairs(player_countdowns) do
-            if not countdown_data.paused then
-                countdown_data.remaining = countdown_data.remaining - delta
+            if countdown_data and not countdown_data.paused then
+                countdown_data.remaining = (countdown_data.remaining or 0) - delta
                 countdown_data.current = countdown_data.remaining
                 
                 -- Check for countdown completion
@@ -87,7 +93,7 @@ function Timer:updateTimers(delta)
                     if not countdown_data.loop then
                         self.countdowns[player_id][countdown_id] = nil
                     else
-                        countdown_data.remaining = countdown_data.duration
+                        countdown_data.remaining = countdown_data.duration or 0
                     end
                 end
             end
@@ -96,8 +102,8 @@ function Timer:updateTimers(delta)
     
     -- Update global timers
     for timer_id, timer_data in pairs(self.global_timers) do
-        if not timer_data.paused then
-            timer_data.elapsed = timer_data.elapsed + delta
+        if timer_data and not timer_data.paused then
+            timer_data.elapsed = (timer_data.elapsed or 0) + delta
             timer_data.current = timer_data.elapsed
             
             -- Check for timer completion
@@ -117,8 +123,8 @@ function Timer:updateTimers(delta)
     
     -- Update global countdowns
     for countdown_id, countdown_data in pairs(self.global_countdowns) do
-        if not countdown_data.paused then
-            countdown_data.remaining = countdown_data.remaining - delta
+        if countdown_data and not countdown_data.paused then
+            countdown_data.remaining = (countdown_data.remaining or 0) - delta
             countdown_data.current = countdown_data.remaining
             
             -- Check for countdown completion
@@ -130,7 +136,7 @@ function Timer:updateTimers(delta)
                     self.global_countdowns[countdown_id] = nil
                     self:emitToAllPlayers("countdown_global_remove", {countdown_id = countdown_id})
                 else
-                    countdown_data.remaining = countdown_data.duration
+                    countdown_data.remaining = countdown_data.duration or 0
                 end
             end
             

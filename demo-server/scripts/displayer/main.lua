@@ -1,234 +1,186 @@
--- Combined Main File - Timers and Text Display (Fixed Player Position)
-local TimerDisplay = require("scripts/displayer/timer-display")
-local TextDisplay = require("scripts/displayer/text-display")
+-- Minimal Displayer Example - Working Version with Global Timer
+local Displayer = require("scripts/displayer/displayer")
 
--- Store timer states
-local player_timers = {}
-local global_timers = {
-    session_timer = 0,
-    session_created = false,
-    session_running = false
+-- Initialize the displayer system
+local displayer = Displayer:init()
+if not displayer then
+    print("Failed to initialize Displayer API")
+    return
+end
+
+print("Displayer API loaded successfully!")
+
+-- Simple state management
+local player_data = {}
+local global_timer = {
+    elapsed_time = 0,
+    running = false
 }
 
--- Track players waiting for timer start
-local players_waiting_for_start = {}
-
--- Fixed player position (center of 240x160 screen)
-local PLAYER_X, PLAYER_Y = 120, 80
-
--- Timer positions relative to player
-local TIMER_Y = PLAYER_Y + 20  -- 20 pixels below player
-local COUNTDOWN_Y = PLAYER_Y + 40  -- 40 pixels below player (20 pixels below timer)
-
--- Function to start global timer
-local function startGlobalTimers()
-    global_timers.session_running = true
-    print("Global timer started!")
-end
-
--- Function to start player-specific countdown
-local function startPlayerCountdown(player_id)
-    if player_timers[player_id] then
-        player_timers[player_id].countdown_running = true
-        print("Player countdown started for " .. player_id)
-    end
-end
-
--- Example of creating and starting displays when players join
+-- Player join handler
 Net:on("player_join", function(event)
     local player_id = event.player_id
+    print("Player joined: " .. player_id)
     
-    -- Initialize player timer data
-    player_timers[player_id] = {
-        countdown = 60,  -- 60 seconds
+    -- Initialize player data
+    player_data[player_id] = {
+        elapsed_time = 0,
+        countdown_time = 60,
         countdown_running = false,
-        join_time = os.clock(),
-        started = false,
-        elapsed_time = 0
+        session_started = false,
+        join_time = os.clock()
     }
     
-    -- Create timer displays positioned below the player
-    TimerDisplay:createPlayerTimerDisplay(player_id, "player_timer", PLAYER_X, TIMER_Y, "default")
-    TimerDisplay:createPlayerCountdownDisplay(player_id, "player_countdown", PLAYER_X, COUNTDOWN_Y, "default")
+    -- Hide default HUD
+    displayer:hidePlayerHUD(player_id)
     
-    -- Create global session timer if it doesn't exist yet
-    if not global_timers.session_created then
-        TimerDisplay:createGlobalTimerDisplay("session_timer", 10, 10, "large")
-        global_timers.session_created = true
-    end
+    -- UI Layout (non-overlapping positions):
+    -- Top-left: Global timer (10, 10)
+    -- Top-center: Marquee area (10, 30)
+    -- Center-left: Player timers (10, 80)
+    -- Center: Player character (120, 80)
+    -- Center-right: Notifications (150, 80)
+    -- Bottom: Text boxes (20, 140)
     
-    -- Update the new player with current global timer value
-    TimerDisplay:updateGlobalTimerDisplay("session_timer", global_timers.session_timer)
+    -- Create global timer display (top-left)
+    displayer.TimerDisplay:createGlobalTimerDisplay("global_timer", 10, 10, "large")
+    displayer.TimerDisplay:updateGlobalTimerDisplay("global_timer", global_timer.elapsed_time)
     
-    -- Create text displays
-    -- Static welcome text
-    TextDisplay:drawText(player_id, "WELCOME PLAYER", 10, 140, "THICK", 1.0, 100)
-    TextDisplay:addBackdrop(player_id, "text_1", {
-        x = 5, y = 135, width = 120, height = 20,
-        padding_x = 4,
-        padding_y = 2
-    })
-    
-    -- News marquee with backdrop that constrains the text
-    TextDisplay:drawMarqueeText(player_id, "news_ticker", 
-        "Welcome to the game! Timers are positioned below your character!",
+    -- Create news marquee (top-center)
+    displayer.Text:drawMarqueeText(player_id, "news_ticker", 
+        "Welcome to the Tournament! New players joining every day!", 
         30, "THICK", 1.0, 100, "slow", {
             x = 10, y = 25, width = 220, height = 15,
-            padding_x = 8,
-            padding_y = 2
+            padding_x = 8, padding_y = 2
         })
     
-    -- Mark player as waiting for timer start
-    players_waiting_for_start[player_id] = true
-    print("Player " .. player_id .. " joined, timers will start in 1 second")
+    -- Create player timer displays (center-left)
+    displayer.TimerDisplay:createPlayerTimerDisplay(player_id, "player_timer", 10, 80, "default")
+    displayer.TimerDisplay:createPlayerCountdownDisplay(player_id, "player_countdown", 10, 100, "default")
+    
+    -- Create welcome message (bottom)
+    displayer.Text:createTextBox(player_id, "welcome", 
+        "Welcome to the Tournament Arena! Your mission begins in 3 seconds...", 
+        20, 140, 200, 50, "THICK", 1.0, 100, {
+            x = 15, y = 135, width = 210, height = 60,
+            padding_x = 8, padding_y = 6
+        }, 25)
+    
+    -- Mark for delayed start
+    player_data[player_id].waiting_for_start = true
 end)
 
--- Handle player disconnect
+-- Player disconnect handler
 Net:on("player_disconnect", function(event)
     local player_id = event.player_id
-    player_timers[player_id] = nil
-    players_waiting_for_start[player_id] = nil
+    print("Player disconnected: " .. player_id)
+    player_data[player_id] = nil
 end)
 
--- Update all timers every tick
+-- Main update loop
 Net:on("tick", function(event)
-    local delta = event.delta_time
+    local delta = event.delta_time or 0
     local current_time = os.clock()
     
-    -- Handle delayed timer starts
-    for player_id, _ in pairs(players_waiting_for_start) do
-        local player_data = player_timers[player_id]
-        if player_data and not player_data.started then
-            -- Check if 1 second has passed since join
-            if current_time - player_data.join_time >= 1.0 then
-                startPlayerCountdown(player_id)
-                player_data.started = true
-                players_waiting_for_start[player_id] = nil
+    -- Update global timer (always runs)
+    global_timer.elapsed_time = global_timer.elapsed_time + delta
+    displayer.TimerDisplay:updateGlobalTimerDisplay("global_timer", global_timer.elapsed_time)
+    
+    -- Handle delayed starts for players
+    for player_id, data in pairs(player_data) do
+        if data.waiting_for_start and not data.session_started then
+            -- Check if 3 seconds have passed since join
+            if current_time - data.join_time >= 3.0 then
+                data.session_started = true
+                data.countdown_running = true
+                data.waiting_for_start = false
+                displayer.Text:createTextBox(player_id, "start_msg", 
+                    "Mission started! Defeat enemies before time runs out!", 
+                    150, 80, 80, 40, "THICK", 0.9, 100, {
+                        x = 145, y = 75, width = 90, height = 50,
+                        padding_x = 4, padding_y = 4
+                    }, 35)
+                print("Starting timers for player " .. player_id)
+            end
+        end
+        
+        -- Update timers if session has started
+        if data.session_started then
+            -- Update elapsed timer (counts up)
+            data.elapsed_time = data.elapsed_time + delta
+            displayer.TimerDisplay:updatePlayerTimerDisplay(player_id, "player_timer", data.elapsed_time)
+            
+            -- Update countdown if running
+            if data.countdown_running then
+                data.countdown_time = math.max(0, data.countdown_time - delta)
+                displayer.TimerDisplay:updatePlayerCountdownDisplay(player_id, "player_countdown", data.countdown_time)
                 
-                -- Start global timer if it hasn't been started yet
-                if not global_timers.session_running then
-                    startGlobalTimers()
+                -- Handle countdown completion
+                if data.countdown_time <= 0 then
+                    data.countdown_running = false
+                    displayer.Text:createTextBox(player_id, "countdown_complete", 
+                        "Time's up! Mission complete! Score: 1500", 
+                        150, 120, 80, 40, "THICK", 0.9, 100, {
+                            x = 145, y = 115, width = 90, height = 50,
+                            padding_x = 4, padding_y = 4
+                        }, 35)
                 end
             end
         end
     end
-    
-    -- Update global session timer (counts up)
-    if global_timers.session_running then
-        global_timers.session_timer = global_timers.session_timer + delta
-        TimerDisplay:updateGlobalTimerDisplay("session_timer", global_timers.session_timer)
-    end
-    
-    -- Update per-player timers
-    for player_id, timers in pairs(player_timers) do
-        -- Update player timer (always counts up once started)
-        if timers.started then
-            timers.elapsed_time = timers.elapsed_time + delta
-            TimerDisplay:updatePlayerTimerDisplay(player_id, "player_timer", timers.elapsed_time)
-        end
-        
-        -- Update countdown if running
-        if timers.countdown_running and timers.countdown > 0 then
-            timers.countdown = math.max(0, timers.countdown - delta)
-            TimerDisplay:updatePlayerCountdownDisplay(player_id, "player_countdown", timers.countdown)
-            
-            if timers.countdown <= 0 then
-                timers.countdown_running = false
-                timers.remove_countdown = true
-            end
-        end
-        
-        -- Handle scheduled countdown removal
-        if timers.remove_countdown then
-            TimerDisplay:removePlayerDisplay(player_id, "player_countdown")
-            timers.remove_countdown = false
-        end
+end)
+
+-- Simple commands for testing
+Net:on("reset", function(event)
+    local player_id = event.player_id
+    if player_data[player_id] then
+        player_data[player_id].countdown_time = 60
+        player_data[player_id].countdown_running = true
+        displayer.TimerDisplay:updatePlayerCountdownDisplay(player_id, "player_countdown", 60)
+        displayer.Text:createTextBox(player_id, "reset_msg", "Countdown reset to 60 seconds!", 
+            150, 60, 80, 30, "THICK", 0.8, 100, nil, 40)
     end
 end)
 
--- Command to reset player countdown
-Net:on("reset_countdown", function(event)
+Net:on("add_text", function(event)
     local player_id = event.player_id
-    if player_timers[player_id] then
-        player_timers[player_id].countdown = 60
-        player_timers[player_id].countdown_running = true
-        TimerDisplay:updatePlayerCountdownDisplay(player_id, "player_countdown", 60)
-        print("Countdown reset for player " .. player_id)
-    end
+    local text = event.text or "This is a test message!"
+    displayer.Text:createTextBox(player_id, "custom_text", text, 
+        150, 160, 80, 30, "THICK", 0.8, 100, nil, 35)
 end)
 
--- Command to add new marquee
-Net:on("add_marquee", function(event)
+Net:on("marquee", function(event)
     local player_id = event.player_id
-    local text = event.text or "New marquee text"
-    local speed = event.speed or "medium"
+    local text = event.text or "This is a scrolling marquee message!"
+    displayer.Text:drawMarqueeText(player_id, "test_marquee", text, 
+        50, "THICK", 1.0, 100, "medium", {
+            x = 10, y = 45, width = 220, height = 15,
+            padding_x = 8, padding_y = 2
+        })
+end)
+
+Net:on("story", function(event)
+    local player_id = event.player_id
+    local story_text = "In the year 210X, the digital world has become intertwined with our reality. " ..
+                      "As a net operator, you have been chosen to participate in the annual tournament. " ..
+                      "Your mission is to survive against waves of digital creatures and other operators. " ..
+                      "Use your abilities wisely and remember: timing is everything!"
     
-    TextDisplay:drawMarqueeText(player_id, "custom_marquee", text, 90, "THICK", 1.0, 100, speed, {
-        x = 20, y = 85, width = 200, height = 15,
-        padding_x = 4,
-        padding_y = 2
+    displayer.Text:createTextBox(player_id, "story_box", story_text, 
+        20, 50, 200, 80, "THICK", 1.0, 100, {
+            x = 15, y = 45, width = 210, height = 90,
+            padding_x = 8, padding_y = 6
+        }, 20)
+end)
+
+Net:on("score", function(event)
+    local player_id = event.player_id
+    local score = event.score or "1000"
+    displayer.Text:drawText(player_id, "SCORE: " .. score, 180, 10, "BATTLE", 1.2, 100)
+    displayer.Text:addBackdrop(player_id, "score_display", {
+        x = 175, y = 5, width = 60, height = 20,
+        padding_x = 4, padding_y = 2
     })
 end)
 
--- Command to add marquee without backdrop
-Net:on("add_marquee_no_backdrop", function(event)
-    local player_id = event.player_id
-    local text = event.text or "New marquee text"
-    local speed = event.speed or "medium"
-    
-    TextDisplay:drawMarqueeText(player_id, "custom_marquee", text, 90, "THICK", 1.0, 100, speed)
-end)
-
--- Command to update existing text
-Net:on("update_text", function(event)
-    local player_id = event.player_id
-    local text_id = event.text_id
-    local new_text = event.new_text
-    
-    TextDisplay:updateText(player_id, text_id, new_text)
-end)
-
--- Command to change marquee speed
-Net:on("change_speed", function(event)
-    local player_id = event.player_id
-    local text_id = event.text_id
-    local speed = event.speed
-    
-    TextDisplay:setMarqueeSpeed(player_id, text_id, speed)
-end)
-
--- Command to remove text
-Net:on("remove_text", function(event)
-    local player_id = event.player_id
-    local text_id = event.text_id
-    
-    TextDisplay:removeText(player_id, text_id)
-end)
-
--- Debug command to check timer states
-Net:on("debug_timers", function(event)
-    local player_id = event.player_id
-    print("=== TIMER DEBUG INFO ===")
-    print("Global timer:")
-    print("  session_timer: " .. global_timers.session_timer .. " (running: " .. tostring(global_timers.session_running) .. ")")
-    
-    if player_timers[player_id] then
-        print("Player " .. player_id .. " timers:")
-        print("  countdown: " .. player_timers[player_id].countdown .. " (running: " .. tostring(player_timers[player_id].countdown_running) .. ")")
-        print("  elapsed_time: " .. (player_timers[player_id].elapsed_time or 0))
-        print("  started: " .. tostring(player_timers[player_id].started))
-    else
-        print("Player " .. player_id .. " not found in player_timers")
-    end
-    print("Players waiting for start: " .. table_count(players_waiting_for_start))
-    print("========================")
-end)
-
--- Helper function to count table elements
-function table_count(t)
-    local count = 0
-    for _ in pairs(t) do count = count + 1 end
-    return count
-end
-
-print("Combined timer and text system loaded successfully!")
+print("Minimal Displayer example with global timer loaded and ready!")
