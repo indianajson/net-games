@@ -48,7 +48,7 @@ function TimerDisplay:init()
 end
 
 function TimerDisplay:setupTimerEventHandlers()
-    -- These would be emitted by the Timer system
+    -- Global timer events
     Net:on("timer_global_create", function(event)
         self:handleGlobalTimerCreate(event)
     end)
@@ -71,6 +71,41 @@ function TimerDisplay:setupTimerEventHandlers()
     
     Net:on("countdown_global_remove", function(event)
         self:removeGlobalDisplay(event.countdown_id)
+    end)
+    
+    -- Player-specific timer events - FIXED: Extract player_id from event data
+    Net:on("timer_update", function(event)
+        if event.player_id then
+            self:updatePlayerTimerDisplay(event.player_id, event.timer_id, event.current)
+        end
+    end)
+    
+    Net:on("countdown_update", function(event)
+        if event.player_id then
+            self:updatePlayerCountdownDisplay(event.player_id, event.countdown_id, event.current)
+        end
+    end)
+    
+    Net:on("timer_create", function(event)
+        -- We don't need to do anything special here since displays are created manually
+        print("Timer created: " .. (event.timer_id or "unknown") .. " for player " .. (event.player_id or "unknown"))
+    end)
+    
+    Net:on("countdown_create", function(event)
+        -- We don't need to do anything special here since displays are created manually
+        print("Countdown created: " .. (event.countdown_id or "unknown") + " for player " .. (event.player_id or "unknown"))
+    end)
+    
+    Net:on("timer_remove", function(event)
+        if event.player_id then
+            self:removePlayerDisplay(event.player_id, event.timer_id)
+        end
+    end)
+    
+    Net:on("countdown_remove", function(event)
+        if event.player_id then
+            self:removePlayerDisplay(event.player_id, event.countdown_id)
+        end
     end)
 end
 

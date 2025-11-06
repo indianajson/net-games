@@ -14,7 +14,7 @@ function Timer:init()
         self:handlePlayerJoin(event.player_id)
     end)
     
-    -- Handle timer updates every tick - FIXED: Add proper error handling
+    -- Handle timer updates every tick
     Net:on("tick", function(event)
         local delta = event.delta_time or 0
         self:updateTimers(delta)
@@ -49,7 +49,6 @@ function Timer:handlePlayerLeave(player_id)
     self.countdowns[player_id] = nil
     self.player_data[player_id] = nil
 end
-
 function Timer:updateTimers(delta)
     -- Add safety check for nil or invalid delta
     if delta == nil or delta <= 0 then
@@ -63,6 +62,13 @@ function Timer:updateTimers(delta)
                 timer_data.elapsed = (timer_data.elapsed or 0) + delta
                 timer_data.current = timer_data.elapsed
                 
+                -- Emit update event for display - FIXED: Use Net:emit without player_id target
+                Net:emit("timer_update", {
+                    player_id = player_id,
+                    timer_id = timer_id,
+                    current = timer_data.current
+                })
+                
                 -- Check for timer completion
                 if timer_data.duration and timer_data.elapsed >= timer_data.duration then
                     if timer_data.callback then
@@ -70,6 +76,10 @@ function Timer:updateTimers(delta)
                     end
                     if not timer_data.loop then
                         self.timers[player_id][timer_id] = nil
+                        Net:emit("timer_remove", {
+                            player_id = player_id,
+                            timer_id = timer_id
+                        })
                     else
                         timer_data.elapsed = 0
                     end
@@ -82,8 +92,20 @@ function Timer:updateTimers(delta)
     for player_id, player_countdowns in pairs(self.countdowns) do
         for countdown_id, countdown_data in pairs(player_countdowns) do
             if countdown_data and not countdown_data.paused then
+                -- Store previous value to check if we crossed a second boundary
+                local previous_floor = math.floor(countdown_data.remaining or 0)
                 countdown_data.remaining = (countdown_data.remaining or 0) - delta
-                countdown_data.current = countdown_data.remaining
+                countdown_data.current = math.max(0, countdown_data.remaining) -- Don't go below 0
+                
+                -- Emit update event for display - FIXED: Use Net:emit without player_id target
+                local current_floor = math.floor(countdown_data.current)
+                if current_floor ~= previous_floor then
+                    Net:emit("countdown_update", {
+                        player_id = player_id,
+                        countdown_id = countdown_id,
+                        current = countdown_data.current
+                    })
+                end
                 
                 -- Check for countdown completion
                 if countdown_data.remaining <= 0 then
@@ -92,8 +114,19 @@ function Timer:updateTimers(delta)
                     end
                     if not countdown_data.loop then
                         self.countdowns[player_id][countdown_id] = nil
+                        Net:emit("countdown_remove", {
+                            player_id = player_id,
+                            countdown_id = countdown_id
+                        })
                     else
                         countdown_data.remaining = countdown_data.duration or 0
+                        countdown_data.current = countdown_data.remaining
+                        -- Emit reset event for looping countdown
+                        Net:emit("countdown_update", {
+                            player_id = player_id,
+                            countdown_id = countdown_id,
+                            current = countdown_data.current
+                        })
                     end
                 end
             end
@@ -105,6 +138,12 @@ function Timer:updateTimers(delta)
         if timer_data and not timer_data.paused then
             timer_data.elapsed = (timer_data.elapsed or 0) + delta
             timer_data.current = timer_data.elapsed
+            
+            -- Emit update event for all players
+            self:emitToAllPlayers("timer_global_update", {
+                timer_id = timer_id,
+                current = timer_data.current
+            })
             
             -- Check for timer completion
             if timer_data.duration and timer_data.elapsed >= timer_data.duration then
@@ -124,8 +163,19 @@ function Timer:updateTimers(delta)
     -- Update global countdowns
     for countdown_id, countdown_data in pairs(self.global_countdowns) do
         if countdown_data and not countdown_data.paused then
+            -- Store previous value to check if we crossed a second boundary
+            local previous_floor = math.floor(countdown_data.remaining or 0)
             countdown_data.remaining = (countdown_data.remaining or 0) - delta
-            countdown_data.current = countdown_data.remaining
+            countdown_data.current = math.max(0, countdown_data.remaining) -- Don't go below 0
+            
+            -- Emit update event for all players (only when value changes significantly)
+            local current_floor = math.floor(countdown_data.current)
+            if current_floor ~= previous_floor then
+                self:emitToAllPlayers("countdown_global_update", {
+                    countdown_id = countdown_id,
+                    current = countdown_data.current
+                })
+            end
             
             -- Check for countdown completion
             if countdown_data.remaining <= 0 then
@@ -137,12 +187,13 @@ function Timer:updateTimers(delta)
                     self:emitToAllPlayers("countdown_global_remove", {countdown_id = countdown_id})
                 else
                     countdown_data.remaining = countdown_data.duration or 0
+                    countdown_data.current = countdown_data.remaining
+                    -- Emit reset event for looping countdown
+                    self:emitToAllPlayers("countdown_global_update", {
+                        countdown_id = countdown_id,
+                        current = countdown_data.current
+                    })
                 end
-            end
-            
-            -- Sync global countdown with all players every second
-            if math.fmod(countdown_data.elapsed or 0, 1.0) < delta then
-                self:syncGlobalCountdown(countdown_id)
             end
         end
     end
@@ -172,6 +223,12 @@ function Timer:createGlobalTimer(timer_id, duration, callback, loop)
         duration = duration,
         loop = loop
     })
+    
+    -- Emit initial value
+    self:emitToAllPlayers("timer_global_update", {
+        timer_id = timer_id,
+        current = 0
+    })
 end
 
 function Timer:createGlobalCountdown(countdown_id, duration, callback, loop)
@@ -189,6 +246,12 @@ function Timer:createGlobalCountdown(countdown_id, duration, callback, loop)
         countdown_id = countdown_id,
         duration = duration,
         loop = loop
+    })
+    
+    -- Emit initial value
+    self:emitToAllPlayers("countdown_global_update", {
+        countdown_id = countdown_id,
+        current = duration
     })
 end
 
@@ -266,18 +329,6 @@ function Timer:syncGlobalTimers(player_id)
         end
     end
 end
-
-function Timer:syncGlobalCountdown(countdown_id)
-    local countdown_data = self.global_countdowns[countdown_id]
-    if countdown_data then
-        self:emitToAllPlayers("countdown_global_update", {
-            countdown_id = countdown_id,
-            current = countdown_data.current
-        })
-    end
-end
-
--- Player-specific timer methods
 function Timer:createPlayerTimer(player_id, timer_id, duration, callback, loop)
     if not self.timers[player_id] then
         self.timers[player_id] = {}
@@ -293,10 +344,19 @@ function Timer:createPlayerTimer(player_id, timer_id, duration, callback, loop)
         paused = false
     }
     
-    Net:emit("timer_create", player_id, {
+    -- Emit create event
+    Net:emit("timer_create", {
+        player_id = player_id,
         timer_id = timer_id,
         duration = duration,
         loop = loop
+    })
+    
+    -- Emit initial value
+    Net:emit("timer_update", {
+        player_id = player_id,
+        timer_id = timer_id,
+        current = 0
     })
 end
 
@@ -315,10 +375,19 @@ function Timer:createPlayerCountdown(player_id, countdown_id, duration, callback
         paused = false
     }
     
-    Net:emit("countdown_create", player_id, {
+    -- Emit create event
+    Net:emit("countdown_create", {
+        player_id = player_id,
         countdown_id = countdown_id,
         duration = duration,
         loop = loop
+    })
+    
+    -- Emit initial value
+    Net:emit("countdown_update", {
+        player_id = player_id,
+        countdown_id = countdown_id,
+        current = duration
     })
 end
 
@@ -341,6 +410,20 @@ function Timer:clearAllGlobalCountdowns()
     for countdown_id, _ in pairs(self.global_countdowns) do
         self:removeGlobalCountdown(countdown_id)
     end
+end
+
+function Timer:getPlayerTimer(player_id, timer_id)
+    if self.timers[player_id] and self.timers[player_id][timer_id] then
+        return self.timers[player_id][timer_id].current or 0
+    end
+    return 0
+end
+
+function Timer:getPlayerCountdown(player_id, countdown_id)
+    if self.countdowns[player_id] and self.countdowns[player_id][countdown_id] then
+        return self.countdowns[player_id][countdown_id].current or 0
+    end
+    return 0
 end
 
 -- Initialize the timer system
