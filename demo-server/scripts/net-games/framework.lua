@@ -994,7 +994,16 @@ end)
 
 
 Net:on("player_area_transfer", function(event)
-    last_position_cache[event.player_id]["area"] = Net.get_player_area(player_id)
+    local pid = event.player_id
+    if not pid then return end
+
+    -- Ensure we have a cache entry for this player
+    if not last_position_cache[pid] then
+        last_position_cache[pid] = {}
+    end
+
+    -- Update the cached area to the player's new area
+    last_position_cache[pid]["area"] = Net.get_player_area(pid)
 end)
 
 -- Whatcha doin'? If you're here you must be a coder, or at least interesting in coding.
