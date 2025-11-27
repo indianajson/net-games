@@ -1094,21 +1094,28 @@ Net:on("tick", function(event)
         for player_id,cosmetics in next,cosmetic_cache do
             for cosmetic_id,cosmetic_data in next,cosmetics do
                 if cosmetic_data["duration"] ~= 0 then
-                    cosmetic_data["elapsed"] = event.delta_time + cosmetic_data["elapsed"]
+                    -- ⬇️ this line was removed by accident
+                    cosmetic_data["elapsed"] = (cosmetic_data["elapsed"] or 0) + event.delta_time
+
                     if cosmetic_data["elapsed"] >= cosmetic_data["duration"] then
-                        --erase the sprite , redraw the sprite
-                        Net.player_erase_sprite(player_id,cosmetic_id .. "_obj")
-                        Net.player_draw_sprite(player_id, cosmetic_id,
-                            {
-                                id = cosmetic_id .. "_obj",
-                                x = cosmetic_data["spritex"], 
-                                y = cosmetic_data["spritey"], 
-                                sx = sprite_scale,
-                                sy = sprite_scale,
-                                anim_state = state
-                            })
+                        -- erase the sprite , redraw the sprite
+                        Net.player_erase_sprite(player_id, cosmetic_id .. "_obj")
+
+                        -- Use the per-cosmetic cached scale + state
+                        local sprite_scale = cosmetic_data["scale"] or 2
+                        local state        = cosmetic_data["state"] or "SNOWFLAKE_PARTICLE"
+
+                        Net.player_draw_sprite(player_id, cosmetic_id, {
+                            id         = cosmetic_id .. "_obj",
+                            x          = cosmetic_data["spritex"],
+                            y          = cosmetic_data["spritey"],
+                            sx         = sprite_scale,
+                            sy         = sprite_scale,
+                            anim_state = state,
+                        })
+
                         cosmetic_data["elapsed"] = 0
-                    end 
+                    end
                 end 
             end
         end
