@@ -268,7 +268,7 @@ function frame.unfreeze_player(player_id)
 end
 
 --purpose: show a texture as a cosmetic on a player's avatar
-function frame.set_cosmetic(cosmetic_id,player_id,texture,animation,state,x,y,visible,player_xoffset,player_yoffset,anim_duration)
+function frame.set_cosmetic(cosmetic_id,player_id,texture,animation,state,x,y,visible,player_xoffset,player_yoffset,anim_duration, scale, bot_scale)
     return async(function ()
     --safety checks
     if cosmetic_id == nil or animation == nil or state == nil or player_id == nil or texture == nil or x == nil or y == nil then
@@ -300,14 +300,16 @@ function frame.set_cosmetic(cosmetic_id,player_id,texture,animation,state,x,y,vi
     if player_yoffset then 
         p_yoffset = player_yoffset
     end 
+    local sprite_scale = scale or 2  -- keep the old 2× behavior by default
+    local world_bot_scale = bot_scale or 1.0
 
     Net.player_draw_sprite(player_id, cosmetic_id,
     {
         id = cosmetic_id .. "_obj",
         x = (x+120+p_xoffset)*2, 
         y = (y+80+p_yoffset)*2,
-        sx = 2,
-        sy = 2,
+        sx = sprite_scale,   -- was 2
+        sy = sprite_scale,   -- was 2
         anim_state = state
     })
 
@@ -318,12 +320,23 @@ function frame.set_cosmetic(cosmetic_id,player_id,texture,animation,state,x,y,vi
     local xoffset,yoffset = fixOffsets(xoffset,yoffset)
 
     --add cosmetic to cache 
-    cosmetic_cache[player_id][cosmetic_id] = {id=cosmetic_id,texture=texture,x=xoffset,y=yoffset,visibility=visibility,animation=animation,state=state,spritex=(x+120+p_xoffset)*2,spritey=(y+80+p_yoffset)*2}
+    cosmetic_cache[player_id][cosmetic_id] = {id=cosmetic_id,texture=texture,x=xoffset,y=yoffset,visibility=visibility,animation=animation,state=state,spritex=(x+120+p_xoffset)*2,spritey=(y+80+p_yoffset)*2,scale=sprite_scale}
 
     cosmetic_cache[player_id][cosmetic_id]["duration"] = anim_duration or 0 
     cosmetic_cache[player_id][cosmetic_id]["elapsed"] = 0
 
     Net.create_bot(cosmetic_id.."_"..player_id, { area_id=area_id, warp_in=false, texture_path=texture, animation_path=animation, animation=state, x=position.x+xoffset, y=position.y+yoffset, z=position.z+3, solid=false})
+    -- If this cosmetic provided a bot_scale, apply it via property animation
+    if bot_scale ~= nil then
+        local keyframes = {{
+            properties = {
+                { property = "ScaleX", ease = "Linear", value = world_bot_scale },
+                { property = "ScaleY", ease = "Linear", value = world_bot_scale },
+            },
+            duration = 0
+        }}
+        Net.animate_bot_properties(cosmetic_id.."_"..player_id, keyframes)
+    end
     --hide bot from player (since we show it the cosmetic with a sprite)
     Net.exclude_actor_for_player(player_id,cosmetic_id.."_"..player_id)
 
@@ -1090,8 +1103,8 @@ Net:on("tick", function(event)
                                 id = cosmetic_id .. "_obj",
                                 x = cosmetic_data["spritex"], 
                                 y = cosmetic_data["spritey"], 
-                                sx = 2,
-                                sy = 2,
+                                sx = sprite_scale,
+                                sy = sprite_scale,
                                 anim_state = state
                             })
                         cosmetic_data["elapsed"] = 0
