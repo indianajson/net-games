@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.8" tiledversion="1.11.2" orientation="isometric" renderorder="right-down" width="40" height="40" tilewidth="64" tileheight="32" infinite="0" nextlayerid="14" nextobjectid="75">
+<map version="1.10" tiledversion="1.11.2" orientation="isometric" renderorder="right-down" width="40" height="40" tilewidth="64" tileheight="32" infinite="0" nextlayerid="14" nextobjectid="105">
  <properties>
   <property name="Background Animation" value="/server/assets/demo/clockman.animation"/>
   <property name="Background Texture" value="/server/assets/demo/clockman.png"/>
@@ -62,11 +62,98 @@
     <property name="Direction" value="Up Right"/>
    </properties>
   </object>
-  <object id="74" name="defaultsimon" type="Simon Says" x="788" y="628">
+  <object id="74" name="defaultsimon" type="Simon Says" x="769.188" y="619.221">
    <properties>
     <property name="Limit" value="10"/>
     <property name="Time" value="30"/>
    </properties>
+   <point/>
+  </object>
+  <object id="75" name="ProgBannerDialogue" x="640.343" y="673.833">
+   <point/>
+  </object>
+  <object id="76" name="ProgDramaticDialogue" x="706.5" y="737.776">
+   <point/>
+  </object>
+  <object id="77" name="ProgBasicDialogue" x="640.725" y="609.314">
+   <point/>
+  </object>
+  <object id="78" name="ProgBasicFreeDraw" x="643.115" y="737.725">
+   <point/>
+  </object>
+  <object id="80" name="ProgDyedDialogue" x="707.369" y="803.333">
+   <point/>
+  </object>
+  <object id="81" name="ProgPromptDialogue" x="642.955" y="802.482">
+   <point/>
+  </object>
+  <object id="82" name="ProgBasicNameplateDialogue" x="894.348" y="612.665">
+   <point/>
+  </object>
+  <object id="83" name="prog_talk_prompt_npc" x="1142.37" y="439.777">
+   <point/>
+  </object>
+  <object id="84" name="prog_orange" x="725.778" y="374.119">
+   <point/>
+  </object>
+  <object id="85" name="prog_lime" x="567.011" y="375.191">
+   <point/>
+  </object>
+  <object id="86" name="prog_purple" x="502.045" y="373.808">
+   <point/>
+  </object>
+  <object id="87" name="prog_pink" x="598.056" y="375.583">
+   <point/>
+  </object>
+  <object id="88" name="prog_emerald" x="631.14" y="374.709">
+   <point/>
+  </object>
+  <object id="89" name="prog_red" x="470.264" y="375.347">
+   <point/>
+  </object>
+  <object id="90" name="prog_turquoise" x="536.241" y="375.957">
+   <point/>
+  </object>
+  <object id="91" name="prog_sapphire" x="662.748" y="375.612">
+   <point/>
+  </object>
+  <object id="92" name="prog_charcoal_grey" x="758.528" y="374.945">
+   <point/>
+  </object>
+  <object id="93" name="prog_yellow" x="696.244" y="376.264">
+   <point/>
+  </object>
+  <object id="94" name="prog_white" x="790.094" y="375.247">
+   <point/>
+  </object>
+  <object id="95" name="prog_default" x="470.75" y="440.25">
+   <point/>
+  </object>
+  <object id="96" name="ProgVertPromptLime" x="995.505" y="900.881">
+   <point/>
+  </object>
+  <object id="97" name="ProgVertPrompt2" x="992.255" y="641.888">
+   <point/>
+  </object>
+  <object id="98" name="ProgVertPrompt" x="991.625" y="700.431">
+   <point/>
+  </object>
+  <object id="99" name="ProgVertPromptSapphire" x="994.795" y="769.868">
+   <point/>
+  </object>
+  <object id="100" name="ProgVertPromptPink" x="994.35" y="833.999">
+   <point/>
+  </object>
+  <object id="101" name="ProgVertPromptCharcoalGrey" x="932.144" y="901.087">
+   <point/>
+  </object>
+  <object id="102" name="ProgVertPromptRed" x="705.489" y="674.565">
+   <point/>
+  </object>
+  <object id="103" name="ProgVertPromptEmeraldShop" x="705.085" y="608.742">
+   <point/>
+  </object>
+  <object id="104" name="ProgShop" x="704.767" y="546.879">
    <point/>
   </object>
  </objectgroup>

@@ -168,8 +168,89 @@ Net:on("player_join", function(event)
     Net.provide_asset_for_player(event.player_id, "/server/assets/net-games/fonts_thin.animation")
     Net.provide_asset_for_player(event.player_id, "/server/assets/net-games/fonts_tiny.animation")
     Net.provide_asset_for_player(event.player_id, "/server/assets/net-games/fonts_compressed.animation")
-    
+    Net.provide_asset_for_player(event.player_id, "/server/assets/net-games/fonts_dark_compressed.png")
+
 end)
+
+-- Try a handful of possible EO/Net APIs to move a player without hard-crashing
+local function try_move_player(player_id, area_id, x, y, z)
+  -- 1) transfer_player(player_id, area_id, x, y, z)
+  local ok = pcall(function()
+    if Net.transfer_player then
+      Net.transfer_player(player_id, area_id, x, y, z)
+    end
+  end)
+  if ok and Net.transfer_player then return true end
+
+  -- 2) transfer_player(player_id, area_id, warp_in, x, y, z) (some forks use warp_in bool)
+  ok = pcall(function()
+    if Net.transfer_player then
+      Net.transfer_player(player_id, area_id, false, x, y, z)
+    end
+  end)
+  if ok and Net.transfer_player then return true end
+
+  -- 3) move_player(player_id, x, y, z)
+  ok = pcall(function()
+    if Net.move_player then
+      Net.move_player(player_id, x, y, z)
+    end
+  end)
+  if ok and Net.move_player then return true end
+
+  -- 4) set_player_position(player_id, x, y, z)
+  ok = pcall(function()
+    if Net.set_player_position then
+      Net.set_player_position(player_id, x, y, z)
+    end
+  end)
+  if ok and Net.set_player_position then return true end
+
+  return false
+end
+
+-- Try common APIs to animate the player
+local function try_animate_player(player_id, anim_state)
+  -- 1) animate_player_properties(player_id, keyframes)
+  local ok = pcall(function()
+    if Net.animate_player_properties then
+      local keyframes = {
+        { properties = { { property = "Animation", value = anim_state } }, duration = 0 }
+      }
+      Net.animate_player_properties(player_id, keyframes)
+    end
+  end)
+  if ok and Net.animate_player_properties then return true end
+
+  -- 2) set_player_animation(player_id, anim_state)
+  ok = pcall(function()
+    if Net.set_player_animation then
+      Net.set_player_animation(player_id, anim_state)
+    end
+  end)
+  if ok and Net.set_player_animation then return true end
+
+  return false
+end
+
+
+-- Move the frozen player (Simon Says uses this after fading to black)
+function frame.move_frozen_player(player_id, x, y, z)
+  return async(function()
+    local area_id = Net.get_player_area(player_id)
+    try_move_player(player_id, area_id, x, y, z)
+    await(Async.sleep(0)) -- yields nicely for callers doing await(...)
+  end)
+end
+
+-- Animate the frozen player
+function frame.animate_frozen_player(player_id, anim_state)
+  return async(function()
+    try_animate_player(player_id, anim_state)
+    await(Async.sleep(0))
+  end)
+end
+
 
 
 -- PLAYER FUNCTIONS
@@ -223,7 +304,10 @@ function frame.set_cosmetic(cosmetic_id,player_id,texture,animation,state,x,y,vi
     if not last_position_cache[player_id] then
         last_position_cache[player_id] = {}
     end 
-    local area_id = last_position_cache[player_id]["area"]
+local area_id =
+  last_position_cache[player_id]["area"]
+  or Net.get_player_area(player_id)
+
     local position = Net.get_player_position(player_id)
     local xoffset,yoffset = convertOffsets(x*-1,y*-1,position.z+3)
     local xoffset,yoffset = fixOffsets(xoffset,yoffset)
@@ -261,7 +345,11 @@ end
 function frame.add_map_element(name,player_id,texture,animation,animation_state,X,Y,Z,exclude)
     
     --spawn map object
-    local area_id = last_position_cache[player_id]["area"]
+    
+local area_id =
+  (last_position_cache[player_id] and last_position_cache[player_id]["area"])
+  or Net.get_player_area(player_id)
+
     Net.create_bot(player_id.."-map-"..name, { area_id=area_id, warp_in=false, texture_path=texture, animation_path=animation, animation=animation_state,x=X, y=Y, z=Z, solid=false})
 
     if exclude == true then
@@ -290,8 +378,12 @@ function frame.change_map_element(name,player_id,animation_state,loop)
 end
 
 function frame.move_map_element(name,player_id,X,Y,Z)
-    local area_id = last_position_cache[player_id]["area"]
-    Net.transfer_bot(player_id.."-map-"..name, area_id, false, X, Y, Z)
+local area_id =
+  (last_position_cache[player_id] and last_position_cache[player_id]["area"])
+  or Net.get_player_area(player_id)
+
+Net.transfer_bot(player_id.."-map-"..name, area_id, false, X, Y, Z)
+
 end
 
 --purpose: removes UI element from screen
@@ -773,8 +865,24 @@ Net:on("virtual_input", function(event)
                 Net:emit("cursor_move", {player_id = event.player_id, cursor = cursor["name"], selection = cursor["current"], button = button.name})
             --if A button emit selection
             elseif (button.name == "Interact" or button.name == "Confirm") and button.state==1 then
-                Net:emit("cursor_selection", {player_id = event.player_id,cursor = cursor["name"],selection = cursor_cache[event.player_id]["selections"][cursor["current"]]["name"]})
+                -- Some systems set cursor_cache without selections (or clear selections during transitions).
+                -- Guard so dialogue/other virtual_input users can't crash menu selection logic.
+                local cc = cursor_cache[event.player_id]
+                local selections = cc and cc.selections
+                local idx = cc and cc.current
+
+                if selections and idx and selections[idx] and selections[idx].name then
+                    Net:emit("cursor_selection", {
+                        player_id = event.player_id,
+                        cursor = cc.name,
+                        selection = selections[idx].name
+                    })
+                else
+                    -- Optional debug (leave off if you don't want spam)
+                    -- print("[framework] cursor_selection ignored (missing selections/current)")
+                end
             end
+
         end
     end
 end)

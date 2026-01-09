@@ -8,7 +8,33 @@
 
 --the below line is required to access net-games functions
 local games = require("scripts/net-games/framework")
+local NetHelpers = require("scripts/net-games/helpers/net-helpers")
+NetHelpers.patch_net()
 
+NetHelpers.safe_require("scripts/net-games/dialogue/startup")
+
+-------------------------------------------
+-- DEMO CODE FOR NPC THAT LITTERALLY JUST TALK (WOW) --
+-------------------------------------------
+
+require("scripts/net-games/npcs/prog_banner_dialogue")
+require("scripts/net-games/npcs/prog_basic_dialogue")
+require("scripts/net-games/npcs/prog_basic_freedraw")
+require("scripts/net-games/npcs/prog_dramatic_dialogue")
+require("scripts/net-games/npcs/prog_dyed_dialogue")
+require("scripts/net-games/npcs/prog_prompt_dialogue")
+require("scripts/net-games/npcs/prog_basic_nameplate")
+require("scripts/net-games/npcs/prog_talk_dialogue")
+require("scripts/net-games/npcs/prog_talk_colors")
+require("scripts/net-games/npcs/prog_vert_prompt")
+require("scripts/net-games/npcs/prog_vert_prompt_2")
+require("scripts/net-games/npcs/prog_vert_prompt_sapphire")
+require("scripts/net-games/npcs/prog_vert_prompt_pink")
+require("scripts/net-games/npcs/prog_vert_prompt_lime")
+require("scripts/net-games/npcs/prog_vert_prompt_charcoal_grey")
+require("scripts/net-games/npcs/prog_vert_prompt_red")
+require("scripts/net-games/npcs/prog_vert_prompt_emerald")
+require("scripts/net-games/npcs/prog_shop")
 -------------------------------------------
 -- DEMO CODE FOR NPC THAT GIVES COSMETIC --
 -------------------------------------------
@@ -155,6 +181,8 @@ Net:on("cursor_selection", function(event)
         games.remove_text("megaman_label",event.player_id)
         games.remove_text("protoman_label",event.player_id)
         games.remove_cursor("navi_changer",event.player_id)
+        Net.unlock_player_input(event.player_id)
+
         local texture = ""
         local animation = ""
         if event.selection == "protoman" then
@@ -196,7 +224,7 @@ Net:on("actor_interaction", function (event)
 
         games.spawn_cursor("navi_changer",event.player_id,cursor_options)
         games.draw_text("roll_label",event.player_id,"<Roll_EXE>",40,40,100,"BATTLE")
-        games.draw_text("megaman_label",event.player_id,"Megaman.EXE",40,60,100,"THICK")
+        games.draw_text("megaman_label",event.player_id,"Megaman_EXE",40,60,100,"BATTLE")
         games.draw_text("protoman_label",event.player_id,"<PROTOMAN_EXE>",40,80,100,"BATTLE")
 
     end 
