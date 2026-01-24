@@ -397,7 +397,38 @@ end
 
 -- UI FUNCTIONS
 -- Functions to add, animate, and remove sprites based on camera's view (not map position)
+-- NEW FUNCTION: Check if a UI element has active animations
+function frame.has_active_animations(sprite_id, player_id)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        return false
+    end
+    
+    local element = ui_cache[player_id][sprite_id]
+    return element.animations and next(element.animations) ~= nil
+end
 
+-- NEW FUNCTION: Pause all animations for a UI element
+function frame.pause_ui_animations(sprite_id, player_id)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        return false
+    end
+    
+    -- Note: The current AnimationEngine doesn't have pause functionality
+    -- You would need to add this to AnimationEngine first
+    print("[games] Pause functionality not yet implemented in AnimationEngine")
+    return false
+end
+
+-- NEW FUNCTION: Resume all animations for a UI element
+function frame.resume_ui_animations(sprite_id, player_id)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        return false
+    end
+    
+    -- Note: The current AnimationEngine doesn't have pause/resume functionality
+    print("[games] Resume functionality not yet implemented in AnimationEngine")
+    return false
+end
 --purpose: places a UI element on screen... that's it. Yes, it's complicated. No, I won't explain it. Blame Jams!
 function frame.add_ui_element(sprite_id,player_id,texture_path,animation_path,animation_state,x,Y,Z,sx,sy)
 
@@ -557,8 +588,8 @@ function frame.update_ui_element(sprite_id,player_id,properties)
     Net.player_draw_sprite(player_id, ui_cache[player_id][sprite_id]["sprite_id"], sprite_data)
 end
 
--- NEW FUNCTION: Animate UI element using AnimationEngine
-function frame.animate_ui_element(sprite_id, player_id, target_properties, duration, easing, on_complete)
+-- NEW FUNCTION: Animate UI element using AnimationEngine with full looping support
+function frame.animate_ui_element(sprite_id, player_id, target_properties, duration, easing, on_complete, loop, ping_pong, easing_back)
     if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
         print("[games] UI element not found: " .. sprite_id)
         return nil
@@ -581,11 +612,10 @@ function frame.animate_ui_element(sprite_id, player_id, target_properties, durat
         color_mode = element.color_mode
     }
     
-    local anim_id = nil 
-    -- Create animation ID
-    anim_id = AnimationEngine.animate(start_values, target_properties, duration or 1.0, {
+    local anim_id = AnimationEngine.animate(start_values, target_properties, duration or 1.0, {
         easing = easing or "linear",
-        on_update = function(values)
+        easing_back = easing_back or easing or "linear",
+        on_update = function(values, t, phase)
             -- Update the UI element with animated values
             local update_props = {}
             
@@ -614,7 +644,9 @@ function frame.animate_ui_element(sprite_id, player_id, target_properties, durat
             if on_complete then
                 on_complete(values, interrupted)
             end
-        end
+        end,
+        loop = loop or false,
+        ping_pong = ping_pong or false
     })
     
     -- Track animation
@@ -635,8 +667,13 @@ function frame.stop_ui_animation(sprite_id, player_id, anim_id)
     local element = ui_cache[player_id][sprite_id]
     
     if anim_id then
-        -- Stop specific animation
+        -- Try to stop as animation first
         local success = AnimationEngine.stop_animation(anim_id)
+        if not success then
+            -- Try to stop as sequence
+            success = AnimationEngine.stop_sequence(anim_id)
+        end
+        
         if success and element.animations then
             element.animations[anim_id] = nil
         end
@@ -645,7 +682,9 @@ function frame.stop_ui_animation(sprite_id, player_id, anim_id)
         -- Stop all animations for this element
         if element.animations then
             for id, _ in pairs(element.animations) do
+                -- Try both animation and sequence stop methods
                 AnimationEngine.stop_animation(id)
+                AnimationEngine.stop_sequence(id)
             end
             element.animations = {}
         end
@@ -653,7 +692,7 @@ function frame.stop_ui_animation(sprite_id, player_id, anim_id)
     end
 end
 
--- NEW FUNCTION: Create animation sequence for UI element
+-- NEW FUNCTION: Create animation sequence for UI element with enhanced parameters
 function frame.create_ui_sequence(sprite_id, player_id, steps, options)
     if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
         print("[games] UI element not found: " .. sprite_id)
@@ -676,7 +715,7 @@ function frame.create_ui_sequence(sprite_id, player_id, steps, options)
             }
             
             -- Add on_update callback to update the UI element
-            step_copy.on_update = function(values)
+            step_copy.on_update = function(values, t, phase)
                 local update_props = {}
                 
                 if values.x ~= nil then update_props.x = values.x end
@@ -711,7 +750,7 @@ function frame.create_ui_sequence(sprite_id, player_id, steps, options)
     return seq_id
 end
 
--- NEW FUNCTION: Apply pre-built animation effects to UI element
+-- NEW FUNCTION: Apply pre-built animation effects to UI element with full looping support
 function frame.animate_ui_effect(sprite_id, player_id, effect_type, params)
     if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
         print("[games] UI element not found: " .. sprite_id)
@@ -722,49 +761,81 @@ function frame.animate_ui_effect(sprite_id, player_id, effect_type, params)
     
     -- Create a proxy object that AnimationEngine can animate
     local proxy_object = {
-        x = element.x,
-        y = element.y,
+        x = element.x or 0,
+        y = element.y or 0,
         sx = element.sx or 2.0, -- Use sx as uniform scale
         sy = element.sy or 2.0,
-        ro = element.ro,
-        opacity = element.opacity,
-        r = element.r,
-        g = element.g,
-        b = element.b,
-        a = element.a,
-        color_mode = element.color_mode,
+        ro = element.ro or 0,
+        opacity = element.opacity or 255,
+        r = element.r or 255,
+        g = element.g or 255,
+        b = element.b or 255,
+        a = element.a or 255,
+        color_mode = element.color_mode or 0,
     }
     
     local anim_id
     
     if effect_type == "move_to" then
-        anim_id = AnimationEngine.move_to(proxy_object, params.x, params.y, params.duration or 1.0, params.easing, function()
+        anim_id = AnimationEngine.move_to(proxy_object, params.x, params.y, 
+                                         params.duration or 1.0, params.easing, 
+                                         function()
             if params.on_complete then params.on_complete() end
-        end)
+        end, params.loop, params.ping_pong, params.easing_back)
     elseif effect_type == "scale_to" then
-        anim_id = AnimationEngine.scale_to(proxy_object, params.scale, params.duration or 1.0, params.easing, function()
+        anim_id = AnimationEngine.scale_to(proxy_object, params.scale, 
+                                          params.duration or 1.0, params.easing, 
+                                          function()
             if params.on_complete then params.on_complete() end
-        end)
+        end, params.loop, params.ping_pong, params.easing_back)
     elseif effect_type == "rotate_to" then
-        anim_id = AnimationEngine.rotate_to(proxy_object, params.angle, params.duration or 1.0, params.easing, function()
+        anim_id = AnimationEngine.rotate_to(proxy_object, params.angle, 
+                                           params.duration or 1.0, params.easing, 
+                                           function()
             if params.on_complete then params.on_complete() end
-        end)
+        end, params.loop, params.ping_pong, params.easing_back)
     elseif effect_type == "fade_to" then
-        anim_id = AnimationEngine.fade_to(proxy_object, params.alpha, params.duration or 1.0, params.easing, function()
+        anim_id = AnimationEngine.fade_to(proxy_object, params.alpha, 
+                                         params.duration or 1.0, params.easing, 
+                                         function()
             if params.on_complete then params.on_complete() end
-        end)
+        end, params.loop, params.ping_pong, params.easing_back)
+    elseif effect_type == "tint_to" then
+        anim_id = AnimationEngine.tint_to(proxy_object, params.r or 255, params.g or 255, params.b or 255, 
+                                         params.duration or 1.0, params.easing, 
+                                         function()
+            if params.on_complete then params.on_complete() end
+        end, params.loop, params.ping_pong, params.easing_back)
     elseif effect_type == "pulse" then
-        anim_id = AnimationEngine.pulse(proxy_object, params.min_scale or 0.8, params.max_scale or 1.2, 
-                                       params.duration or 0.5, params.loops, function()
-            if params.on_complete then params.on_complete() end
-        end)
+        -- Use the new animate function for pulse with looping support
+        local start_scale = element.sx or 2.0
+        anim_id = AnimationEngine.animate(
+            {scale = start_scale},
+            {scale = params.max_scale or 1.2},
+            (params.duration or 0.5) / 2,
+            {
+                easing = params.easing or "ease_in_out",
+                easing_back = params.easing_back or params.easing or "ease_in_out",
+                on_update = function(values)
+                    local update_props = {sx = values.scale, sy = values.scale}
+                    frame.update_ui_element(sprite_id, player_id, update_props)
+                end,
+                on_complete = function()
+                    if params.on_complete then params.on_complete() end
+                end,
+                loop = params.loops or params.loop,
+                ping_pong = true  -- Pulse always ping-pongs between min and max
+            }
+        )
     elseif effect_type == "shake" then
-        anim_id = AnimationEngine.shake(proxy_object, params.intensity or 5, params.duration or 0.5, 
+        anim_id = AnimationEngine.shake(proxy_object, params.intensity or 5, 
+                                       params.duration or 0.5, 
                                        params.frequency or 10, function()
             if params.on_complete then params.on_complete() end
         end)
     elseif effect_type == "bounce_in" then
-        anim_id = AnimationEngine.bounce_in(proxy_object, params.start_scale or 0, params.duration or 0.5, function()
+        anim_id = AnimationEngine.bounce_in(proxy_object, params.start_scale or 0, 
+                                           params.duration or 0.5, function()
             if params.on_complete then params.on_complete() end
         end)
     end
@@ -824,11 +895,12 @@ function frame.update_ui_position(sprite_id, player_id, x, Y, Z)
     end
 end
 
---purpose: slide an existing UI element across the screen over a specified duration
-function frame.slide_ui_element(sprite_id,player_id,x,Y,duration)
+-- Updated slide_ui_element to support looping
+function frame.slide_ui_element(sprite_id, player_id, x, y, duration, easing, on_complete, loop, ping_pong, easing_back)
     -- Use the new animation system
-    local target_props = {x = x, y = Y}
-    return frame.animate_ui_element(sprite_id, player_id, target_props, duration or 1.0, "ease_in_out")
+    local target_props = {x = x, y = y}
+    return frame.animate_ui_element(sprite_id, player_id, target_props, duration or 1.0, 
+                                    easing or "ease_in_out", on_complete, loop, ping_pong, easing_back)
 end
 
 --purpose: make camera pannable freely with arrows but without player following. 

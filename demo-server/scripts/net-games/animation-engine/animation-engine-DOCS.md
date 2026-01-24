@@ -1,444 +1,467 @@
-AnimationEngine - Comprehensive Documentation
+Animation Engine Documentation
 Overview
-AnimationEngine is a standalone Lua library for creating smooth animations, interpolations, and effects with various easing functions. It's completely decoupled from any specific rendering system, making it reusable across different projects.
+The Animation Engine is a powerful, reusable animation system for Lua that provides:
 
-Core Concepts
-1. Animation Basics
-An animation consists of:
+Smooth interpolation between values
 
-Start values: Initial state
+Multiple easing functions for natural motion
 
-Target values: Desired end state
+Animation sequences and chaining
 
-Duration: Time to complete (seconds)
+Pre-built visual effects
 
-Easing function: How the interpolation progresses over time
+Callback support for custom logic
 
-2. Easing Functions
-Built-in easing modes:
-
-linear: Constant speed
-
-ease_in: Starts slow, accelerates
-
-ease_out: Starts fast, decelerates
-
-ease_in_out: Combines both
-
-smoothstep: Smooth acceleration/deceleration
-
-elastic_in: Elastic bounce at start
-
-elastic_out: Elastic bounce at end
-
-bounce_out: Bouncing effect at end
-
-Installation
+Installation & Setup
 lua
--- In your main script:
+-- In your main game file
 local AnimationEngine = require("/server/scripts/ezlibs-custom/animation_engine")
-Core API Reference
-1. Configuration
+
+-- Make sure to call the update function in your game loop
+function onTick(dt)
+    AnimationEngine.tick(dt)
+end
+Basic Usage
+Simple Property Animation
 lua
--- Toggle debug logging
-AnimationEngine.set_debug(true)  -- Default: true
-
--- Add custom easing function
-AnimationEngine.add_easing_function("my_easing", function(t)
-    return t * t * t  -- Custom cubic easing
-end)
-
--- Set default interpolation speeds (optional)
-AnimationEngine.set_interpolation_speeds(
-    position_speed,  -- units/sec (default: 10)
-    angle_speed,     -- degrees/sec (default: 180)
-    color_speed,     -- color/sec (default: 5)
-    scale_speed      -- scale/sec (default: 2)
-)
-2. Basic Animation
-AnimationEngine.animate(start_values, target_values, duration, options)
-Creates a generic animation.
-
-Parameters:
-
-start_values: Table of starting values {x=0, y=0, scale=1, etc}
-
-target_values: Table of target values
-
-duration: Animation duration in seconds
-
-options: Optional table with:
-
-easing: Easing function name (default: "linear")
-
-on_update: Function called each frame with current values
-
-on_complete: Function called when animation finishes
-
-id: Custom animation ID (auto-generated if not provided)
-
-Returns: Animation ID string
-
-Example:
-
-lua
-local animId = AnimationEngine.animate(
-    {x=0, y=0, scale=1},          -- Start values
-    {x=100, y=50, scale=2},       -- Target values
-    2.0,                          -- 2 seconds
+-- Animate a position
+AnimationEngine.animate(
+    {x = 0, y = 0},           -- Start values
+    {x = 100, y = 200},       -- Target values
+    2.0,                      -- Duration in seconds
     {
-        easing = "ease_in_out",
+        easing = "ease_in_out", -- Easing function name
         on_update = function(values)
-            -- Update your object here
+            -- Called every frame with interpolated values
             myObject.x = values.x
             myObject.y = values.y
-            myObject.scale = values.scale
         end,
-        on_complete = function()
-            print("Animation complete!")
+        on_complete = function(values, interrupted)
+            if not interrupted then
+                print("Animation completed!")
+            end
         end
     }
 )
-3. Convenience Animation Functions
-Move Animation
+Using Pre-built Effects
 lua
-AnimationEngine.move_to(object, target_x, target_y, duration, easing, on_complete)
--- Automatically reads object.x and object.y as start values
--- If object has setPosition(x,y) method, it will be called
--- Otherwise, object.x and object.y will be set directly
-Scale Animation
-lua
-AnimationEngine.scale_to(object, target_scale, duration, easing, on_complete)
-Rotation Animation
-lua
-AnimationEngine.rotate_to(object, target_angle, duration, easing, on_complete)
-Fade Animation
-lua
-AnimationEngine.fade_to(object, target_alpha, duration, easing, on_complete)
--- Alpha range: 0-255 or 0-1 depending on your system
-Color Tint Animation
-lua
-AnimationEngine.tint_to(object, target_r, target_g, target_b, duration, easing, on_complete)
--- Color range: 0-255
-4. Pre-built Effects
-Pulse Effect
-Creates a pulsating scale animation.
+-- Move an object
+AnimationEngine.move_to(myObject, 300, 200, 1.5, "ease_out")
 
-lua
-AnimationEngine.pulse(object, min_scale, max_scale, duration, loops, on_complete)
--- min_scale: Minimum scale (e.g., 0.8)
--- max_scale: Maximum scale (e.g., 1.2)
--- duration: Time for one complete pulse cycle
--- loops: Number of pulses (nil for infinite)
-Shake Effect
-Creates a screen shake/vibration effect.
+-- Scale an object
+AnimationEngine.scale_to(myObject, 2.0, 1.0, "ease_in_out")
 
-lua
-AnimationEngine.shake(object, intensity, duration, frequency, on_complete)
--- intensity: Maximum shake distance in units
--- duration: Total shake time in seconds
--- frequency: Shakes per second
-Bounce In Effect
-Elastic bounce-in animation for UI elements.
+-- Rotate an object
+AnimationEngine.rotate_to(myObject, 360, 2.0, "ease_in_out")
 
-lua
-AnimationEngine.bounce_in(object, start_scale, duration, on_complete)
--- start_scale: Starting scale (e.g., 0 for scale from 0 to 1)
-5. Animation Sequences
-Sequences allow chaining multiple animations and delays.
+-- Fade in/out
+AnimationEngine.fade_to(myObject, 0, 1.0, "ease_in_out") -- Fade out
 
-Creating a Sequence
-lua
-local sequenceId = AnimationEngine.create_sequence(steps, options)
+-- Color tint
+AnimationEngine.tint_to(myObject, 255, 0, 0, 1.0, "ease_in_out") -- Tint to red
+Easing Functions
+The engine includes 13 built-in easing functions:
 
--- Steps format:
-local steps = {
+Function	Description	Best For
+linear	Constant speed	Simple movements
+ease_in	Starts slow, accelerates	Starting motions
+ease_out	Starts fast, decelerates	Ending motions
+ease_in_out	Starts/ends slow	Natural movements
+smoothstep	Very smooth curve	UI animations
+smootherstep	Even smoother	Premium feel
+elastic_in	Elastic bounce at start	Attention-grabbing
+elastic_out	Elastic bounce at end	Playful effects
+elastic_in_out	Elastic both ends	Cartoon effects
+bounce_in	Bounces into view	Playful entrances
+bounce_out	Bounces out of view	Playful exits
+square	Quadratic acceleration	Power effects
+cubic	Cubic acceleration	Strong emphasis
+Animation Sequences
+Sequences allow you to chain multiple animations together with delays and callbacks.
+
+Basic Sequence
+lua
+local sequenceId = AnimationEngine.create_sequence({
+    -- Step 1: Move right
     {
-        type = "animate",      -- or "delay" or "callback"
-        target = {x=100, y=50},-- Target values (for animate)
-        duration = 1.0,        -- Duration in seconds
-        easing = "ease_out",   -- Easing function
-        on_update = function(values)
-            -- Update object each frame
-        end
+        type = "animate",
+        target = {x = "current+100"},  -- Relative to current position
+        duration = 1.0,
+        easing = "ease_out"
     },
+    
+    -- Step 2: Pause for 0.5 seconds
     {
         type = "delay",
-        duration = 0.5         -- Wait 0.5 seconds
+        duration = 0.5
     },
+    
+    -- Step 3: Scale up
+    {
+        type = "animate",
+        target = {scale = 2.0},
+        duration = 0.8,
+        easing = "elastic_out"
+    },
+    
+    -- Step 4: Call custom function
     {
         type = "callback",
         callback = function()
-            -- Execute custom code
+            print("Sequence step 4 completed!")
+        end
+    },
+    
+    -- Step 5: Return to original size
+    {
+        type = "animate",
+        target = {scale = "original"},  -- Returns to original scale
+        duration = 0.8,
+        easing = "bounce_out"
+    }
+}, {
+    loop = false,  -- Set to true for infinite loop
+    on_complete = function()
+        print("Entire sequence completed!")
+    end
+})
+
+-- Start the sequence
+AnimationEngine.start_sequence(sequenceId)
+Advanced Sequence with Object Control
+lua
+local myCharacter = {x = 100, y = 100, scale = 1.0}
+
+local walkSequence = AnimationEngine.create_sequence({
+    -- Walk right
+    {
+        type = "animate",
+        target = {x = "current+50"},
+        duration = 0.5,
+        easing = "linear",
+        on_update = function(values)
+            myCharacter.x = values.x
+            myCharacter.scale = 1.0  -- Face right
+        end
+    },
+    
+    -- Jump
+    {
+        type = "animate",
+        start = {y = "current"},
+        target = {y = "current-30"},  -- Jump up
+        duration = 0.3,
+        easing = "ease_out"
+    },
+    {
+        type = "animate",
+        target = {y = "current"},  -- Fall down
+        duration = 0.3,
+        easing = "ease_in"
+    },
+    
+    -- Walk left
+    {
+        type = "animate",
+        target = {x = "current-50"},
+        duration = 0.5,
+        easing = "linear",
+        on_update = function(values)
+            myCharacter.x = values.x
+            myCharacter.scale = -1.0  -- Face left (flipped)
         end
     }
-}
+}, {
+    loop = true,  -- Loop forever
+    id = "walk_animation"  -- Custom ID for easy reference
+})
 
--- Options:
-local options = {
-    loop = true,              -- Loop indefinitely
-    on_complete = function()  -- Called when sequence ends
-        print("Sequence complete!")
+AnimationEngine.start_sequence(walkSequence)
+Pre-built Effects
+Pulse Effect
+lua
+-- Simple pulse (infinite loop by default)
+AnimationEngine.pulse(myObject, 0.8, 1.2, 0.5)
+
+-- Pulse with specific number of loops
+AnimationEngine.pulse(myObject, 0.8, 1.2, 0.5, 3, function()
+    print("Pulsed 3 times!")
+end)
+Shake Effect
+lua
+-- Shake an object
+AnimationEngine.shake(myObject, 10, 1.0, 30, function()
+    print("Shake complete!")
+end)
+
+-- Stronger, longer shake
+AnimationEngine.shake(myObject, 20, 2.0, 15)
+Bounce In Effect
+lua
+-- Bounce an object into view
+AnimationEngine.bounce_in(myObject, 0.1, 1.5, function()
+    print("Bounced in!")
+end)
+Loop Animations for Properties
+You can create infinite or limited loops for any property:
+
+Method 1: Using Sequences with Loop Flag
+lua
+-- Loop rotation forever
+local rotateLoop = AnimationEngine.create_sequence({
+    {
+        type = "animate",
+        start = {angle = 0},
+        target = {angle = 360},
+        duration = 2.0,
+        easing = "linear",
+        on_update = function(values)
+            myObject.angle = values.angle
+        end
+    }
+}, {
+    loop = true,
+    id = "rotation_loop"
+})
+
+AnimationEngine.start_sequence(rotateLoop)
+
+-- Stop the loop later
+AnimationEngine.stop_sequence("rotation_loop")
+Method 2: Custom Loop Function
+lua
+function createBreatheLoop(object, property, minValue, maxValue, duration, easing)
+    local seqId = AnimationEngine.create_sequence({
+        {
+            type = "animate",
+            target = {[property] = maxValue},
+            duration = duration / 2,
+            easing = easing,
+            on_update = function(values)
+                object[property] = values[property]
+            end
+        },
+        {
+            type = "animate",
+            target = {[property] = minValue},
+            duration = duration / 2,
+            easing = easing,
+            on_update = function(values)
+                object[property] = values[property]
+            end
+        }
+    }, {
+        loop = true
+    })
+    
+    return seqId
+end
+
+-- Usage: Breathe alpha between 100 and 255
+local breatheAlpha = createBreatheLoop(myObject, "alpha", 100, 255, 2.0, "ease_in_out")
+AnimationEngine.start_sequence(breatheAlpha)
+Method 3: Using Relative Values in Loop
+lua
+-- Oscillate between positions
+local oscillateSeq = AnimationEngine.create_sequence({
+    {
+        type = "animate",
+        target = {x = "current+100"},
+        duration = 1.0,
+        easing = "ease_in_out",
+        on_update = function(values)
+            myObject.x = values.x
+        end
+    },
+    {
+        type = "animate",
+        target = {x = "current-100"},
+        duration = 1.0,
+        easing = "ease_in_out",
+        on_update = function(values)
+            myObject.x = values.x
+        end
+    }
+}, {
+    loop = true
+})
+
+AnimationEngine.start_sequence(oscillateSeq)
+Advanced Examples
+Complex Character Animation
+lua
+function animateCharacterEntrance(character)
+    local seqId = AnimationEngine.create_sequence({
+        -- Fade in
+        {
+            type = "animate",
+            start = {alpha = 0},
+            target = {alpha = 255},
+            duration = 0.5,
+            easing = "ease_in"
+        },
+        
+        -- Drop from above with bounce
+        {
+            type = "animate",
+            start = {y = -100},
+            target = {y = character.y},
+            duration = 0.8,
+            easing = "bounce_out"
+        },
+        
+        -- Shake on landing
+        {
+            type = "callback",
+            callback = function()
+                AnimationEngine.shake(character, 5, 0.3, 20)
+            end
+        },
+        
+        -- Pulse to indicate readiness
+        {
+            type = "delay",
+            duration = 0.2
+        },
+        {
+            type = "callback",
+            callback = function()
+                AnimationEngine.pulse(character, 0.9, 1.1, 0.3, 2)
+            end
+        }
+    }, {
+        id = "character_entrance_" .. character.id
+    })
+    
+    AnimationEngine.start_sequence(seqId)
+    return seqId
+end
+UI Animation System
+lua
+local UIAnimations = {
+    slideIn = function(uiElement, fromSide)
+        local startX, startY = uiElement.x, uiElement.y
+        local targetX, targetY = uiElement.x, uiElement.y
+        
+        if fromSide == "left" then
+            startX = -uiElement.width
+        elseif fromSide == "right" then
+            startX = love.graphics.getWidth()
+        elseif fromSide == "top" then
+            startY = -uiElement.height
+        elseif fromSide == "bottom" then
+            startY = love.graphics.getHeight()
+        end
+        
+        return AnimationEngine.move_to(uiElement, targetX, targetY, 0.5, "elastic_out")
+    end,
+    
+    slideOut = function(uiElement, toSide)
+        local targetX, targetY = uiElement.x, uiElement.y
+        
+        if toSide == "left" then
+            targetX = -uiElement.width
+        elseif toSide == "right" then
+            targetX = love.graphics.getWidth()
+        elseif toSide == "top" then
+            targetY = -uiElement.height
+        elseif toSide == "bottom" then
+            targetY = love.graphics.getHeight()
+        end
+        
+        return AnimationEngine.move_to(uiElement, targetX, targetY, 0.3, "ease_in")
+    end,
+    
+    highlight = function(uiElement)
+        AnimationEngine.tint_to(uiElement, 255, 255, 200, 0.2, "ease_in_out", function()
+            AnimationEngine.tint_to(uiElement, 255, 255, 255, 0.2, "ease_in_out")
+        end)
     end
 }
-Starting a Sequence
-lua
-AnimationEngine.start_sequence(sequenceId)
-Advanced Sequence Features
-Relative Values:
-
-lua
-{
-    type = "animate",
-    target = {
-        x = "current+10",     -- Move 10 units right from current position
-        y = "original"        -- Return to original Y position
-    },
-    duration = 1.0
-}
-Available value references:
-
-"current": Current value from previous step
-
-"current+10": Current value plus offset
-
-"original": Original value from sequence start
-
-6. Utility Functions
-Delay
-lua
-AnimationEngine.delay(2.0, function()
-    print("This runs after 2 seconds")
-end)
+Management and Control
 Stop Animations
 lua
 -- Stop specific animation
-AnimationEngine.stop_animation(animId)
+AnimationEngine.stop_animation(animationId)
 
 -- Stop specific sequence
 AnimationEngine.stop_sequence(sequenceId)
 
--- Stop all animations
+-- Clear all animations
 AnimationEngine.clear_all()
-Get Statistics
+Check Status
 lua
+-- Get counts
 local activeAnimations = AnimationEngine.get_active_count()
 local activeSequences = AnimationEngine.get_sequence_count()
-7. Integration with Game Loop
+
+print("Active: " .. activeAnimations .. " animations, " .. activeSequences .. " sequences")
+Delayed Actions
 lua
--- Call this every frame with delta time
-function update(dt)
-    AnimationEngine.tick(dt)
-end
-
--- Or hook into your game's tick event:
-Net:on("tick", function(event)
-    AnimationEngine.tick(event.delta_time)
-end)
-Complete Examples
-Example 1: Basic Object Animation
-lua
--- Define an object (could be anything with x,y,scale properties)
-local mySprite = {
-    x = 100,
-    y = 100,
-    scale = 1,
-    angle = 0,
-    alpha = 255,
-    r = 255,
-    g = 255,
-    b = 255
-}
-
--- Move with bounce easing
-AnimationEngine.move_to(mySprite, 300, 200, 1.5, "bounce_out", function()
-    print("Moved to position!")
-end)
-
--- Fade out
-AnimationEngine.fade_to(mySprite, 128, 1.0, "ease_in_out")
-
--- Complex animation with multiple properties
-AnimationEngine.animate(
-    {scale=1, angle=0},
-    {scale=2, angle=360},
-    2.0,
-    {
-        easing = "ease_in_out",
-        on_update = function(values)
-            mySprite.scale = values.scale
-            mySprite.angle = values.angle
-            -- Update your rendering system here
-            renderSprite(mySprite)
-        end
-    }
+-- Execute after delay
+AnimationEngine.delay(2.0, function()
+    print("This runs after 2 seconds!")
 )
-Example 2: Complex Sequence
-lua
-local uiElement = {x=50, y=50, scale=1, alpha=255}
 
-local seqId = AnimationEngine.create_sequence({
-    -- Fade in
-    {
-        type = "animate",
-        start = {alpha=0},
-        target = {alpha=255},
-        duration = 0.5,
-        easing = "ease_out",
-        on_update = function(values)
-            uiElement.alpha = values.alpha
-        end
-    },
-    
-    -- Bounce into position
-    {
-        type = "animate",
-        target = {x=200, scale=1.2},
-        duration = 0.8,
-        easing = "elastic_out"
-    },
-    {
-        type = "animate",
-        target = {scale=1.0},
-        duration = 0.3,
-        easing = "bounce_out"
-    },
-    
-    -- Wait a moment
-    {
-        type = "delay",
-        duration = 1.0
-    },
-    
-    -- Shake for attention
-    {
-        type = "callback",
-        callback = function()
-            AnimationEngine.shake(uiElement, 5, 0.5, 10)
-        end
-    },
-    
-    -- Pulse continuously
-    {
-        type = "callback",
-        callback = function()
-            AnimationEngine.pulse(uiElement, 0.95, 1.05, 1.0)
-        end
-    }
-}, {
-    on_complete = function()
-        print("UI element fully animated!")
-    end
+-- Chain delays
+AnimationEngine.delay(1.0, function()
+    print("First delay")
+    AnimationEngine.delay(1.0, function()
+        print("Second delay")
+    end)
+end)
+Animation Enums Documentation
+The animation-enums.lua file provides a convenient way to reference easing function names:
+
+lua
+local Enums = require("scripts/net-games/animation-engine/animation-enums")
+
+-- Use enums for type safety
+AnimationEngine.animate(start, target, duration, {
+    easing = Enums.EasingFns.elastic_out,
+    on_update = function(values) -- ... end
 })
 
-AnimationEngine.start_sequence(seqId)
-Example 3: Sprite Integration
-lua
--- Integration with a sprite system
-local function animateSprite(sprite, params)
-    -- params: {x, y, scale, rotation, alpha, r, g, b, duration, easing}
-    
-    local animValues = {}
-    for key, value in pairs(params) do
-        if key ~= "duration" and key ~= "easing" and key ~= "on_complete" then
-            animValues[key] = value
-        end
-    end
-    
-    -- Get current values from sprite
-    local currentValues = {
-        x = sprite:getX(),
-        y = sprite:getY(),
-        scale = sprite:getScale(),
-        rotation = sprite:getRotation(),
-        alpha = sprite:getAlpha(),
-        r = sprite:getRed(),
-        g = sprite:getGreen(),
-        b = sprite:getBlue()
-    }
-    
-    return AnimationEngine.animate(
-        currentValues,
-        animValues,
-        params.duration or 0.5,
-        {
-            easing = params.easing or "linear",
-            on_update = function(values)
-                sprite:setPosition(values.x, values.y)
-                sprite:setScale(values.scale)
-                sprite:setRotation(values.rotation)
-                sprite:setAlpha(values.alpha)
-                sprite:setColor(values.r, values.g, values.b)
-            end,
-            on_complete = params.on_complete
-        }
-    )
-end
-Best Practices
-Always clean up: Use AnimationEngine.clear_all() when switching scenes/levels
+-- All available enums
+print(Enums.EasingFns.linear)        -- "linear"
+print(Enums.EasingFns.ease_in_out)   -- "ease_in_out"
+print(Enums.EasingFns.bounce_in)     -- "bounce_in"
+Tips & Best Practices
+Use meaningful IDs: Assign custom IDs to important animations for easy management
 
-Use appropriate easing:
+Clean up on object removal: Call AnimationEngine.clear_all() or stop specific animations when objects are destroyed
 
-UI elements: ease_out or bounce_out
+Chain callbacks: Use the on_complete callback to trigger the next action
 
-Physical objects: linear or ease_in_out
+Mix easing functions: Combine different easings in sequences for natural motion
 
-Attention effects: elastic or bounce
+Use relative values: "current+50" is more maintainable than hardcoded values
 
-Keep durations reasonable:
+Test performance: Complex sequences with many objects may need optimization
 
-UI animations: 0.2-0.5 seconds
-
-Transitions: 0.5-1.5 seconds
-
-Special effects: Varies based on effect
-
-Chain with sequences: For complex animations instead of nested callbacks
-
-Test performance: Monitor with get_active_count() if animating many objects
+Use loops sparingly: Infinite loops can accumulate; remember to stop them when done
 
 Troubleshooting
-Problem: Animations don't run
-Solution: Ensure AnimationEngine.tick(dt) is called every frame
+Animation not playing?
 
-Problem: Memory leak
-Solution: Call AnimationEngine.clear_all() when objects are destroyed
+Make sure AnimationEngine.tick(dt) is called in your game loop
 
-Problem: Animations are jumpy
-Solution: Ensure consistent delta time in tick() calls
+Check that duration > 0
 
-Problem: Object properties not updating
-Solution: Check that on_update callback correctly sets object properties
+Verify easing function name is spelled correctly
 
-Advanced Usage
-Custom Interpolation
-lua
--- Manual interpolation between any values
-local currentScale = AnimationEngine.interpolate(
-    1.0,      -- Start
-    2.0,      -- Target
-    0.5,      -- t (0-1)
-    "ease_in" -- Easing
-)
+"Invalid key to 'next'" error?
 
--- Table interpolation
-local pos = AnimationEngine.interpolate(
-    {x=0, y=0},
-    {x=100, y=50},
-    0.5,
-    "ease_out"
-)
-Creating Composite Effects
-lua
-function flashEffect(object, duration)
-    local originalAlpha = object.alpha or 255
-    local sequence = {
-        {type="animate", target={alpha=0}, duration=duration/4, easing="linear"},
-        {type="animate", target={alpha=originalAlpha}, duration=duration/4, easing="linear"},
-        {type="animate", target={alpha=0}, duration=duration/4, easing="linear"},
-        {type="animate", target={alpha=originalAlpha}, duration=duration/4, easing="linear"}
-    }
-    return AnimationEngine.create_sequence(sequence)
-end
+Use the fixed update functions provided above
 
-This documentation covers all major aspects of the AnimationEngine. The library is flexible and can be adapted to any object system that needs smooth animations and transitions.
+Don't modify animation tables in callbacks (create new animations instead)
+
+Animation jumps at end?
+
+Make sure start and target values are the correct type (both numbers or both tables)
+
+Memory leaks?
+
+Always stop sequences when objects are destroyed
+
+Use AnimationEngine.clear_all() when switching scenes
