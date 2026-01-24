@@ -589,16 +589,16 @@ function frame.update_ui_element(sprite_id,player_id,properties)
 end
 
 -- NEW FUNCTION: Animate UI element using AnimationEngine with full looping support
-function frame.animate_ui_element(sprite_id, player_id, target_properties, duration, easing, on_complete, loop, ping_pong, easing_back)
+function frame.animate_ui_element(sprite_id, player_id, start_values, target_properties, duration, easing, on_complete, loop, ping_pong, easing_back)
     if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
         print("[games] UI element not found: " .. sprite_id)
         return nil
     end
     
     local element = ui_cache[player_id][sprite_id]
-    
+    local anim_id = nil
     -- Create start values from current element state
-    local start_values = {
+    local start_values = start_values or {
         x = element.x,
         y = element.y,
         sx = element.sx,
@@ -612,7 +612,7 @@ function frame.animate_ui_element(sprite_id, player_id, target_properties, durat
         color_mode = element.color_mode
     }
     
-    local anim_id = AnimationEngine.animate(start_values, target_properties, duration or 1.0, {
+    anim_id = AnimationEngine.animate(start_values, target_properties, duration or 1.0, {
         easing = easing or "linear",
         easing_back = easing_back or easing or "linear",
         on_update = function(values, t, phase)
