@@ -430,7 +430,7 @@ function frame.resume_ui_animations(sprite_id, player_id)
     return false
 end
 --purpose: places a UI element on screen... that's it. Yes, it's complicated. No, I won't explain it. Blame Jams!
-function frame.add_ui_element(sprite_id,player_id,texture_path,animation_path,animation_state,x,Y,Z,sx,sy)
+function frame.add_ui_element(sprite_id,player_id,texture_path,animation_path,animation_state,x,y,z,sx,sy)
 
     local sx = 2.0
     local sy = 2.0
@@ -473,10 +473,11 @@ function frame.add_ui_element(sprite_id,player_id,texture_path,animation_path,an
         {
             id = sprite_id .. "_obj",
             x = x*2, 
-            y = Y*2, 
+            y = y*2,
+            z = z*2 or 0, 
             sx = sx,
             sy = sy,
-            ro=0,
+            ro= 0,
             ox = 0,
             oy = 0,
             a = 255,
@@ -496,7 +497,7 @@ function frame.add_ui_element(sprite_id,player_id,texture_path,animation_path,an
     ui_cache[player_id][sprite_id] = {
         texture_path=texture_path, 
         sprite_id=new_sprite_id, 
-        x=x, y=Y, z=Z or 0,
+        x=x, y=y, z=z or 0,
         sx=sx, sy=sy, 
         ro=0,
         ox = 0,
@@ -609,7 +610,8 @@ function frame.animate_ui_element(sprite_id, player_id, start_values, target_pro
         r = element.r,
         g = element.g,
         b = element.b,
-        color_mode = element.color_mode
+        color_mode = element.color_mode,
+        discrete = element.discrete or {}
     }
     
     anim_id = AnimationEngine.animate(start_values, target_properties, duration or 1.0, {
@@ -631,7 +633,7 @@ function frame.animate_ui_element(sprite_id, player_id, start_values, target_pro
             if values.g ~= nil then update_props.g = math.floor(values.g) end
             if values.b ~= nil then update_props.b = math.floor(values.b) end
             if values.color_mode ~= nil then update_props.color_mode = values.color_mode end
-
+            
             frame.update_ui_element(sprite_id, player_id, update_props)
         end,
         on_complete = function(values, interrupted)
@@ -646,7 +648,8 @@ function frame.animate_ui_element(sprite_id, player_id, start_values, target_pro
             end
         end,
         loop = loop or false,
-        ping_pong = ping_pong or false
+        ping_pong = ping_pong or false,
+        discrete = start_values.discrete
     })
     
     -- Track animation

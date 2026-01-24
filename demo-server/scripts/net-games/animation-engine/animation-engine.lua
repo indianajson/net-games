@@ -120,10 +120,18 @@ end
 -- Core Interpolation Functions
 -- ---------------------------------------------------------------------------
 
--- Generic interpolation function
-function AnimationEngine.interpolate(start, target, t, easing)
+-- Generic interpolation function with support for discrete values
+function AnimationEngine.interpolate(start, target, t, easing, discrete)
     local ease_func = cfg.easing_functions[easing] or cfg.easing_functions.linear
     local eased_t = ease_func(t)
+    
+    -- Create a set of discrete keys for fast lookup
+    local discrete_set = {}
+    if discrete then
+        for _, key in ipairs(discrete) do
+            discrete_set[key] = true
+        end
+    end
     
     if type(start) == "number" and type(target) == "number" then
         return start + (target - start) * eased_t
@@ -131,12 +139,40 @@ function AnimationEngine.interpolate(start, target, t, easing)
         local result = {}
         for key, start_value in pairs(start) do
             local target_value = target[key]
-            if type(start_value) == "number" and type(target_value) == "number" then
+            
+            -- Check if this key should be discrete
+            if discrete_set[key] then
+                -- Discrete value: only change at the end of animation
+                if t >= 1.0 then
+                    result[key] = target_value or start_value
+                else
+                    result[key] = start_value
+                end
+            elseif type(start_value) == "number" and type(target_value) == "number" then
+                -- Regular interpolation for numeric values
                 result[key] = start_value + (target_value - start_value) * eased_t
             else
+                -- Non-numeric or mismatched types - set to target immediately
                 result[key] = target_value or start_value
             end
         end
+        
+        -- Also include any keys in target that aren't in start
+        for key, target_value in pairs(target) do
+            if not start[key] then
+                -- Check if this key should be discrete
+                if discrete_set[key] then
+                    -- Discrete value: only change at the end of animation
+                    if t >= 1.0 then
+                        result[key] = target_value
+                    end
+                else
+                    -- Non-numeric or new value - set to target immediately
+                    result[key] = target_value
+                end
+            end
+        end
+        
         return result
     end
     
@@ -152,6 +188,7 @@ function AnimationEngine.animate(start_values, target_values, duration, options)
     local on_complete = options.on_complete
     local loop = options.loop or false -- Can be true (infinite), false (no loop), or a number (loop count)
     local ping_pong = options.ping_pong or false -- If true, alternates between start and target
+    local discrete = options.discrete or {} -- Array of keys that should change discretely (not interpolated)
     local id = options.id or generate_id()
     
     local max_cycles = nil
@@ -183,6 +220,7 @@ function AnimationEngine.animate(start_values, target_values, duration, options)
         target_values = target_values,
         original_start_values = original_start_values,
         original_target_values = original_target_values,
+        discrete = discrete,
         on_update = on_update,
         on_complete = on_complete,
         loop = loop,
@@ -193,7 +231,7 @@ function AnimationEngine.animate(start_values, target_values, duration, options)
         current_values = {}
     }
     
-    log("Started animation: " .. id .. (loop and " (looping)" or ""))
+    log("Started animation: " .. id .. (loop and " (looping)" or "") .. (#discrete > 0 and " (discrete keys: " .. table.concat(discrete, ", ") .. ")" or ""))
     return id
 end
 
@@ -221,22 +259,25 @@ function AnimationEngine.update(dt)
         -- Determine which easing to use based on phase
         local current_easing = anim.phase == 1 and anim.easing or anim.easing_back
         
-        -- Interpolate all values
+        -- Determine which values to use based on phase
+        local phase_start_values, phase_target_values
+        
         if anim.phase == 1 then
-            anim.current_values = AnimationEngine.interpolate(
-                anim.start_values, 
-                anim.target_values, 
-                t, 
-                current_easing
-            )
+            phase_start_values = anim.start_values
+            phase_target_values = anim.target_values
         else
-            anim.current_values = AnimationEngine.interpolate(
-                anim.target_values, 
-                anim.start_values, 
-                t, 
-                current_easing
-            )
+            phase_start_values = anim.target_values
+            phase_target_values = anim.start_values
         end
+        
+        -- Interpolate all values with discrete keys support
+        anim.current_values = AnimationEngine.interpolate(
+            phase_start_values, 
+            phase_target_values, 
+            t, 
+            current_easing,
+            anim.discrete
+        )
         
         -- Call update callback
         if anim.on_update then
@@ -429,9 +470,10 @@ function AnimationEngine._execute_sequence_step(seq_id)
             seq.step_data[seq.current_step][key] = value
         end
         
-        -- Start animation
+        -- Start animation with discrete keys support
         seq.active_animation = AnimationEngine.animate(start_values, target_values, step.duration, {
             easing = step.easing,
+            discrete = step.discrete, -- Pass through discrete keys
             on_update = step.on_update,
             on_complete = function(values, interrupted)
                 if not interrupted then
@@ -505,10 +547,11 @@ function AnimationEngine.stop_sequence(id)
 end
 
 -- ---------------------------------------------------------------------------
--- Pre-built Animation Effects
+-- Pre-built Animation Effects with Discrete Value Support
 -- ---------------------------------------------------------------------------
+
 -- Simple move animation with looping support
-function AnimationEngine.move_to(object, target_x, target_y, duration, easing, on_complete, loop, ping_pong, easing_back)
+function AnimationEngine.move_to(object, target_x, target_y, duration, easing, on_complete, loop, ping_pong, easing_back, discrete)
     return AnimationEngine.animate(
         {x = object.x or 0, y = object.y or 0},
         {x = target_x, y = target_y},
@@ -516,6 +559,7 @@ function AnimationEngine.move_to(object, target_x, target_y, duration, easing, o
         {
             easing = easing,
             easing_back = easing_back,
+            discrete = discrete,
             on_update = function(values)
                 if object.setPosition then
                     object:setPosition(values.x, values.y)
@@ -532,7 +576,7 @@ function AnimationEngine.move_to(object, target_x, target_y, duration, easing, o
 end
 
 -- Scale animation with looping support
-function AnimationEngine.scale_to(object, target_scale, duration, easing, on_complete, loop, ping_pong, easing_back)
+function AnimationEngine.scale_to(object, target_scale, duration, easing, on_complete, loop, ping_pong, easing_back, discrete)
     return AnimationEngine.animate(
         {scale = object.scale or 1},
         {scale = target_scale},
@@ -540,6 +584,7 @@ function AnimationEngine.scale_to(object, target_scale, duration, easing, on_com
         {
             easing = easing,
             easing_back = easing_back,
+            discrete = discrete,
             on_update = function(values)
                 if object.setScale then
                     object:setScale(values.scale)
@@ -555,7 +600,7 @@ function AnimationEngine.scale_to(object, target_scale, duration, easing, on_com
 end
 
 -- Rotation animation with looping support
-function AnimationEngine.rotate_to(object, target_angle, duration, easing, on_complete, loop, ping_pong, easing_back)
+function AnimationEngine.rotate_to(object, target_angle, duration, easing, on_complete, loop, ping_pong, easing_back, discrete)
     return AnimationEngine.animate(
         {angle = object.angle or 0},
         {angle = target_angle},
@@ -563,6 +608,7 @@ function AnimationEngine.rotate_to(object, target_angle, duration, easing, on_co
         {
             easing = easing,
             easing_back = easing_back,
+            discrete = discrete,
             on_update = function(values)
                 if object.setRotation then
                     object:setRotation(values.angle)
@@ -578,7 +624,7 @@ function AnimationEngine.rotate_to(object, target_angle, duration, easing, on_co
 end
 
 -- Fade animation with looping support
-function AnimationEngine.fade_to(object, target_alpha, duration, easing, on_complete, loop, ping_pong, easing_back)
+function AnimationEngine.fade_to(object, target_alpha, duration, easing, on_complete, loop, ping_pong, easing_back, discrete)
     return AnimationEngine.animate(
         {alpha = object.alpha or 255},
         {alpha = target_alpha},
@@ -586,6 +632,7 @@ function AnimationEngine.fade_to(object, target_alpha, duration, easing, on_comp
         {
             easing = easing,
             easing_back = easing_back,
+            discrete = discrete,
             on_update = function(values)
                 if object.setAlpha then
                     object:setAlpha(values.alpha)
@@ -601,7 +648,7 @@ function AnimationEngine.fade_to(object, target_alpha, duration, easing, on_comp
 end
 
 -- Color tint animation with looping support
-function AnimationEngine.tint_to(object, target_r, target_g, target_b, duration, easing, on_complete, loop, ping_pong, easing_back)
+function AnimationEngine.tint_to(object, target_r, target_g, target_b, duration, easing, on_complete, loop, ping_pong, easing_back, discrete)
     return AnimationEngine.animate(
         {r = object.r or 255, g = object.g or 255, b = object.b or 255},
         {r = target_r, g = target_g, b = target_b},
@@ -609,6 +656,7 @@ function AnimationEngine.tint_to(object, target_r, target_g, target_b, duration,
         {
             easing = easing,
             easing_back = easing_back,
+            discrete = discrete,
             on_update = function(values)
                 if object.setColor then
                     object:setColor(values.r, values.g, values.b)
@@ -623,162 +671,6 @@ function AnimationEngine.tint_to(object, target_r, target_g, target_b, duration,
             ping_pong = ping_pong
         }
     )
-end
--- Pulse effect with enhanced looping support
-function AnimationEngine.pulse(object, min_scale, max_scale, duration, loops, on_complete, easing, easing_back)
-    local sequence = {
-        {
-            type = "animate",
-            target = {scale = max_scale},
-            duration = duration / 2,
-            easing = easing or "ease_in_out"
-        },
-        {
-            type = "animate",
-            target = {scale = min_scale},
-            duration = duration / 2,
-            easing = easing_back or (easing or "ease_in_out")
-        }
-    }
-    
-    -- If loops is provided, use the new animate function with loop parameter
-    if loops then
-        return AnimationEngine.animate(
-            {scale = object.scale or 1},
-            {scale = max_scale},
-            duration / 2,
-            {
-                easing = easing or "ease_in_out",
-                easing_back = easing_back or (easing or "ease_in_out"),
-                on_update = function(values)
-                    if object.setScale then
-                        object:setScale(values.scale)
-                    else
-                        object.scale = values.scale
-                    end
-                end,
-                on_complete = on_complete,
-                loop = loops,
-                ping_pong = true
-            }
-        )
-    end
-    
-    local seq_id = AnimationEngine.create_sequence(sequence, {
-        loop = (loops == nil),
-        on_complete = on_complete
-    })
-    
-    -- Store original scale
-    sequences[seq_id].original_values = {scale = object.scale or 1}
-    
-    -- Set up update callbacks
-    for _, step in ipairs(sequences[seq_id].steps) do
-        if step.type == "animate" then
-            step.on_update = function(values)
-                if object.setScale then
-                    object:setScale(values.scale)
-                else
-                    object.scale = values.scale
-                end
-            end
-        end
-    end
-    
-    AnimationEngine.start_sequence(seq_id)
-    return seq_id
-end
-
--- Shake effect
-function AnimationEngine.shake(object, intensity, duration, frequency, on_complete)
-    local steps = math.floor(duration * frequency)
-    local sequence = {}
-    local original_x = object.x or 0
-    local original_y = object.y or 0
-    
-    -- Store original position
-    local seq_id = AnimationEngine.create_sequence(sequence, {
-        on_complete = on_complete
-    })
-    sequences[seq_id].original_values = {x = original_x, y = original_y}
-    
-    for i = 1, steps do
-        local offset_x = (math.random() * 2 - 1) * intensity
-        local offset_y = (math.random() * 2 - 1) * intensity
-        
-        table.insert(sequence, {
-            type = "animate",
-            target = {x = original_x + offset_x, y = original_y + offset_y},
-            duration = 1 / frequency,
-            easing = "linear"
-        })
-    end
-    
-    -- Return to original position
-    table.insert(sequence, {
-        type = "animate",
-        target = {x = original_x, y = original_y},
-        duration = 0.1,
-        easing = "ease_out"
-    })
-    
-    sequences[seq_id].steps = sequence
-    
-    -- Set up update callbacks
-    for _, step in ipairs(sequences[seq_id].steps) do
-        if step.type == "animate" then
-            step.on_update = function(values)
-                if object.setPosition then
-                    object:setPosition(values.x, values.y)
-                else
-                    object.x = values.x
-                    object.y = values.y
-                end
-            end
-        end
-    end
-    
-    AnimationEngine.start_sequence(seq_id)
-    return seq_id
-end
-
--- Bounce in effect
-function AnimationEngine.bounce_in(object, start_scale, duration, on_complete)
-    local sequence = {
-        {
-            type = "animate",
-            start = {scale = start_scale},
-            target = {scale = 1.2},
-            duration = duration * 0.6,
-            easing = "elastic_out"
-        },
-        {
-            type = "animate",
-            target = {scale = 1.0},
-            duration = duration * 0.4,
-            easing = "bounce_out"
-        }
-    }
-    
-    local seq_id = AnimationEngine.create_sequence(sequence, {
-        on_complete = on_complete
-    })
-    
-    -- Set up update callbacks
-    for _, step in ipairs(sequences[seq_id].steps) do
-        if step.type == "animate" then
-            step.on_update = function(values)
-                if object.setScale then
-                    object:setScale(values.scale)
-                else
-                    object.scale = values.scale
-                end
-            end
-        end
-    end
-    
-    AnimationEngine.start_sequence(seq_id)
-    return seq_id
 end
 
 -- ---------------------------------------------------------------------------
@@ -901,39 +793,78 @@ local myObject = {
     y = 100,
     scale = 1,
     angle = 0,
-    alpha = 255
+    alpha = 255,
+    color_mode = 1
 }
 
--- Move animation with infinite looping (ping-pong)
-AnimationEngine.move_to(myObject, 200, 150, 1.5, "ease_in_out", function()
-    print("Move complete!")
-end, true, true, "ease_in_out")
-
--- Scale animation that loops 3 times
-AnimationEngine.scale_to(myObject, 2.0, 1.0, "ease_in_out", function()
-    print("Scale animation looped 3 times!")
-end, 3, true, "ease_out")
-
--- Rotation animation that loops infinitely with different easing for return trip
-AnimationEngine.rotate_to(myObject, 360, 2.0, "ease_in", function()
-    print("This won't be called for infinite loop!")
-end, true, true, "ease_out")
-
--- Fade animation that loops 5 times
-AnimationEngine.fade_to(myObject, 100, 0.5, "linear", function()
-    print("Fade animation completed 5 loops!")
-end, 5, true)
-
--- Create custom animation sequence
-local seqId = AnimationEngine.create_sequence({
+-- Example 1: Move with color_mode as discrete value
+-- color_mode will stay at 1 until the end of animation, then jump to 2
+AnimationEngine.animate(
+    {x = 100, y = 100, color_mode = 1},
+    {x = 200, y = 150, color_mode = 2},
+    2.0,
     {
-        type = "animate",
-        target = {x = 300, y = 200},
-        duration = 1,
-        easing = "ease_out",
+        easing = "ease_in_out",
+        discrete = {"color_mode"}, -- color_mode won't interpolate, changes at end
         on_update = function(values)
             myObject.x = values.x
             myObject.y = values.y
+            myObject.color_mode = values.color_mode
+            print("x:", values.x, "y:", values.y, "color_mode:", values.color_mode)
+        end,
+        on_complete = function(values)
+            print("Animation complete! color_mode is now:", values.color_mode)
+        end
+    }
+)
+
+-- Example 2: Using the pre-built functions with discrete values
+AnimationEngine.move_to(myObject, 300, 200, 1.5, "ease_in_out", 
+    function() print("Move complete!") end,
+    false, false, nil, {"color_mode"} -- Last parameter is discrete keys
+)
+
+-- Example 3: Multiple discrete values
+local anotherObject = {
+    x = 50,
+    y = 50,
+    visible = true,
+    layer = 1,
+    special_flag = false
+}
+
+AnimationEngine.animate(
+    {x = 50, y = 50, visible = true, layer = 1, special_flag = false},
+    {x = 200, y = 200, visible = false, layer = 3, special_flag = true},
+    3.0,
+    {
+        easing = "linear",
+        discrete = {"visible", "layer", "special_flag"}, -- All these change discretely at the end
+        on_update = function(values)
+            anotherObject.x = values.x
+            anotherObject.y = values.y
+            anotherObject.visible = values.visible
+            anotherObject.layer = values.layer
+            anotherObject.special_flag = values.special_flag
+            
+            -- During animation: visible stays true, layer stays 1, special_flag stays false
+            -- At the end: visible becomes false, layer becomes 3, special_flag becomes true
+        end
+    }
+)
+
+-- Example 4: Discrete values in sequences
+local seqId = AnimationEngine.create_sequence({
+    {
+        type = "animate",
+        target = {x = 300, y = 200, mode = 1},
+        duration = 1,
+        easing = "ease_out",
+        discrete = {"mode"}, -- mode changes discretely at the end of this step
+        on_update = function(values)
+            myObject.x = values.x
+            myObject.y = values.y
+            myObject.mode = values.mode
         end
     },
     {
@@ -942,9 +873,10 @@ local seqId = AnimationEngine.create_sequence({
     },
     {
         type = "animate",
-        target = {scale = 2, angle = 360},
+        target = {scale = 2, mode = 2},
         duration = 2,
-        easing = "ease_in_out"
+        easing = "ease_in_out",
+        discrete = {"mode"} -- mode changes discretely again
     }
 })
 
