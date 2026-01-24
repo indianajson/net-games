@@ -598,10 +598,12 @@ function frame.animate_ui_element(sprite_id, player_id, start_values, target_pro
     
     local element = ui_cache[player_id][sprite_id]
     local anim_id = nil
+
     -- Create start values from current element state
-    local start_values = start_values or {
+    local og_values = {
         x = element.x,
         y = element.y,
+        z = element.z,
         sx = element.sx,
         sy = element.sy,
         ro = element.ro,
@@ -613,8 +615,8 @@ function frame.animate_ui_element(sprite_id, player_id, start_values, target_pro
         color_mode = element.color_mode,
         discrete = element.discrete or {}
     }
-    
-    anim_id = AnimationEngine.animate(start_values, target_properties, duration or 1.0, {
+  
+    anim_id = AnimationEngine.animate_discrete_first(og_values, target_properties, duration or 1.0, {
         easing = easing or "linear",
         easing_back = easing_back or easing or "linear",
         on_update = function(values, t, phase)
@@ -624,6 +626,7 @@ function frame.animate_ui_element(sprite_id, player_id, start_values, target_pro
             -- Convert x,y from UI coordinates to sprite coordinates (x2)
             if values.x ~= nil then update_props.x = values.x end
             if values.y ~= nil then update_props.y = values.y end
+            if values.z ~= nil then update_props.z = values.z end
             if values.sx ~= nil then update_props.sx = values.sx end
             if values.sy ~= nil then update_props.sy = values.sy end
             if values.ro ~= nil then update_props.ro = values.ro end

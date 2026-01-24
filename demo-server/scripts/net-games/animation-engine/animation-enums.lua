@@ -3,6 +3,7 @@ _G.AnimationEnums = AnimationEnums
 AnimationEnums.__index = AnimationEnums
 
 AnimationEnums.easing_function_names = {
+    instant = "instant",
     linear = "linear",
     ease_in = "ease_in",
     ease_out = "ease_out",

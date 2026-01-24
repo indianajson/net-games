@@ -1,4 +1,3 @@
--- /server/scripts/ezlibs-custom/animation_engine.lua
 -- Reusable animation and interpolation engine
 
 local AnimationEngine = {}
@@ -19,6 +18,10 @@ local cfg = {
     
     -- Easing functions
     easing_functions = {
+        instant = function(t)
+            -- Returns 1 for any t > 0, meaning immediate transition to target
+            return t > 0 and 1 or 0
+        end,
         linear = function(t) return t end,
         square=function(t) return t*t end,
         cubic=function(t) return t*t*t end,
@@ -125,6 +128,11 @@ function AnimationEngine.interpolate(start, target, t, easing, discrete)
     local ease_func = cfg.easing_functions[easing] or cfg.easing_functions.linear
     local eased_t = ease_func(t)
     
+    -- For instant easing, we want to jump immediately to target for any t > 0
+    if easing == "instant" and t > 0 then
+        eased_t = 1
+    end
+    
     -- Create a set of discrete keys for fast lookup
     local discrete_set = {}
     if discrete then
@@ -142,8 +150,8 @@ function AnimationEngine.interpolate(start, target, t, easing, discrete)
             
             -- Check if this key should be discrete
             if discrete_set[key] then
-                -- Discrete value: only change at the end of animation
-                if t >= 1.0 then
+                -- Discrete value: change at the beginning of animation
+                if t > 0 then
                     result[key] = target_value or start_value
                 else
                     result[key] = start_value
@@ -162,8 +170,8 @@ function AnimationEngine.interpolate(start, target, t, easing, discrete)
             if not start[key] then
                 -- Check if this key should be discrete
                 if discrete_set[key] then
-                    -- Discrete value: only change at the end of animation
-                    if t >= 1.0 then
+                    -- Discrete value: change at the beginning of animation
+                    if t > 0 then
                         result[key] = target_value
                     end
                 else
@@ -191,6 +199,13 @@ function AnimationEngine.animate(start_values, target_values, duration, options)
     local discrete = options.discrete or {} -- Array of keys that should change discretely (not interpolated)
     local id = options.id or generate_id()
     
+    -- For instant animations, duration should be effectively 0, but we need to process it
+    -- So we'll handle this specially in the update function
+    local actual_duration = duration
+    if easing == "instant" then
+        actual_duration = 0.001 -- Very small duration to trigger immediate update
+    end
+    
     local max_cycles = nil
     if type(loop) == "number" and loop > 0 then
         max_cycles = loop
@@ -213,7 +228,7 @@ function AnimationEngine.animate(start_values, target_values, duration, options)
     animations[id] = {
         id = id,
         start_time = os.clock(),
-        duration = duration,
+        duration = actual_duration,
         easing = easing,
         easing_back = easing_back,
         start_values = start_values,
@@ -231,7 +246,28 @@ function AnimationEngine.animate(start_values, target_values, duration, options)
         current_values = {}
     }
     
-    log("Started animation: " .. id .. (loop and " (looping)" or "") .. (#discrete > 0 and " (discrete keys: " .. table.concat(discrete, ", ") .. ")" or ""))
+    log("Started animation: " .. id .. 
+        (loop and " (looping)" or "") .. 
+        (#discrete > 0 and " (discrete keys: " .. table.concat(discrete, ", ") .. ")" or "") ..
+        (easing == "instant" and " (instant)" or ""))
+    
+    -- For instant animations, we should immediately trigger one update
+    if easing == "instant" then
+        -- Force an immediate update
+        animations[id].current_values = target_values
+        if on_update then
+            on_update(target_values, 1.0, phase)
+        end
+        -- If not looping, complete immediately
+        if not loop then
+            if on_complete then
+                on_complete(target_values, false)
+            end
+            animations[id] = nil
+            log("Completed instant animation: " .. id)
+        end
+    end
+    
     return id
 end
 
@@ -250,6 +286,42 @@ function AnimationEngine.update(dt)
     for id, anim in pairs(to_process) do
         -- Skip if animation was removed during processing
         if animations[id] == nil then
+            goto continue
+        end
+        
+        -- For instant animations, handle specially
+        if anim.easing == "instant" then
+            -- Set values to target immediately
+            anim.current_values = anim.target_values
+            
+            -- Call update callback
+            if anim.on_update then
+                anim.on_update(anim.current_values, 1.0, anim.phase)
+            end
+            
+            -- Handle completion
+            if anim.loop then
+                -- For looping instant animations
+                anim.current_cycle = anim.current_cycle + 1
+                if anim.max_cycles and anim.current_cycle >= anim.max_cycles then
+                    -- Reached max cycles
+                    if anim.on_complete then
+                        anim.on_complete(anim.current_values, false)
+                    end
+                    table.insert(to_remove, id)
+                    log("Completed instant animation (reached max cycles): " .. id)
+                else
+                    -- Continue looping
+                    anim.start_time = current_time
+                end
+            else
+                -- Not looping, complete the animation
+                if anim.on_complete then
+                    anim.on_complete(anim.current_values, false)
+                end
+                table.insert(to_remove, id)
+                log("Completed instant animation: " .. id)
+            end
             goto continue
         end
         
@@ -674,6 +746,135 @@ function AnimationEngine.tint_to(object, target_r, target_g, target_b, duration,
 end
 
 -- ---------------------------------------------------------------------------
+-- Discrete-First Animation Helper
+-- ---------------------------------------------------------------------------
+
+-- Create animation where discrete values change immediately, then continuous values animate
+function AnimationEngine.animate_discrete_first(start_values, target_values, duration, options)
+    options = options or {}
+    local discrete = options.discrete or {}
+    
+    -- Create a two-step approach:
+    -- 1. First, immediately set discrete values
+    -- 2. Then animate continuous values
+    
+    local step1_complete = false
+    local discrete_values_set = false
+    
+    -- Create the animation with a custom on_update handler
+    return AnimationEngine.animate(start_values, target_values, duration, {
+        easing = options.easing or "linear",
+        easing_back = options.easing_back,
+        on_update = function(values, t, phase)
+            -- If we haven't set discrete values yet, set them immediately
+            if not discrete_values_set and t > 0 then
+                discrete_values_set = true
+                
+                -- Call the original on_update immediately with discrete values set
+                if options.on_update then
+                    -- Create a copy of values with discrete values already at target
+                    local discrete_first_values = {}
+                    for k, v in pairs(values) do
+                        discrete_first_values[k] = v
+                    end
+                    
+                    -- Set discrete values to target immediately
+                    for _, key in ipairs(discrete) do
+                        if target_values[key] ~= nil then
+                            discrete_first_values[key] = target_values[key]
+                        end
+                    end
+                    
+                    options.on_update(discrete_first_values, t, phase)
+                end
+            elseif options.on_update then
+                options.on_update(values, t, phase)
+            end
+        end,
+        on_complete = options.on_complete,
+        loop = options.loop,
+        ping_pong = options.ping_pong,
+        max_cycles = options.max_cycles,
+        discrete = discrete
+    })
+end
+
+-- Discrete-first versions of the pre-built animations
+function AnimationEngine.move_to_discrete_first(object, target_x, target_y, duration, easing, on_complete, loop, ping_pong, easing_back, discrete)
+    return AnimationEngine.animate_discrete_first(
+        {x = object.x or 0, y = object.y or 0},
+        {x = target_x, y = target_y},
+        duration,
+        {
+            easing = easing,
+            easing_back = easing_back,
+            discrete = discrete,
+            on_update = function(values)
+                if object.setPosition then
+                    object:setPosition(values.x, values.y)
+                else
+                    object.x = values.x
+                    object.y = values.y
+                end
+            end,
+            on_complete = on_complete,
+            loop = loop,
+            ping_pong = ping_pong
+        }
+    )
+end
+
+-- ---------------------------------------------------------------------------
+-- Instant Transition Helpers
+-- ---------------------------------------------------------------------------
+
+-- Set value instantly (no animation)
+function AnimationEngine.set_to(object, values)
+    if not object then return end
+    
+    for key, value in pairs(values) do
+        -- Use appropriate setter method if available
+        if key == "x" or key == "y" then
+            if object.setPosition then
+                object:setPosition(values.x or object.x, values.y or object.y)
+            else
+                object.x = values.x or object.x
+                object.y = values.y or object.y
+            end
+        elseif key == "scale" then
+            if object.setScale then
+                object:setScale(value)
+            else
+                object.scale = value
+            end
+        elseif key == "angle" then
+            if object.setRotation then
+                object:setRotation(value)
+            else
+                object.angle = value
+            end
+        elseif key == "alpha" then
+            if object.setAlpha then
+                object:setAlpha(value)
+            else
+                object.alpha = value
+            end
+        elseif key == "r" or key == "g" or key == "b" then
+            if object.setColor then
+                object:setColor(values.r or object.r, values.g or object.g, values.b or object.b)
+            else
+                object.r = values.r or object.r
+                object.g = values.g or object.g
+                object.b = values.b or object.b
+            end
+        else
+            -- Set any other property directly
+            object[key] = value
+        end
+    end
+end
+
+-- ---------------------------------------------------------------------------
 -- Utility Functions
 -- ---------------------------------------------------------------------------
 
@@ -794,78 +995,50 @@ local myObject = {
     scale = 1,
     angle = 0,
     alpha = 255,
-    color_mode = 1
+    color_mode = 1,  -- Discrete property
+    state = "idle"   -- Discrete property
 }
 
--- Example 1: Move with color_mode as discrete value
--- color_mode will stay at 1 until the end of animation, then jump to 2
+-- Example 1: Instant transition using easing="instant"
+AnimationEngine.move_to(myObject, 500, 300, 0, "instant", function()
+    print("Instantly moved to 500, 300")
+end)
+
+-- Example 2: Animation with discrete values transitioning FIRST
+-- color_mode and state will change immediately when animation starts
 AnimationEngine.animate(
-    {x = 100, y = 100, color_mode = 1},
-    {x = 200, y = 150, color_mode = 2},
+    {x = myObject.x, y = myObject.y, scale = 1, color_mode = 1, state = "idle"},
+    {x = 300, y = 200, scale = 2, color_mode = 2, state = "moving"},
     2.0,
     {
         easing = "ease_in_out",
-        discrete = {"color_mode"}, -- color_mode won't interpolate, changes at end
+        discrete = {"color_mode", "state"},  -- These will change at BEGINNING of animation
         on_update = function(values)
             myObject.x = values.x
             myObject.y = values.y
-            myObject.color_mode = values.color_mode
-            print("x:", values.x, "y:", values.y, "color_mode:", values.color_mode)
-        end,
-        on_complete = function(values)
-            print("Animation complete! color_mode is now:", values.color_mode)
+            myObject.scale = values.scale
+            myObject.color_mode = values.color_mode  -- Will be 2 immediately (t > 0)
+            myObject.state = values.state           -- Will be "moving" immediately (t > 0)
+            print("Update: x=" .. values.x .. ", y=" .. values.y .. 
+                  ", color_mode=" .. values.color_mode .. ", state=" .. values.state)
         end
     }
 )
 
--- Example 2: Using the pre-built functions with discrete values
-AnimationEngine.move_to(myObject, 300, 200, 1.5, "ease_in_out", 
-    function() print("Move complete!") end,
-    false, false, nil, {"color_mode"} -- Last parameter is discrete keys
-)
-
--- Example 3: Multiple discrete values
-local anotherObject = {
-    x = 50,
-    y = 50,
-    visible = true,
-    layer = 1,
-    special_flag = false
-}
-
-AnimationEngine.animate(
-    {x = 50, y = 50, visible = true, layer = 1, special_flag = false},
-    {x = 200, y = 200, visible = false, layer = 3, special_flag = true},
-    3.0,
-    {
-        easing = "linear",
-        discrete = {"visible", "layer", "special_flag"}, -- All these change discretely at the end
-        on_update = function(values)
-            anotherObject.x = values.x
-            anotherObject.y = values.y
-            anotherObject.visible = values.visible
-            anotherObject.layer = values.layer
-            anotherObject.special_flag = values.special_flag
-            
-            -- During animation: visible stays true, layer stays 1, special_flag stays false
-            -- At the end: visible becomes false, layer becomes 3, special_flag becomes true
-        end
-    }
-)
-
--- Example 4: Discrete values in sequences
+-- Example 3: Mix instant and regular animations in sequence
 local seqId = AnimationEngine.create_sequence({
     {
         type = "animate",
-        target = {x = 300, y = 200, mode = 1},
+        target = {x = 300, y = 200, state = "walking"},
         duration = 1,
         easing = "ease_out",
-        discrete = {"mode"}, -- mode changes discretely at the end of this step
-        on_update = function(values)
-            myObject.x = values.x
-            myObject.y = values.y
-            myObject.mode = values.mode
-        end
+        discrete = {"state"}  -- State changes immediately
+    },
+    {
+        type = "animate",
+        target = {color_mode = 2},
+        duration = 0,  -- Zero duration with instant easing
+        easing = "instant"  -- Color mode changes instantly
     },
     {
         type = "delay",
@@ -873,12 +1046,33 @@ local seqId = AnimationEngine.create_sequence({
     },
     {
         type = "animate",
-        target = {scale = 2, mode = 2},
-        duration = 2,
-        easing = "ease_in_out",
-        discrete = {"mode"} -- mode changes discretely again
+        target = {scale = 2, state = "running"},
+        duration = 1.5,
+        easing = "elastic_out",
+        discrete = {"state"}  -- State changes immediately again
     }
 })
+
+-- Example 4: Using the discrete-first helper for cleaner control
+AnimationEngine.animate_discrete_first(
+    {x = myObject.x, y = myObject.y, state = myObject.state},
+    {x = 500, y = 300, state = "attacking"},
+    1.5,
+    {
+        easing = "ease_in_out",
+        discrete = {"state"},  -- state changes immediately
+        on_update = function(values)
+            print("State immediately changed to: " .. values.state)
+            myObject.x = values.x
+            myObject.y = values.y
+            myObject.state = values.state
+        end
+    }
+)
+
+-- Example 5: Instant helper function
+AnimationEngine.set_to(myObject, {x = 400, y = 250, alpha = 128})
+print("Instantly set position and alpha")
 
 -- In your game loop
 function onTick(dt)

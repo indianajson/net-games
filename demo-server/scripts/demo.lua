@@ -162,8 +162,9 @@ Net:on("actor_interaction", function (event)
         -- games.animate_ui_element("points", event.player_id, {opacity = 255, r = 125,g = 0,b= 122, color_mode = 1}, 2, AnimationEngine.AnimEnums.EasingFns.linear, function ()
         -- end)end)end) end)end)
         --         games.animate_ui_element("points", event.player_id, {x = 161, y = 10}, 2, "linear", nil, 0)
-        games.animate_ui_element("points", event.player_id, {opacity = 0,a = 0, r = 255, g = 255, b = 255, color_mode = 0, discrete = {"color_mode"}}, {opacity = 255,a = 255, r = 255, g = 125, b = 255, color_mode = 1, discrete = {"color_mode"}},2, AnimationEngine.AnimEnums.EasingFns.ease_in, nil, true , true, AnimationEngine.AnimEnums.EasingFns.ease_out)
-                -- games.animate_ui_effect("points",event.player_id, "pulse",{0.2, 0.4, 0.5,3, function() print("Shake complete!") end})
+        games.animate_ui_element("points", event.player_id, {color_mode = 0, discrete = { "color_mode"}}, {opacity = 255,a = 255, r = 255, g = 125, b = 255, color_mode = 1},2, AnimationEngine.AnimEnums.EasingFns.smoothstep, nil, true , true, AnimationEngine.AnimEnums.EasingFns.instant)
+        games.create_ui_sequence("points", event.player_id, {}, {})
+        -- games.animate_ui_effect("points",event.player_id, "pulse",{0.2, 0.4, 0.5,3, function() print("Shake complete!") end})
         -- games.animate_ui_element("points", event.player_id, {x = 6, y = 140} , 1, "ease_in_out", function() print("ended anim")end )
        
         bat_active[event.player_id] = true
