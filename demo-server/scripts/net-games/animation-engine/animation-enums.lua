@@ -14,6 +14,8 @@ AnimationEnums.easing_function_names = {
     bounce_out = "bounce_out",
     bounce_in = "bounce_in",
     bound_in_out = "bound_in_out",
+    square = "square",
+    cubic = "cubic"
 }
 
 return {

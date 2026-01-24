@@ -20,6 +20,8 @@ local cfg = {
     -- Easing functions
     easing_functions = {
         linear = function(t) return t end,
+        square=function(t) return t*t end,
+        cubic=function(t) return t*t*t end,
         ease_in = function(t) return t * t end,
         ease_out = function(t) return t * (2 - t) end,
         ease_in_out = function(t)
@@ -182,8 +184,20 @@ end
 function AnimationEngine.update(dt)
     local current_time = os.clock()
     local to_remove = {}
+    local to_process = {}
     
+    -- First, collect all animations to process
     for id, anim in pairs(animations) do
+        to_process[id] = anim
+    end
+    
+    -- Then process them
+    for id, anim in pairs(to_process) do
+        -- Skip if animation was removed during processing
+        if animations[id] == nil then
+            goto continue
+        end
+        
         local elapsed = current_time - anim.start_time
         local t = math.min(elapsed / anim.duration, 1.0)
         
@@ -208,6 +222,8 @@ function AnimationEngine.update(dt)
             table.insert(to_remove, id)
             log("Completed animation: " .. id)
         end
+        
+        ::continue::
     end
     
     -- Clean up completed animations
@@ -215,6 +231,7 @@ function AnimationEngine.update(dt)
         animations[id] = nil
     end
 end
+
 
 -- ---------------------------------------------------------------------------
 -- Animation Sequences
@@ -666,8 +683,15 @@ end
 function AnimationEngine.update_callbacks()
     local current_time = os.clock()
     local to_remove = {}
+    local to_process = {}
     
+    -- First collect all callbacks
     for id, cb in pairs(callbacks) do
+        to_process[id] = cb
+    end
+    
+    -- Then process them
+    for id, cb in pairs(to_process) do
         if current_time >= cb.trigger_time then
             cb.callback()
             table.insert(to_remove, id)
