@@ -7,6 +7,7 @@
 ]]--
 
 local Displayer = require("scripts/net-games/displayer/displayer") --module by D3str0y3d to handle text, timers, countdowns using v2.1
+local AnimationEngine = require("scripts/net-games/animation-engine/animation-engine") -- Animation engine for sprite animations
 
 if not Displayer:init() or not Displayer:isValid() then
     print("Failed to initialize Displayer API")
@@ -16,7 +17,7 @@ end
 local frame = {} --holds the framework functions and returns them to whatever script is calling them
 local last_position_cache = {} --legacy cache that only tracks player's area now
 local button_states = {} --cache of latest button states from player
-local tracking_state = {} --tracks if a player's button state has remained 2 for more than X seconds
+local tracking_state = {} --tracks if a player's button state has remained 2 for more than x seconds
 local cosmetic_cache = {} --tracks cosmetics for player
 local cursor_cache = {} --tracks cursors currently spawned for player
 local avatar_cache = {} --tracks the original player avatar for each player
@@ -37,7 +38,7 @@ local function round_fraction(value, denominator)
     return int_part, n / denominator
 end
 
---purpose: checks if a string follows a valid X,Y,Z pattern
+--purpose: checks if a string follows a valid x,Y,Z pattern
 local function validateCords(str)
     -- Remove all spaces from the string
     str = str:gsub("%s+", "")
@@ -342,7 +343,7 @@ end
 -- MAP FUNCTIONS
 -- Functions to add, animate, and remove objects based on map position (for mini-game elements on map, especially those visible to other players)
 
-function frame.add_map_element(name,player_id,texture,animation,animation_state,X,Y,Z,exclude)
+function frame.add_map_element(name,player_id,texture,animation,animation_state,x,Y,Z,exclude)
     
     --spawn map object
     
@@ -350,7 +351,7 @@ local area_id =
   (last_position_cache[player_id] and last_position_cache[player_id]["area"])
   or Net.get_player_area(player_id)
 
-    Net.create_bot(player_id.."-map-"..name, { area_id=area_id, warp_in=false, texture_path=texture, animation_path=animation, animation=animation_state,x=X, y=Y, z=Z, solid=false})
+    Net.create_bot(player_id.."-map-"..name, { area_id=area_id, warp_in=false, texture_path=texture, animation_path=animation, animation=animation_state,x=x, y=Y, z=Z, solid=false})
 
     if exclude == true then
         exclude_except_for(player_id,player_id.."-map-"..name)
@@ -377,12 +378,12 @@ function frame.change_map_element(name,player_id,animation_state,loop)
     end 
 end
 
-function frame.move_map_element(name,player_id,X,Y,Z)
+function frame.move_map_element(name,player_id,x,Y,Z)
 local area_id =
   (last_position_cache[player_id] and last_position_cache[player_id]["area"])
   or Net.get_player_area(player_id)
 
-Net.transfer_bot(player_id.."-map-"..name, area_id, false, X, Y, Z)
+Net.transfer_bot(player_id.."-map-"..name, area_id, false, x, Y, Z)
 
 end
 
@@ -398,18 +399,18 @@ end
 -- Functions to add, animate, and remove sprites based on camera's view (not map position)
 
 --purpose: places a UI element on screen... that's it. Yes, it's complicated. No, I won't explain it. Blame Jams!
-function frame.add_ui_element(sprite_id,player_id,texture_path,animation_path,animation_state,X,Y,Z,ScaleX,ScaleY)
+function frame.add_ui_element(sprite_id,player_id,texture_path,animation_path,animation_state,x,Y,Z,sx,sy)
 
-    local scaleX = 2.0
-    local scaleY = 2.0
-    if ScaleX ~= nil then
-        if ScaleX >= 0.0 then
-            scaleX = ScaleX
+    local sx = 2.0
+    local sy = 2.0
+    if sx ~= nil then
+        if sx >= 0.0 then
+            sx = sx
         end
     end
-      if ScaleY ~= nil then
-        if ScaleY >= 0.0 then
-            scaleY = ScaleY
+      if sy ~= nil then
+        if sy >= 0.0 then
+            sy = sy
         end
     end
     if not animation_path then animation_path = "" end
@@ -440,11 +441,20 @@ function frame.add_ui_element(sprite_id,player_id,texture_path,animation_path,an
     Net.player_draw_sprite(player_id, new_sprite_id,
         {
             id = sprite_id .. "_obj",
-            x = X*2, 
+            x = x*2, 
             y = Y*2, 
-            sx = scaleX,
-            sy = scaleY,
-            anim_state = animation_state
+            sx = sx,
+            sy = sy,
+            ro=0,
+            ox = 0,
+            oy = 0,
+            a = 255,
+            r = 255,
+            g = 255,
+            b = 255,
+            color_mode = 0,
+            animation_state=animation_state,
+            opacity=255,
         }
     )
 
@@ -452,19 +462,37 @@ function frame.add_ui_element(sprite_id,player_id,texture_path,animation_path,an
         ui_cache[player_id] = {}
     end 
     --includes UI element in UI cache for player so we can track sprites
-    ui_cache[player_id][sprite_id] = {texture_path=texture_path, sprite_id=sprite_id, x=X,y=Y,z=Z,scaleX=scaleX,scaleY=scaleY,rotation=0,animation_state=animation_state,opacity=255}
+    ui_cache[player_id][sprite_id] = {
+        texture_path=texture_path, 
+        sprite_id=new_sprite_id, 
+        x=x, y=Y, z=Z or 0,
+        sx=sx, sy=sy, 
+        ro=0,
+        ox = 0,
+        oy = 0,
+        a = 255,
+        r = 255,
+        g = 255,
+        b = 255,
+        color_mode = 0,
+        animation_state=animation_state,
+        opacity=255,
+        animations = {} -- Track active animations for this element
+    }
 end
 
 --purpose: allows you to update any property of a sprite element 
 function frame.update_ui_element(sprite_id,player_id,properties)
     --write logic to only update elements that need to be updated. 
     local sprite_data = {id = sprite_id .. "_obj"}
+    
+    -- Update cache and prepare sprite data
     if properties["x"] then 
-        sprite_data["x"] = properties["x"]
+        sprite_data["x"] = properties["x"] * 2
         ui_cache[player_id][sprite_id]["x"] = properties["x"]
     end 
     if properties["y"] then 
-        sprite_data["y"] = properties["y"]
+        sprite_data["y"] = properties["y"] * 2
         ui_cache[player_id][sprite_id]["y"] = properties["y"]
     end 
     if properties["z"] then 
@@ -481,23 +509,275 @@ function frame.update_ui_element(sprite_id,player_id,properties)
     end 
     if properties["scale"] then 
         sprite_data["sx"] = properties["scale"]
-        ui_cache[player_id][sprite_id]["scaleX"] = properties["scale"]
+        ui_cache[player_id][sprite_id]["sx"] = properties["scale"]
         sprite_data["sy"] = properties["scale"]
-        ui_cache[player_id][sprite_id]["scaleY"] = properties["scale"]
+        ui_cache[player_id][sprite_id]["sy"] = properties["scale"]
     end 
-    if properties["rotation"] then 
+    if properties["sx"] then 
+        sprite_data["sx"] = properties["sx"]
+        ui_cache[player_id][sprite_id]["sx"] = properties["sx"]
+    end 
+    if properties["sy"] then 
+        sprite_data["sy"] = properties["sy"]
+        ui_cache[player_id][sprite_id]["sy"] = properties["sy"]
+    end 
+    if properties["ro"] then 
         sprite_data["ro"] = properties["ro"]
-        ui_cache[player_id][sprite_id]["rotation"] = properties["rotation"]
+        ui_cache[player_id][sprite_id]["ro"] = properties["ro"]
     end 
     if properties["opacity"] then 
         sprite_data["opacity"] = properties["opacity"]
         ui_cache[player_id][sprite_id]["opacity"] = properties["opacity"]
     end 
+    if properties["a"] then 
+        sprite_data["a"] = properties["a"]
+        ui_cache[player_id][sprite_id]["a"] = properties["a"]
+    end 
+    if properties["r"] then 
+        sprite_data["r"] = properties["r"]
+        ui_cache[player_id][sprite_id]["r"] = properties["r"]
+    end 
+    if properties["g"] then 
+        sprite_data["g"] = properties["g"]
+        ui_cache[player_id][sprite_id]["g"] = properties["g"]
+    end 
+    if properties["b"] then 
+        sprite_data["b"] = properties["b"]
+        ui_cache[player_id][sprite_id]["b"] = properties["b"]
+    end 
+    if properties["color_mode"] then 
+        sprite_data["color_mode"] = properties["color_mode"]
+        ui_cache[player_id][sprite_id]["color_mode"] = properties["color_mode"]
+    end 
     if properties["animation_state"] then 
-        sprite_data["anim_state"] = properties["animation_state"]
+        sprite_data["animation_state"] = properties["animation_state"]
         ui_cache[player_id][sprite_id]["animation_state"] = properties["animation_state"]
     end 
-    Net.player_draw_sprite(player_id, sprite_id,sprite_data)
+    
+    Net.player_draw_sprite(player_id, ui_cache[player_id][sprite_id]["sprite_id"], sprite_data)
+end
+
+-- NEW FUNCTION: Animate UI element using AnimationEngine
+function frame.animate_ui_element(sprite_id, player_id, target_properties, duration, easing, on_complete)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    
+    local element = ui_cache[player_id][sprite_id]
+    
+    -- Create start values from current element state
+    local start_values = {
+        x = element.x,
+        y = element.y,
+        sx = element.sx,
+        sy = element.sy,
+        ro = element.ro,
+        opacity = element.opacity,
+        a = element.a,
+        r = element.r,
+        g = element.g,
+        b = element.b,
+        color_mode = element.color_mode
+    }
+    
+    local anim_id = nil 
+    -- Create animation ID
+    anim_id = AnimationEngine.animate(start_values, target_properties, duration or 1.0, {
+        easing = easing or "linear",
+        on_update = function(values)
+            -- Update the UI element with animated values
+            local update_props = {}
+            
+            -- Convert x,y from UI coordinates to sprite coordinates (x2)
+            if values.x ~= nil then update_props.x = values.x end
+            if values.y ~= nil then update_props.y = values.y end
+            if values.sx ~= nil then update_props.sx = values.sx end
+            if values.sy ~= nil then update_props.sy = values.sy end
+            if values.ro ~= nil then update_props.ro = values.ro end
+            if values.opacity ~= nil then update_props.opacity = math.floor(values.opacity) end
+            if values.a ~= nil then update_props.a = math.floor(values.a) end
+            if values.r ~= nil then update_props.r = math.floor(values.r) end
+            if values.g ~= nil then update_props.g = math.floor(values.g) end
+            if values.b ~= nil then update_props.b = math.floor(values.b) end
+            if values.color_mode ~= nil then update_props.color_mode = values.color_mode end
+
+            frame.update_ui_element(sprite_id, player_id, update_props)
+        end,
+        on_complete = function(values, interrupted)
+            -- Clean up animation tracking
+            if element.animations and anim_id then
+                element.animations[anim_id] = nil
+            end
+            
+            -- Call user callback if provided
+            if on_complete then
+                on_complete(values, interrupted)
+            end
+        end
+    })
+    
+    -- Track animation
+    if not element.animations then
+        element.animations = {}
+    end
+    element.animations[anim_id] = true
+    
+    return anim_id
+end
+
+-- NEW FUNCTION: Stop UI element animation
+function frame.stop_ui_animation(sprite_id, player_id, anim_id)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        return false
+    end
+    
+    local element = ui_cache[player_id][sprite_id]
+    
+    if anim_id then
+        -- Stop specific animation
+        local success = AnimationEngine.stop_animation(anim_id)
+        if success and element.animations then
+            element.animations[anim_id] = nil
+        end
+        return success
+    else
+        -- Stop all animations for this element
+        if element.animations then
+            for id, _ in pairs(element.animations) do
+                AnimationEngine.stop_animation(id)
+            end
+            element.animations = {}
+        end
+        return true
+    end
+end
+
+-- NEW FUNCTION: Create animation sequence for UI element
+function frame.create_ui_sequence(sprite_id, player_id, steps, options)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    
+    local element = ui_cache[player_id][sprite_id]
+    options = options or {}
+    
+    -- Create the sequence steps with proper on_update callbacks
+    local sequence_steps = {}
+    
+    for _, step in ipairs(steps) do
+        if step.type == "animate" then
+            local step_copy = {
+                type = "animate",
+                target = step.target,
+                duration = step.duration,
+                easing = step.easing or "linear"
+            }
+            
+            -- Add on_update callback to update the UI element
+            step_copy.on_update = function(values)
+                local update_props = {}
+                
+                if values.x ~= nil then update_props.x = values.x end
+                if values.y ~= nil then update_props.y = values.y end
+                if values.sx ~= nil then update_props.sx = values.sx end
+                if values.sy ~= nil then update_props.sy = values.sy end
+                if values.ro ~= nil then update_props.ro = values.ro end
+                if values.opacity ~= nil then update_props.opacity = math.floor(values.opacity) end
+                if values.a ~= nil then update_props.a = math.floor(values.a) end
+                if values.r ~= nil then update_props.r = math.floor(values.r) end
+                if values.g ~= nil then update_props.g = math.floor(values.g) end
+                if values.b ~= nil then update_props.b = math.floor(values.b) end
+                if values.color_mode ~= nil then update_props.color_mode = values.color_mode end
+                
+                frame.update_ui_element(sprite_id, player_id, update_props)
+            end
+            
+            table.insert(sequence_steps, step_copy)
+        else
+            table.insert(sequence_steps, step)
+        end
+    end
+    
+    local seq_id = AnimationEngine.create_sequence(sequence_steps, options)
+    
+    -- Track sequence
+    if not element.animations then
+        element.animations = {}
+    end
+    element.animations[seq_id] = true
+    
+    return seq_id
+end
+
+-- NEW FUNCTION: Apply pre-built animation effects to UI element
+function frame.animate_ui_effect(sprite_id, player_id, effect_type, params)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    
+    local element = ui_cache[player_id][sprite_id]
+    
+    -- Create a proxy object that AnimationEngine can animate
+    local proxy_object = {
+        x = element.x,
+        y = element.y,
+        sx = element.sx or 2.0, -- Use sx as uniform scale
+        sy = element.sy or 2.0,
+        ro = element.ro,
+        opacity = element.opacity,
+        r = element.r,
+        g = element.g,
+        b = element.b,
+        a = element.a,
+        color_mode = element.color_mode,
+    }
+    
+    local anim_id
+    
+    if effect_type == "move_to" then
+        anim_id = AnimationEngine.move_to(proxy_object, params.x, params.y, params.duration or 1.0, params.easing, function()
+            if params.on_complete then params.on_complete() end
+        end)
+    elseif effect_type == "scale_to" then
+        anim_id = AnimationEngine.scale_to(proxy_object, params.scale, params.duration or 1.0, params.easing, function()
+            if params.on_complete then params.on_complete() end
+        end)
+    elseif effect_type == "rotate_to" then
+        anim_id = AnimationEngine.rotate_to(proxy_object, params.angle, params.duration or 1.0, params.easing, function()
+            if params.on_complete then params.on_complete() end
+        end)
+    elseif effect_type == "fade_to" then
+        anim_id = AnimationEngine.fade_to(proxy_object, params.alpha, params.duration or 1.0, params.easing, function()
+            if params.on_complete then params.on_complete() end
+        end)
+    elseif effect_type == "pulse" then
+        anim_id = AnimationEngine.pulse(proxy_object, params.min_scale or 0.8, params.max_scale or 1.2, 
+                                       params.duration or 0.5, params.loops, function()
+            if params.on_complete then params.on_complete() end
+        end)
+    elseif effect_type == "shake" then
+        anim_id = AnimationEngine.shake(proxy_object, params.intensity or 5, params.duration or 0.5, 
+                                       params.frequency or 10, function()
+            if params.on_complete then params.on_complete() end
+        end)
+    elseif effect_type == "bounce_in" then
+        anim_id = AnimationEngine.bounce_in(proxy_object, params.start_scale or 0, params.duration or 0.5, function()
+            if params.on_complete then params.on_complete() end
+        end)
+    end
+    
+    if anim_id then
+        -- Track animation
+        if not element.animations then
+            element.animations = {}
+        end
+        element.animations[anim_id] = true
+    end
+    
+    return anim_id
 end
 
 --purpose: change the animation state of existing UI element
@@ -512,44 +792,43 @@ function frame.set_ui_animation(sprite_id,player_id,animation_state)
 end
 
 --purpose: move existing UI element
-function frame.move_ui_element(sprite_id,player_id,X,Y,Z)
+function frame.move_ui_element(sprite_id,player_id,x,Y,Z)
     Net.player_draw_sprite(player_id, ui_cache[player_id][sprite_id]["sprite_id"],
     {
         id = sprite_id .. "_obj",
-        x = X*2,
+        x = x*2,
         y = Y*2,
         z = Z    
     }
     )
 end
 
-function frame.update_ui_position(sprite_id, player_id, X, Y, Z)
+function frame.update_ui_position(sprite_id, player_id, x, Y, Z)
     if ui_cache[player_id] and ui_cache[player_id][sprite_id] then
         local element = ui_cache[player_id][sprite_id]
         Net.player_draw_sprite(player_id, element.sprite_id,
             {
                 id = sprite_id .. "_obj",
-                x = X*2,
+                x = x*2,
                 y = Y*2,
                 z = Z or element.z,
-                sx = element.scaleX,
-                sy = element.scaleY,
+                sx = element.sx,
+                sy = element.sy,
                 anim_state = element.animation_state
             }
         )
         -- Update cache
-        element.x = X
+        element.x = x
         element.y = Y
         element.z = Z or element.z
     end
 end
 
 --purpose: slide an existing UI element across the screen over a specified duration
-function frame.slide_ui_element(sprite_id,player_id,X,Y,duration)
-    print("slide_ui_element() is not yet supported.")
-    --local element = ui_cache[player_id][sprite_id]
-    return 
-    --add move to ui_update table
+function frame.slide_ui_element(sprite_id,player_id,x,Y,duration)
+    -- Use the new animation system
+    local target_props = {x = x, y = Y}
+    return frame.animate_ui_element(sprite_id, player_id, target_props, duration or 1.0, "ease_in_out")
 end
 
 --purpose: make camera pannable freely with arrows but without player following. 
@@ -560,10 +839,16 @@ end
 
 --purpose: removes UI element from screen
 function frame.remove_ui_element(sprite_id,player_id)
+    -- Stop all animations for this element
+    frame.stop_ui_animation(sprite_id, player_id)
+    
     Net.player_erase_sprite(player_id, sprite_id .. "_obj")
+    if ui_cache[player_id] then
+        ui_cache[player_id][sprite_id] = nil
+    end
 end
 
--- TEXT FUNCTIONS
+-- TExT FUNCTIONS
 function frame.draw_text(text_id,player_id,text,x,y,z,font,scale)
     Displayer.Text.drawText(player_id, text_id, text, tonumber(x)*2, tonumber(y)*2, z, font, scale)
 end
@@ -576,7 +861,7 @@ function frame.remove_text(text_id,player_id)
     Displayer.Text.removeText(player_id, text_id)
 end
 
--- ADD MARQUEE TEXT FUNCTION
+-- ADD MARQUEE TExT FUNCTION
 function frame.draw_marquee_text(marquee_id, player_id, text, y, font, scale, z_order, speed, backdrop)
     Displayer.Text.drawMarqueeText(player_id, marquee_id, text, y, font, scale, z_order, speed, backdrop)
 end
@@ -591,7 +876,7 @@ end
 
 -- TIMER FUNCTIONS
 
-function frame.spawn_timer(timer_id,player_id,X,Y,duration,loop)
+function frame.spawn_timer(timer_id,player_id,x,Y,duration,loop)
     loop = loop or false
     Displayer.Timer.createPlayerTimer(
         player_id, 
@@ -600,7 +885,7 @@ function frame.spawn_timer(timer_id,player_id,X,Y,duration,loop)
         function(_, timer_id, value)
         end,
         loop)
-    Displayer.TimerDisplay.createPlayerTimerDisplay(player_id, timer_id, X*2, Y*2, "default")
+    Displayer.TimerDisplay.createPlayerTimerDisplay(player_id, timer_id, x*2, Y*2, "default")
 end 
 
 function frame.resume_timer(timer_id,player_id)
@@ -621,7 +906,7 @@ end
 
 -- COUNTDOWN FUNCTIONS
 
-function frame.spawn_countdown(countdown_id,player_id,X,Y,duration,loop)
+function frame.spawn_countdown(countdown_id,player_id,x,Y,duration,loop)
     loop = loop or false
     Displayer.Timer.createPlayerCountdown(
         player_id, 
@@ -633,7 +918,7 @@ function frame.spawn_countdown(countdown_id,player_id,X,Y,duration,loop)
             end
         end,
         loop)
-    Displayer.TimerDisplay.createPlayerCountdownDisplay(player_id, countdown_id, X*2, Y*2, "default")
+    Displayer.TimerDisplay.createPlayerCountdownDisplay(player_id, countdown_id, x*2, Y*2, "default")
 end 
 
 function frame.resume_countdown(countdown_id,player_id)
@@ -895,8 +1180,8 @@ Net:on("player_move", function(event)
             local bot_position = Net.get_bot_position(cosmetic_id.."_"..event.player_id)
             --local xoffset,yoffset = convertOffsets(cosmetic_data["x"]*-1,cosmetic_data["y"]*-1,event.z+3)
             --local xoffset,yoffset = fixOffsets(xoffset,yoffset)
-            local keyframes = {{properties={{property="Animation",value=cosmetic_data["state"]},{property="X",ease="Linear",value=bot_position.x},{property="Y",ease="Linear",value=bot_position.y},{property="Z",ease="Linear",value=bot_position.z}},duration=0}}
-            keyframes[#keyframes+1] = {properties={{property="Animation",value=cosmetic_data["state"]},{property="X",ease="Linear",value=event.x + cosmetic_data["x"]},{property="Y",ease="Linear",value=event.y + cosmetic_data["y"]},{property="Z",ease="Linear",value=event.z+3}},duration=.1}
+            local keyframes = {{properties={{property="Animation",value=cosmetic_data["state"]},{property="x",ease="Linear",value=bot_position.x},{property="Y",ease="Linear",value=bot_position.y},{property="Z",ease="Linear",value=bot_position.z}},duration=0}}
+            keyframes[#keyframes+1] = {properties={{property="Animation",value=cosmetic_data["state"]},{property="x",ease="Linear",value=event.x + cosmetic_data["x"]},{property="Y",ease="Linear",value=event.y + cosmetic_data["y"]},{property="Z",ease="Linear",value=event.z+3}},duration=.1}
             Net.move_bot(cosmetic_id.."_"..event.player_id,event.x+cosmetic_data["x"],event.y+cosmetic_data["y"],event.z+3)
             Net.animate_bot_properties(cosmetic_id.."_"..event.player_id, keyframes)
             Net.animate_bot(cosmetic_id.."_"..event.player_id,cosmetic_data["state"],true)
@@ -935,7 +1220,7 @@ Net:on("virtual_input", function(event)
 end)
 
 -- Whatcha doin'? If you're here you must be a coder, or at least interesting in coding.
--- You should help out on the Discord. There's only a few of us that can actually code. 
+-- You should help out on the Discord. There's only a few of us that can actually code.
 -- Seriously, stop reading this and come help! For real. Please. I'm begging you. 
 
 return frame

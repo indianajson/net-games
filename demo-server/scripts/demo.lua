@@ -153,7 +153,17 @@ Net:on("actor_interaction", function (event)
         points = 8
         Net.message_player(event.player_id, "Press Left Shoulder to incfease and Right Shoulder to decrease. Press any arrow key to stop.","","") 
         Net.lock_player_input(event.player_id)
-        games.add_ui_element("points",event.player_id,"/server/assets/demo/order_points.png","/server/assets/demo/order_points.animation","8POINT",161,2,0)
+        games.add_ui_element("points",event.player_id,"/server/assets/demo/order_points.png","/server/assets/demo/order_points.animation","8POINT",161,2,0, 2,2)
+        games.slide_ui_element("points", event.player_id,161, 4, 1)
+        games.animate_ui_element("points", event.player_id, {x = 161, y = 10}, 2, AnimationEngine.AnimEnums.EasingFns.bound_in_out, function() 
+        games.animate_ui_element("points", event.player_id, {x = 161, y = 2}, 2, AnimationEngine.AnimEnums.EasingFns.smootherstep, function()
+        games.animate_ui_element("points", event.player_id, {x = 161, y = 10}, 2, "linear", function() 
+        games.animate_ui_element("points", event.player_id,{sx = 3.0, sy = 3.0}, 2, AnimationEngine.AnimEnums.EasingFns.bound_in_out, function()
+        games.animate_ui_element("points", event.player_id,{sx = 2.0, sy = 2.0}, 2, "elastic_out", function()
+        games.animate_ui_element("points", event.player_id, {opacity = 255, r = 125,g = 0,b= 122, color_mode = 1}, 2, AnimationEngine.AnimEnums.EasingFns.linear, function ()
+        end)end)end) end)end)end)
+        -- games.animate_ui_element("points", event.player_id, {x = 6, y = 140} , 1, "ease_in_out", function() print("ended anim")end )
+       
         bat_active[event.player_id] = true
     end 
 end)
