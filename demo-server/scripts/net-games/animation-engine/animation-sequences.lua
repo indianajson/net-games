@@ -1,0 +1,787 @@
+-- animation-sequences.lua
+-- General purpose animation sequences that mimic duels.lua behaviors
+-- Works with any sprite_id and object properties
+
+local AnimationSequences = {}
+_G.AnimationSequences = AnimationSequences
+
+-- Load the animation engine
+local AnimationEngine = _G.AnimationEngine or require("scripts/net-games/animation-engine/animation-engine")
+local AnimationEnums = _G.AnimationEnums or require("scripts/net-games/animation-engine/animation-enums")
+
+-- ---------------------------------------------------------------------------
+-- Configuration
+-- ---------------------------------------------------------------------------
+AnimationSequences.config = {
+    -- Default animation parameters
+    default_duration = 0.25,
+    default_easing = "ease_in_out",
+    
+    -- Summon animation defaults
+    summon = {
+        arc_height = 24,
+        peak_scale_mul = 1.35,
+        wobble_ro_deg = 5,
+        duration = 0.25,
+        z_offset = 10
+    },
+    
+    -- Position change animation defaults
+    position_change = {
+        duration = 0.18,
+        peak_scale_mul = 1.15,
+        flip_min = 0.06,
+        swap_t = 0.5
+    },
+    
+    -- Attack animation defaults
+    attack = {
+        duration = 0.22,
+        recoil_distance = 5,
+        lunge_distance = 15,
+        t1 = 0.25,  -- end recoil
+        t2 = 0.60,  -- end lunge
+        z_offset = 12
+    },
+    
+    -- Slide animation defaults
+    slide = {
+        duration = 0.15,
+        easing = "ease_out"
+    },
+    
+    -- Bob animation defaults (for idle/menu animations)
+    bob = {
+        duration = 1.0,
+        distance = 3,
+        easing = "smoothstep",
+        loop = true,
+        ping_pong = true
+    },
+    
+    -- Pulse animation defaults (for highlighting)
+    pulse = {
+        duration = 0.8,
+        scale_from = 1.0,
+        scale_to = 1.1,
+        alpha_from = 255,
+        alpha_to = 200,
+        easing = "elastic_out",
+        loop = true,
+        ping_pong = true
+    },
+    
+    -- Shake animation defaults (for hit/recoil)
+    shake = {
+        duration = 0.15,
+        intensity = 3,
+        frequency = 15,
+        easing = "elastic_out"
+    },
+    
+    -- Fade animation defaults
+    fade = {
+        duration = 0.3,
+        easing = "ease_in_out"
+    }
+}
+
+-- ---------------------------------------------------------------------------
+-- Math Utilities
+-- ---------------------------------------------------------------------------
+local function clamp01(t)
+    return t < 0 and 0 or (t > 1 and 1 or t)
+end
+
+local function lerp(a, b, t)
+    return a + (b - a) * t
+end
+
+local function smoothstep(t)
+    return t * t * (3 - 2 * t)
+end
+
+local function quadratic_bezier(p0, p1, p2, t)
+    local u = 1 - t
+    return u*u*p0.x + 2*u*t*p1.x + t*t*p2.x, u*u*p0.y + 2*u*t*p1.y + t*t*p2.y
+end
+
+-- ---------------------------------------------------------------------------
+-- Core Animation Sequences
+-- ---------------------------------------------------------------------------
+
+-- Create a summon animation (card flies from start to end with arc)
+function AnimationSequences.summon(object, start_x, start_y, start_scale, 
+                                 end_x, end_y, end_scale, options)
+    options = options or {}
+    
+    local cfg = AnimationSequences.config.summon
+    local duration = options.duration or cfg.duration
+    local arc_height = options.arc_height or cfg.arc_height
+    local peak_scale_mul = options.peak_scale_mul or cfg.peak_scale_mul
+    local wobble_deg = options.wobble_deg or cfg.wobble_ro_deg
+    local easing = options.easing or AnimationSequences.config.default_easing
+    local on_complete = options.on_complete
+    local on_update = options.on_update
+    
+    -- Calculate control point for arc
+    local control_x = (start_x + end_x) * 0.5
+    local control_y = (start_y + end_y) * 0.5 - arc_height
+    
+    -- Store initial properties
+    local initial_values = {
+        x = start_x,
+        y = start_y,
+        scale = start_scale,
+        progress = 0
+    }
+    
+    -- Create animation sequence
+    local sequence_id = AnimationEngine.create_sequence({
+        {
+            type = "animate",
+            duration = duration,
+            easing = easing,
+            on_update = function(values, t, phase)
+                -- Calculate bezier position
+                local x, y = quadratic_bezier(
+                    {x = start_x, y = start_y},
+                    {x = control_x, y = control_y},
+                    {x = end_x, y = end_y},
+                    t
+                )
+                
+                -- Calculate scale with pulse
+                local base_scale = lerp(start_scale, end_scale, t)
+                local pulse = 1.0 + ((peak_scale_mul - 1.0) * math.sin(math.pi * t))
+                local current_scale = base_scale * pulse
+                
+                -- Calculate rotation with wobble
+                local base_rotation = lerp(0, 0, t) -- No base rotation
+                local wobble = wobble_deg ~= 0 and math.sin(math.pi * 2 * t) * wobble_deg or 0
+                local current_rotation = base_rotation + wobble
+                
+                -- Apply to object
+                object.x = x
+                object.y = y
+                object.scale = current_scale
+                object.rotation = current_rotation
+                
+                -- Call custom update if provided
+                if on_update then
+                    on_update({
+                        x = x,
+                        y = y,
+                        scale = current_scale,
+                        rotation = current_rotation,
+                        progress = t
+                    }, t, phase)
+                end
+            end,
+            on_complete = on_complete
+        }
+    })
+    
+    AnimationEngine.start_sequence(sequence_id)
+    return sequence_id
+end
+
+-- Create a set animation (similar to summon but with flip and rotation)
+function AnimationSequences.set(object, start_x, start_y, start_scale, start_rotation,
+                              end_x, end_y, end_scale, end_rotation, options)
+    options = options or {}
+    
+    local cfg = AnimationSequences.config.position_change
+    local duration = options.duration or cfg.duration
+    local peak_scale_mul = options.peak_scale_mul or cfg.peak_scale_mul
+    local flip_min = options.flip_min or cfg.flip_min
+    local swap_t = options.swap_t or cfg.swap_t
+    local easing = options.easing or AnimationSequences.config.default_easing
+    local on_complete = options.on_complete
+    local on_update = options.on_update
+    
+    local sequence_id = AnimationEngine.create_sequence({
+        {
+            type = "animate",
+            duration = duration,
+            easing = easing,
+            on_update = function(values, t, phase)
+                -- Linear interpolation for position
+                local x = lerp(start_x, end_x, t)
+                local y = lerp(start_y, end_y, t)
+                
+                -- Linear interpolation for rotation
+                local rotation = lerp(start_rotation, end_rotation, t)
+                
+                -- Calculate scale with midpoint pulse
+                local base_scale = lerp(start_scale, end_scale, t)
+                local pulse = 1.0 + ((peak_scale_mul - 1.0) * math.sin(math.pi * t))
+                local current_scale = base_scale * pulse
+                
+                -- Flip effect: width shrinks at midpoint
+                local edge = math.abs(2 * t - 1) -- 1 at ends, 0 at mid
+                local width_scale = flip_min + (1 - flip_min) * edge
+                
+                -- Apply to object (with flip effect on X scale)
+                object.x = x
+                object.y = y
+                object.rotation = rotation
+                object.scaleX = current_scale * width_scale
+                object.scaleY = current_scale
+                
+                -- Call custom update if provided
+                if on_update then
+                    on_update({
+                        x = x,
+                        y = y,
+                        scaleX = current_scale * width_scale,
+                        scaleY = current_scale,
+                        rotation = rotation,
+                        progress = t
+                    }, t, phase)
+                end
+            end,
+            on_complete = on_complete
+        }
+    })
+    
+    AnimationEngine.start_sequence(sequence_id)
+    return sequence_id
+end
+
+-- Create a position change animation (rotate and reveal)
+function AnimationSequences.positionChange(object, start_rotation, end_rotation, 
+                                         options)
+    options = options or {}
+    
+    local cfg = AnimationSequences.config.position_change
+    local duration = options.duration or cfg.duration
+    local peak_scale_mul = options.peak_scale_mul or cfg.peak_scale_mul
+    local easing = options.easing or AnimationSequences.config.default_easing
+    local on_complete = options.on_complete
+    local on_update = options.on_update
+    
+    -- Store initial values
+    local start_scale = object.scale or 1
+    local start_x = object.x or 0
+    local start_y = object.y or 0
+    
+    local sequence_id = AnimationEngine.create_sequence({
+        {
+            type = "animate",
+            duration = duration,
+            easing = easing,
+            on_update = function(values, t, phase)
+                -- Interpolate rotation
+                local rotation = lerp(start_rotation, end_rotation, t)
+                
+                -- Scale pulse at midpoint
+                local pulse = 1.0 + ((peak_scale_mul - 1.0) * math.sin(math.pi * t))
+                local current_scale = start_scale * pulse
+                
+                -- Apply to object
+                object.rotation = rotation
+                object.scale = current_scale
+                
+                -- Call custom update if provided
+                if on_update then
+                    on_update({
+                        rotation = rotation,
+                        scale = current_scale,
+                        x = start_x,
+                        y = start_y,
+                        progress = t
+                    }, t, phase)
+                end
+            end,
+            on_complete = on_complete
+        }
+    })
+    
+    AnimationEngine.start_sequence(sequence_id)
+    return sequence_id
+end
+
+-- Create an attack animation (recoil then lunge)
+function AnimationSequences.attack(object, recoil_offset, lunge_offset, options)
+    options = options or {}
+    
+    local cfg = AnimationSequences.config.attack
+    local duration = options.duration or cfg.duration
+    local t1 = options.t1 or cfg.t1
+    local t2 = options.t2 or cfg.t2
+    local easing = options.easing or AnimationSequences.config.default_easing
+    local on_complete = options.on_complete
+    local on_update = options.on_update
+    
+    -- Store initial position
+    local start_x = object.x or 0
+    local start_y = object.y or 0
+    
+    local sequence_id = AnimationEngine.create_sequence({
+        {
+            type = "animate",
+            duration = duration,
+            easing = easing,
+            on_update = function(values, t, phase)
+                local offset_y = 0
+                
+                -- Three-phase movement: recoil -> lunge -> return
+                if t < t1 then
+                    -- Recoil phase
+                    local u = smoothstep(t / t1)
+                    offset_y = lerp(0, recoil_offset, u)
+                elseif t < t2 then
+                    -- Lunge phase
+                    local u = smoothstep((t - t1) / (t2 - t1))
+                    offset_y = lerp(recoil_offset, lunge_offset, u)
+                else
+                    -- Return phase
+                    local u = smoothstep((t - t2) / (1 - t2))
+                    offset_y = lerp(lunge_offset, 0, u)
+                end
+                
+                -- Apply movement
+                object.y = start_y + offset_y
+                
+                -- Add slight scale change for impact
+                local impact_scale = 1.0 + 0.1 * math.sin(math.pi * t)
+                object.scale = impact_scale
+                
+                -- Call custom update if provided
+                if on_update then
+                    on_update({
+                        x = start_x,
+                        y = start_y + offset_y,
+                        scale = impact_scale,
+                        offset = offset_y,
+                        progress = t
+                    }, t, phase)
+                end
+            end,
+            on_complete = on_complete
+        }
+    })
+    
+    AnimationEngine.start_sequence(sequence_id)
+    return sequence_id
+end
+
+-- Create a slide animation (move from offscreen to position)
+function AnimationSequences.slideIn(object, start_x, start_y, end_x, end_y, options)
+    options = options or {}
+    
+    local cfg = AnimationSequences.config.slide
+    local duration = options.duration or cfg.duration
+    local easing = options.easing or cfg.easing
+    local on_complete = options.on_complete
+    local on_update = options.on_update
+    
+    local sequence_id = AnimationEngine.create_sequence({
+        {
+            type = "animate",
+            start = {x = start_x, y = start_y},
+            target = {x = end_x, y = end_y},
+            duration = duration,
+            easing = easing,
+            on_update = function(values)
+                object.x = values.x
+                object.y = values.y
+                
+                if on_update then
+                    on_update(values)
+                end
+            end,
+            on_complete = on_complete
+        }
+    })
+    
+    AnimationEngine.start_sequence(sequence_id)
+    return sequence_id
+end
+
+-- Create a bob animation (up and down movement)
+function AnimationSequences.bob(object, options)
+    options = options or {}
+    
+    local cfg = AnimationSequences.config.bob
+    local duration = options.duration or cfg.duration
+    local distance = options.distance or cfg.distance
+    local easing = options.easing or cfg.easing
+    local loop = options.loop ~= nil and options.loop or cfg.loop
+    local ping_pong = options.ping_pong ~= nil and options.ping_pong or cfg.ping_pong
+    local on_update = options.on_update
+    
+    -- Store initial position
+    local start_y = object.y or 0
+    
+    return AnimationEngine.animate(
+        {y = start_y},
+        {y = start_y - distance},
+        duration,
+        {
+            easing = easing,
+            on_update = function(values)
+                object.y = values.y
+                
+                if on_update then
+                    on_update(values)
+                end
+            end,
+            loop = loop,
+            ping_pong = ping_pong
+        }
+    )
+end
+
+-- Create a pulse animation (scale and alpha pulsing)
+function AnimationSequences.pulse(object, options)
+    options = options or {}
+    
+    local cfg = AnimationSequences.config.pulse
+    local duration = options.duration or cfg.duration
+    local scale_from = options.scale_from or cfg.scale_from
+    local scale_to = options.scale_to or cfg.scale_to
+    local alpha_from = options.alpha_from or cfg.alpha_from
+    local alpha_to = options.alpha_to or cfg.alpha_to
+    local easing = options.easing or cfg.easing
+    local loop = options.loop ~= nil and options.loop or cfg.loop
+    local ping_pong = options.ping_pong ~= nil and options.ping_pong or cfg.ping_pong
+    local on_update = options.on_update
+    
+    return AnimationEngine.animate(
+        {scale = scale_from, alpha = alpha_from},
+        {scale = scale_to, alpha = alpha_to},
+        duration,
+        {
+            easing = easing,
+            on_update = function(values)
+                object.scale = values.scale
+                object.alpha = values.alpha
+                
+                if on_update then
+                    on_update(values)
+                end
+            end,
+            loop = loop,
+            ping_pong = ping_pong
+        }
+    )
+end
+
+-- Create a shake animation (screen shake effect)
+function AnimationSequences.shake(object, options)
+    options = options or {}
+    
+    local cfg = AnimationSequences.config.shake
+    local duration = options.duration or cfg.duration
+    local intensity = options.intensity or cfg.intensity
+    local frequency = options.frequency or cfg.frequency
+    local easing = options.easing or cfg.easing
+    local on_complete = options.on_complete
+    local on_update = options.on_update
+    
+    -- Store initial position
+    local start_x = object.x or 0
+    local start_y = object.y or 0
+    
+    local sequence_id = AnimationEngine.create_sequence({
+        {
+            type = "animate",
+            duration = duration,
+            easing = easing,
+            on_update = function(values, t, phase)
+                -- Calculate shake intensity (decays over time)
+                local current_intensity = intensity * (1 - t)
+                
+                -- Calculate shake offset using sine waves
+                local shake_x = math.sin(t * frequency * math.pi * 2) * current_intensity
+                local shake_y = math.cos(t * frequency * math.pi * 2) * current_intensity * 0.7
+                
+                -- Apply shake
+                object.x = start_x + shake_x
+                object.y = start_y + shake_y
+                
+                -- Add rotation shake
+                object.rotation = math.sin(t * frequency * math.pi * 3) * current_intensity * 0.5
+                
+                -- Call custom update if provided
+                if on_update then
+                    on_update({
+                        x = start_x + shake_x,
+                        y = start_y + shake_y,
+                        rotation = object.rotation,
+                        intensity = current_intensity,
+                        progress = t
+                    }, t, phase)
+                end
+            end,
+            on_complete = on_complete
+        }
+    })
+    
+    AnimationEngine.start_sequence(sequence_id)
+    return sequence_id
+end
+
+-- Create a fade animation (fade in/out)
+function AnimationSequences.fade(object, target_alpha, options)
+    options = options or {}
+    
+    local cfg = AnimationSequences.config.fade
+    local duration = options.duration or cfg.duration
+    local easing = options.easing or cfg.easing
+    local on_complete = options.on_complete
+    local discrete = options.discrete
+    
+    return AnimationEngine.fade_to(
+        object,
+        target_alpha,
+        duration,
+        easing,
+        on_complete,
+        options.loop,
+        options.ping_pong,
+        options.easing_back,
+        discrete
+    )
+end
+
+-- Create a color tint animation
+function AnimationSequences.tint(object, target_r, target_g, target_b, options)
+    options = options or {}
+    
+    local duration = options.duration or AnimationSequences.config.default_duration
+    local easing = options.easing or AnimationSequences.config.default_easing
+    local on_complete = options.on_complete
+    local discrete = options.discrete
+    
+    return AnimationEngine.tint_to(
+        object,
+        target_r, target_g, target_b,
+        duration,
+        easing,
+        on_complete,
+        options.loop,
+        options.ping_pong,
+        options.easing_back,
+        discrete
+    )
+end
+
+-- Create a complex sequence that mimics duels.lua summon with all effects
+function AnimationSequences.complexSummon(object, start_x, start_y, start_scale,
+                                        end_x, end_y, end_scale, options)
+    options = options or {}
+    
+    local sequence_steps = {}
+    
+    -- Step 1: Arc movement with scale pulse
+    table.insert(sequence_steps, {
+        type = "animate",
+        duration = options.arc_duration or 0.25,
+        easing = options.easing or "ease_in_out",
+        on_update = function(values, t, phase)
+            -- Arc calculation
+            local control_x = (start_x + end_x) * 0.5
+            local control_y = (start_y + end_y) * 0.5 - (options.arc_height or 24)
+            
+            local x, y = quadratic_bezier(
+                {x = start_x, y = start_y},
+                {x = control_x, y = control_y},
+                {x = end_x, y = end_y},
+                t
+            )
+            
+            -- Scale with pulse
+            local base_scale = lerp(start_scale, end_scale, t)
+            local pulse = 1.0 + ((options.peak_scale_mul or 1.35) - 1.0) * math.sin(math.pi * t)
+            local current_scale = base_scale * pulse
+            
+            -- Apply
+            object.x = x
+            object.y = y
+            object.scale = current_scale
+            
+            if options.on_update_step1 then
+                options.on_update_step1({x = x, y = y, scale = current_scale, progress = t})
+            end
+        end
+    })
+    
+    -- Step 2: Rotation wobble
+    if options.wobble_deg and options.wobble_deg > 0 then
+        table.insert(sequence_steps, {
+            type = "animate",
+            duration = options.wobble_duration or 0.1,
+            easing = "elastic_out",
+            on_update = function(values, t, phase)
+                local wobble = math.sin(t * math.pi * 4) * options.wobble_deg * (1 - t)
+                object.rotation = wobble
+                
+                if options.on_update_step2 then
+                    options.on_update_step2({rotation = wobble, progress = t})
+                end
+            end
+        })
+    end
+    
+    -- Step 3: Final settle
+    table.insert(sequence_steps, {
+        type = "animate",
+        duration = options.settle_duration or 0.05,
+        easing = "bounce_out",
+        on_update = function(values, t, phase)
+            object.scale = end_scale * (1 - 0.05 * (1 - t))
+            
+            if options.on_update_step3 then
+                options.on_update_step3({scale = object.scale, progress = t})
+            end
+        end,
+        on_complete = options.on_complete
+    })
+    
+    local sequence_id = AnimationEngine.create_sequence(sequence_steps)
+    AnimationEngine.start_sequence(sequence_id)
+    return sequence_id
+end
+
+-- Create a menu cursor animation (bob + pulse)
+function AnimationSequences.menuCursor(object, options)
+    options = options or {}
+    
+    local bob_distance = options.bob_distance or 2
+    local pulse_scale = options.pulse_scale or 1.1
+    local duration = options.duration or 0.8
+    
+    -- Start both animations
+    local bob_id = AnimationSequences.bob(object, {
+        distance = bob_distance,
+        duration = duration,
+        loop = true,
+        ping_pong = true
+    })
+    
+    local pulse_id = AnimationSequences.pulse(object, {
+        scale_from = 1.0,
+        scale_to = pulse_scale,
+        duration = duration * 1.5,
+        loop = true,
+        ping_pong = true
+    })
+    
+    return {bob = bob_id, pulse = pulse_id}
+end
+
+-- Create a card highlight animation (lift + glow)
+function AnimationSequences.highlightCard(object, options)
+    options = options or {}
+    
+    local lift_amount = options.lift_amount or 5
+    local glow_alpha = options.glow_alpha or 100
+    local duration = options.duration or 0.15
+    
+    local start_y = object.y or 0
+    local start_alpha = object.alpha or 255
+    
+    return AnimationEngine.animate(
+        {y = start_y, alpha = start_alpha},
+        {y = start_y - lift_amount, alpha = glow_alpha},
+        duration,
+        {
+            easing = "ease_out",
+            on_update = function(values)
+                object.y = values.y
+                object.alpha = values.alpha
+            end,
+            on_complete = options.on_complete
+        }
+    )
+end
+
+-- ---------------------------------------------------------------------------
+-- Utility Functions
+-- ---------------------------------------------------------------------------
+
+-- Stop all animations for an object
+function AnimationSequences.stopAll(object_id_prefix)
+    -- This would need to track animations by object
+    -- For now, provides a placeholder
+    print("Stop animations for: " .. (object_id_prefix or "all"))
+end
+
+-- Check if any animations are running for an object
+function AnimationSequences.isAnimating(object_id_prefix)
+    -- Placeholder implementation
+    return false
+end
+
+-- Reset object to its initial state
+function AnimationSequences.reset(object, initial_values)
+    initial_values = initial_values or {}
+    
+    AnimationEngine.set_to(object, {
+        x = initial_values.x or object.x,
+        y = initial_values.y or object.y,
+        scale = initial_values.scale or 1,
+        rotation = initial_values.rotation or 0,
+        alpha = initial_values.alpha or 255
+    })
+end
+
+-- ---------------------------------------------------------------------------
+-- Example Usage
+-- ---------------------------------------------------------------------------
+--[[
+-- Example object
+local mySprite = {
+    x = 100,
+    y = 100,
+    scale = 1,
+    rotation = 0,
+    alpha = 255
+}
+
+-- Summon animation
+AnimationSequences.summon(mySprite, 
+    0, 100, 0.5,   -- Start: x, y, scale
+    100, 100, 1.0, -- End: x, y, scale
+    {
+        duration = 0.3,
+        arc_height = 30,
+        on_complete = function()
+            print("Summon complete!")
+        end
+    }
+)
+
+-- Bob animation
+AnimationSequences.bob(mySprite, {
+    distance = 3,
+    duration = 1.0
+})
+
+-- Shake animation
+AnimationSequences.shake(mySprite, {
+    intensity = 5,
+    duration = 0.2,
+    on_complete = function()
+        print("Shake complete!")
+    end
+})
+
+-- Complex sequence
+AnimationSequences.complexSummon(mySprite,
+    50, 150, 0.3,
+    150, 150, 1.0,
+    {
+        arc_height = 40,
+        wobble_deg = 10,
+        on_complete = function()
+            print("Complex summon complete!")
+        end
+    }
+)
+]]
+
+return AnimationSequences
