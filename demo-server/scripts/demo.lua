@@ -174,20 +174,54 @@ Net:on("actor_interaction", function (event)
     -- games.color_pulse_from_current("points", event.player_id, {r = 128, g = 50, b = 120, a =255}, {duration = 0.8, easing = AnimationEngine.AnimEnums.EasingFns.smootherstep, loop = true, ping_pong = false})
         -- games.animate_ui_effect("points",event.player_id, "pulse",{0.2, 0.4, 0.5,3, function() print("Shake complete!") end})
         -- games.animate_ui_element("points", event.player_id, {x = 6, y = 140} , 1, "ease_in_out", function() print("ended anim")end )
-    games.animate_ui_effect("points", event.player_id, "summon", 
-        {
-            start_x = 240, start_y = 160, start_scale = 0.5,
-            end_x = 0, end_y = 160, end_scale = 2.0,
-            options = {
-                duration = 2,           
-                peak_scale_mul = 1.15,     
-                flip_min = 0.06,           
-                swap_t = 0.5,              
-                easing = "ease_in_out",    
-                on_complete = function() end,  
-                on_update = function() end
-            }
-        })
+    -- games.apply_ui_effect("points", event.player_id, "summon", {
+    --     start_x = 240, start_y = 0, start_scale =  0.5,
+    --     end_x = 0 , end_y = 160, end_scale = 2.0, 
+    --     options = {
+    --         arc_height = 24,
+    --         peak_scale_mul = 1.35,
+    --         wobble_ro_deg = 5,
+    --         duration = 0.25,
+    --         z_offset = 10
+    --         }
+    --     }
+    -- ) 
+    
+    local updates = games.get_ui_element_proxy("points", event.player_id)
+    
+    local seq_id = games.summon_ui_element("points",event.player_id, 120, 0, 0.5,
+        0, 140, 2.0, {
+            start_x = 161, start_y = 2, start_scale = 0,
+            end_x = 0, end_y = 130, end_scale = 2.0,
+        duration = 3,     -- Animation duration in seconds
+        arc_height = 24,     -- How high the arc goes
+        peak_scale_mul = 1.35, -- Scale multiplier at peak of arc
+        wobble_deg = 5,      -- Rotation wobble in degrees   
+        on_complete = function ()
+            
+        end,
+        on_update = function (value)
+            print(value)
+            updates:setScale(value.scale)
+            updates:setPosition(value.x, value.y)
+            updates:setRo(value.rotation)
+        end
+    })
+    games.update_ui_element("points", event.player_id, updates)
+    print(updates)
+    --    {
+    --        start_x = 240, start_y = 160, start_scale = 0.5,
+    --        end_x = 0, end_y = 160, end_scale = 2.0,
+    --        options = {
+    --            duration = 2,           
+    --            peak_scale_mul = 1.15,     
+    --            flip_min = 0.06,           
+    --            swap_t = 0.5,              
+    --            easing = "ease_in_out",    
+    --            on_complete = function() end,  
+    --            on_update = function() end
+    --        }
+    --    })
 
     bat_active[event.player_id] = true
     end 

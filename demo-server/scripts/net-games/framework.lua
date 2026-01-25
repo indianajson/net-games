@@ -316,6 +316,14 @@ function frame.set_cosmetic(cosmetic_id,player_id,texture,animation,state,x,y,vi
         y = (y+80+p_yoffset)*2,
         sx = 2,
         sy = 2,
+        ox = 0,
+        oy = 0,
+        ro = 0,
+        opacity = 255,
+        a = 255,
+        r = 255,
+        g = 255,
+        b = 255,
         anim_state = state
     })
 
@@ -361,7 +369,7 @@ end
 -- MAP FUNCTIONS
 -- Functions to add, animate, and remove objects based on map position (for mini-game elements on map, especially those visible to other players)
 
-function frame.add_map_element(name,player_id,texture,animation,animation_state,x,Y,Z,exclude)
+function frame.add_map_element(name,player_id,texture,animation,animation_state,x,y,z,exclude)
     
     --spawn map object
     
@@ -369,7 +377,7 @@ local area_id =
   (last_position_cache[player_id] and last_position_cache[player_id]["area"])
   or Net.get_player_area(player_id)
 
-    Net.create_bot(player_id.."-map-"..name, { area_id=area_id, warp_in=false, texture_path=texture, animation_path=animation, animation=animation_state,x=x, y=Y, z=Z, solid=false})
+    Net.create_bot(player_id.."-map-"..name, { area_id=area_id, warp_in=false, texture_path=texture, animation_path=animation, animation=animation_state,x=x, y=y, z=z, solid=false})
 
     if exclude == true then
         exclude_except_for(player_id,player_id.."-map-"..name)
@@ -396,12 +404,12 @@ function frame.change_map_element(name,player_id,animation_state,loop)
     end 
 end
 
-function frame.move_map_element(name,player_id,x,Y,Z)
+function frame.move_map_element(name,player_id,x,y,z)
 local area_id =
   (last_position_cache[player_id] and last_position_cache[player_id]["area"])
   or Net.get_player_area(player_id)
 
-Net.transfer_bot(player_id.."-map-"..name, area_id, false, x, Y, Z)
+Net.transfer_bot(player_id.."-map-"..name, area_id, false, x, y, z)
 
 end
 
@@ -415,6 +423,325 @@ end
 
 -- UI FUNCTIONS
 -- Functions to add, animate, and remove sprites based on camera's view (not map position)
+
+-- UI ANIMATION FUNCTIONS USING PRE-BUILT SEQUENCES
+-- Functions that apply pre-built animation sequences from animation-sequences.lua to UI elements
+
+-- purpose: Apply summon animation to UI element (flies with arc)
+function frame.summon_ui_element(sprite_id, player_id, start_x, start_y, start_scale, 
+                                end_x, end_y, end_scale, options)
+    return frame.apply_ui_effect(sprite_id, player_id, "summon", {
+        start_x = start_x,
+        start_y = start_y,
+        start_scale = start_scale,
+        end_x = end_x,
+        end_y = end_y,
+        end_scale = end_scale,
+        options = options
+    })
+end
+
+-- purpose: Apply set animation to UI element (with flip and rotation)
+function frame.set_ui_element(sprite_id, player_id, start_x, start_y, start_scale, start_ro,
+                             end_x, end_y, end_scale, end_ro, options)
+    return frame.apply_ui_effect(sprite_id, player_id, "set", {
+        start_x = start_x,
+        start_y = start_y,
+        start_scale = start_scale,
+        start_ro = start_ro,
+        end_x = end_x,
+        end_y = end_y,
+        end_scale = end_scale,
+        end_ro = end_ro,
+        options = options
+    })
+end
+
+-- purpose: Apply position change animation (rotate and reveal)
+function frame.position_change_ui_element(sprite_id, player_id, start_ro, end_ro, options)
+    return frame.apply_ui_effect(sprite_id, player_id, "position_change", {
+        start_ro = start_ro,
+        end_ro = end_ro,
+        options = options
+    })
+end
+
+-- purpose: Apply attack animation (recoil then lunge)
+function frame.attack_ui_element(sprite_id, player_id, recoil_offset, lunge_offset, options)
+    return frame.apply_ui_effect(sprite_id, player_id, "attack", {
+        recoil_offset = recoil_offset,
+        lunge_offset = lunge_offset,
+        options = options
+    })
+end
+
+-- purpose: Apply slide-in animation
+function frame.slide_in_ui_element(sprite_id, player_id, start_x, start_y, end_x, end_y, options)
+    return frame.apply_ui_effect(sprite_id, player_id, "slide_in", {
+        start_x = start_x,
+        start_y = start_y,
+        end_x = end_x,
+        end_y = end_y,
+        options = options
+    })
+end
+
+-- purpose: Apply bob animation (up and down movement)
+function frame.bob_ui_element(sprite_id, player_id, options)
+    return frame.apply_ui_effect(sprite_id, player_id, "bob", options)
+end
+
+
+-- purpose: Apply fade animation
+function frame.fade_ui_element_to(sprite_id, player_id, target_opacity, options)
+    return frame.apply_ui_effect(sprite_id, player_id, "fade", {
+        target_opacity = target_opacity,
+        options = options
+    })
+end
+
+-- purpose: Apply tint animation (color change)
+function frame.tint_ui_element_to(sprite_id, player_id, r, g, b, options)
+    return frame.apply_ui_effect(sprite_id, player_id, "tint", {
+        r = r,
+        g = g,
+        b = b,
+        options = options
+    })
+end
+
+-- purpose: Apply complex summon animation (all effects)
+function frame.complex_summon_ui_element(sprite_id, player_id, start_x, start_y, start_scale,
+                                        end_x, end_y, end_scale, options)
+    return frame.apply_ui_effect(sprite_id, player_id, "complex_summon", {
+        start_x = start_x,
+        start_y = start_y,
+        start_scale = start_scale,
+        end_x = end_x,
+        end_y = end_y,
+        end_scale = end_scale,
+        options = options
+    })
+end
+
+-- purpose: Apply menu cursor animation (bob + pulse)
+function frame.menu_cursor_ui_element(sprite_id, player_id, options)
+    return frame.apply_ui_effect(sprite_id, player_id, "menu_cursor", options)
+end
+
+-- purpose: Apply card highlight animation (lift + glow)
+function frame.highlight_card_ui_element(sprite_id, player_id, options)
+    return frame.apply_ui_effect(sprite_id, player_id, "highlight_card", options)
+end
+
+-- purpose: Apply simple move animation with looping support
+function frame.move_ui_element_to(sprite_id, player_id, target_x, target_y, duration, easing, 
+                                 on_complete, loop, ping_pong, easing_back, discrete)
+    local options = {
+        target_x = target_x,
+        target_y = target_y,
+        duration = duration,
+        easing = easing,
+        on_complete = on_complete,
+        loop = loop,
+        ping_pong = ping_pong,
+        easing_back = easing_back,
+        discrete = discrete
+    }
+    return frame.apply_animation_sequence(sprite_id, player_id, "move_to", target_x, target_y, 
+                                         duration, easing, on_complete, loop, ping_pong, 
+                                         easing_back, discrete)
+end
+
+-- purpose: Apply scale animation with looping support
+function frame.scale_ui_element_to(sprite_id, player_id, target_scale, duration, easing, 
+                                  on_complete, loop, ping_pong, easing_back, discrete)
+    local options = {
+        target_scale = target_scale,
+        duration = duration,
+        easing = easing,
+        on_complete = on_complete,
+        loop = loop,
+        ping_pong = ping_pong,
+        easing_back = easing_back,
+        discrete = discrete
+    }
+    return frame.apply_animation_sequence(sprite_id, player_id, "scale_to", target_scale, 
+                                         duration, easing, on_complete, loop, ping_pong, 
+                                         easing_back, discrete)
+end
+
+-- purpose: Apply rotation animation with looping support
+function frame.rotate_ui_element_to(sprite_id, player_id, target_angle, duration, easing, 
+                                   on_complete, loop, ping_pong, easing_back, discrete)
+    local options = {
+        target_rotation = target_angle,
+        duration = duration,
+        easing = easing,
+        on_complete = on_complete,
+        loop = loop,
+        ping_pong = ping_pong,
+        easing_back = easing_back,
+        discrete = discrete
+    }
+    return frame.apply_animation_sequence(sprite_id, player_id, "rotate_to", target_angle, 
+                                         duration, easing, on_complete, loop, ping_pong, 
+                                         easing_back, discrete)
+end
+
+-- purpose: Apply fade animation with looping support
+function frame.fade_ui_element_to_with_loop(sprite_id, player_id, target_alpha, duration, easing, 
+                                           on_complete, loop, ping_pong, easing_back, discrete)
+    local options = {
+        target_opacity = target_alpha,
+        duration = duration,
+        easing = easing,
+        on_complete = on_complete,
+        loop = loop,
+        ping_pong = ping_pong,
+        easing_back = easing_back,
+        discrete = discrete
+    }
+    return frame.apply_animation_sequence(sprite_id, player_id, "fade_to", target_alpha, 
+                                         duration, easing, on_complete, loop, ping_pong, 
+                                         easing_back, discrete)
+end
+
+-- purpose: Apply color tint animation with looping support
+function frame.tint_ui_element_to_with_loop(sprite_id, player_id, r, g, b, duration, easing, 
+                                           on_complete, loop, ping_pong, easing_back, discrete)
+    local options = {
+        r = r,
+        g = g,
+        b = b,
+        duration = duration,
+        easing = easing,
+        on_complete = on_complete,
+        loop = loop,
+        ping_pong = ping_pong,
+        easing_back = easing_back,
+        discrete = discrete
+    }
+    return frame.apply_animation_sequence(sprite_id, player_id, "tint_to", r, g, b, 
+                                         duration, easing, on_complete, loop, ping_pong, 
+                                         easing_back, discrete)
+end
+
+-- purpose: Apply discrete-first move animation (discrete values change immediately)
+function frame.move_ui_element_discrete_first(sprite_id, player_id, target_x, target_y, 
+                                             duration, easing, on_complete, loop, ping_pong, 
+                                             easing_back, discrete)
+    local options = {
+        target_x = target_x,
+        target_y = target_y,
+        duration = duration,
+        easing = easing,
+        on_complete = on_complete,
+        loop = loop,
+        ping_pong = ping_pong,
+        easing_back = easing_back,
+        discrete = discrete
+    }
+    return frame.apply_animation_sequence(sprite_id, player_id, "move_to_discrete_first", 
+                                         target_x, target_y, duration, easing, on_complete, 
+                                         loop, ping_pong, easing_back, discrete)
+end
+
+-- purpose: Apply color pulse animation (transition between two colors)
+function frame.color_pulse_ui_element_to(sprite_id, player_id, target_r, target_g, target_b, 
+                                        target_a, duration, easing, on_complete, loop, 
+                                        ping_pong, easing_back, discrete)
+    local options = {
+        r = target_r,
+        g = target_g,
+        b = target_b,
+        a = target_a,
+        duration = duration,
+        easing = easing,
+        on_complete = on_complete,
+        loop = loop,
+        ping_pong = ping_pong,
+        easing_back = easing_back,
+        discrete = discrete
+    }
+    return frame.apply_animation_sequence(sprite_id, player_id, "color_pulse_to", target_r, 
+                                         target_g, target_b, target_a, duration, easing, 
+                                         on_complete, loop, ping_pong, easing_back, discrete)
+end
+
+-- purpose: Get list of all available animation sequences
+function frame.get_available_animation_sequences()
+    local sequences = {}
+    for name, _ in pairs(AnimationSequences) do
+        if type(AnimationSequences[name]) == "function" then
+            table.insert(sequences, name)
+        end
+    end
+    return sequences
+end
+
+-- purpose: Apply a named animation sequence with specific parameters
+function frame.apply_named_sequence(sprite_id, player_id, sequence_name, ...)
+    return frame.apply_animation_sequence(sprite_id, player_id, sequence_name, ...)
+end
+
+-- purpose: Apply instant transition (no animation)
+function frame.set_ui_element_instant(sprite_id, player_id, properties)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return
+    end
+    
+    local element = ui_cache[player_id][sprite_id]
+    
+    -- Update cache with new properties
+    for key, value in pairs(properties) do
+        if element[key] ~= nil then
+            element[key] = value
+        end
+    end
+    
+    -- Update UI element immediately
+    frame.update_ui_element(sprite_id, player_id, properties)
+end
+
+-- purpose: Reset UI element to its initial state
+function frame.reset_ui_element(sprite_id, player_id, initial_values)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return
+    end
+    
+    -- Stop any active animations first
+    frame.stop_ui_animation(sprite_id, player_id)
+    
+    -- Use instant set to reset values
+    local element = ui_cache[player_id][sprite_id]
+    local reset_props = initial_values or {
+        x = element.x or 0,
+        y = element.y or 0,
+        sx = element.sx or 2.0,
+        sy = element.sy or 2.0,
+        ro = element.ro or 0,
+        opacity = element.opacity or 255,
+        r = element.r or 255,
+        g = element.g or 255,
+        b = element.b or 255,
+        animation_state = element.animation_state or ""
+    }
+    
+    frame.set_ui_element_instant(sprite_id, player_id, reset_props)
+end
+
+-- purpose: Create and play a custom animation sequence
+function frame.create_custom_sequence(sprite_id, player_id, steps, options)
+    return frame.create_ui_sequence(sprite_id, player_id, steps, options)
+end
+
+-- purpose: Start a previously created animation sequence
+function frame.start_custom_sequence(sprite_id, player_id, seq_id)
+    return frame.start_ui_sequence(sprite_id, player_id, seq_id)
+end
 
 -- NEW FUNCTION: Apply color pulse animation to UI element
 function frame.color_pulse_ui_element(sprite_id, player_id, start_color, target_color, options)
@@ -772,7 +1099,10 @@ end
 -- purpose: apply a pre-built animation effect to a UI element
 function frame.apply_ui_effect(sprite_id, player_id, effect_type, params)
     params = params or {}
-    
+    local proxy = frame.get_ui_element_proxy(sprite_id, player_id)
+    if not proxy then return nil end
+
+
     if effect_type == "summon" then
         return frame.apply_animation_sequence(sprite_id, player_id, "summon",
             params.start_x, params.start_y, params.start_scale or 0.5,
@@ -798,8 +1128,6 @@ function frame.apply_ui_effect(sprite_id, player_id, effect_type, params)
             params.start_x, params.start_y, params.end_x, params.end_y, params.options or {})
             
     elseif effect_type == "bob" then
-        local proxy = frame.get_ui_element_proxy(sprite_id, player_id)
-        if not proxy then return nil end
         
         local seq_object = {
             x = proxy.x,
@@ -854,6 +1182,41 @@ function frame.apply_ui_effect(sprite_id, player_id, effect_type, params)
             
     elseif effect_type == "color_pulse" then
         return frame.apply_color_pulse_effect(sprite_id, player_id, params)
+            
+    elseif effect_type == "move_to" then
+        return frame.apply_animation_sequence(sprite_id, player_id, "move_to",
+            params.target_x, params.target_y, params.duration, params.easing, 
+            params.on_complete, params.loop, params.ping_pong, params.easing_back, params.discrete)
+            
+    elseif effect_type == "scale_to" then
+        return frame.apply_animation_sequence(sprite_id, player_id, "scale_to",
+            params.target_scale, params.duration, params.easing, params.on_complete,
+            params.loop, params.ping_pong, params.easing_back, params.discrete)
+            
+    elseif effect_type == "rotate_to" then
+        return frame.apply_animation_sequence(sprite_id, player_id, "rotate_to",
+            params.target_rotation, params.duration, params.easing, params.on_complete,
+            params.loop, params.ping_pong, params.easing_back, params.discrete)
+            
+    elseif effect_type == "fade_to" then
+        return frame.apply_animation_sequence(sprite_id, player_id, "fade_to",
+            params.target_opacity, params.duration, params.easing, params.on_complete,
+            params.loop, params.ping_pong, params.easing_back, params.discrete)
+            
+    elseif effect_type == "tint_to" then
+        return frame.apply_animation_sequence(sprite_id, player_id, "tint_to",
+            params.r, params.g, params.b, params.duration, params.easing, params.on_complete,
+            params.loop, params.ping_pong, params.easing_back, params.discrete)
+            
+    elseif effect_type == "color_pulse_to" then
+        return frame.apply_animation_sequence(sprite_id, player_id, "color_pulse_to",
+            params.r, params.g, params.b, params.a, params.duration, params.easing, params.on_complete,
+            params.loop, params.ping_pong, params.easing_back, params.discrete)
+            
+    elseif effect_type == "move_to_discrete_first" then
+        return frame.apply_animation_sequence(sprite_id, player_id, "move_to_discrete_first",
+            params.target_x, params.target_y, params.duration, params.easing, params.on_complete,
+            params.loop, params.ping_pong, params.easing_back, params.discrete)
     end
     
     return nil
@@ -1540,7 +1903,7 @@ end
 
 -- TIMER FUNCTIONS
 
-function frame.spawn_timer(timer_id,player_id,x,Y,duration,loop)
+function frame.spawn_timer(timer_id,player_id,x,y,duration,loop)
     loop = loop or false
     Displayer.Timer.createPlayerTimer(
         player_id, 
@@ -1549,7 +1912,7 @@ function frame.spawn_timer(timer_id,player_id,x,Y,duration,loop)
         function(_, timer_id, value)
         end,
         loop)
-    Displayer.TimerDisplay.createPlayerTimerDisplay(player_id, timer_id, x*2, Y*2, "default")
+    Displayer.TimerDisplay.createPlayerTimerDisplay(player_id, timer_id, x*2, y*2, "default")
 end 
 
 function frame.resume_timer(timer_id,player_id)
@@ -1570,7 +1933,7 @@ end
 
 -- COUNTDOWN FUNCTIONS
 
-function frame.spawn_countdown(countdown_id,player_id,x,Y,duration,loop)
+function frame.spawn_countdown(countdown_id,player_id,x,y,duration,loop)
     loop = loop or false
     Displayer.Timer.createPlayerCountdown(
         player_id, 
@@ -1582,7 +1945,7 @@ function frame.spawn_countdown(countdown_id,player_id,x,Y,duration,loop)
             end
         end,
         loop)
-    Displayer.TimerDisplay.createPlayerCountdownDisplay(player_id, countdown_id, x*2, Y*2, "default")
+    Displayer.TimerDisplay.createPlayerCountdownDisplay(player_id, countdown_id, x*2, y*2, "default")
 end 
 
 function frame.resume_countdown(countdown_id,player_id)

@@ -269,11 +269,13 @@ local function greet_simon(actor_id, player_id)
       2, 2, 100
     )
 
-    games.spawn_countdown("simon_says", player_id, 22, 15, simon.custom_properties["Time"] + 1, false)
+    -- FIXED: Updated to match new framework API (removed +1 from duration)
+    games.spawn_countdown("simon_says", player_id, 22, 15, tonumber(simon.custom_properties["Time"]), false)
     await(Async.sleep(0.1))
     games.pause_countdown("simon_says", player_id)
 
-    games.draw_text("simon_says_answers", player_id, "00", 32, 39, 100, "THICK")
+    -- FIXED: Added scale parameter (2.0) to match new framework API
+    games.draw_text("simon_says_answers", player_id, "00", 32, 39, 100, "THICK", 2.0)
 
     Net.fade_player_camera(player_id, {r=0,g=0,b=0,a=0}, 0.5)
     await(Async.sleep(0.75))
@@ -334,7 +336,7 @@ Net:on("virtual_input", function(event)
     if not p or p.active ~= true then return end
 
     -- Only process one valid press per prompt.
-    -- We treat state==1 (pressed) and state==4 (held repeat) as “a press”.
+    -- We treat state==1 (pressed) and state==4 (held repeat) as "a press".
     for _, btn in next, event.events do
       local pressed = (btn.state == 1 or btn.state == 4)
       if pressed and is_simon_button(btn.name) then
