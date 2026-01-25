@@ -184,36 +184,36 @@ Net:on("actor_interaction", function (event)
         ------------------------------------------------------------------------
     
         -- summon test
-        -- games.summon_ui_element("points",event.player_id, 120, 0, 0.5,
-        --     0, 140, 2.0, 3, 24, 1.35, 5, function() end)
-        -- print(eprops)
+        games.summon_ui_element("points",event.player_id, 120, 0, 0.5,
+            0, 140, 2.0, 3, 24, 1.35, 5, function() end)
+        await(Async.sleep(3))        
         ---- complex summon test
-        games.complex_summon_ui_element(spr_id,pid, eprops.x or 0, eprops.y or 0, 2.0, 4, 150, 2.0)
-        print(eprops)
+        games.complex_summon_ui_element(spr_id,pid, eprops.x or 0, eprops.y or 0, 2.0, 4, 141, 2.0)
         await(Async.sleep(2))
+
         ---- bob test:
         -- games.bob_ui_element(spr_id, pid, 10, 2, AnimationEngine.AnimEnums.EasingFns.smootherstep, true, false)
-        -- print(eprops)
 
         ---- pulse scale test:
         -- games.pulse_scale_ui_element(spr_id, pid, 0.0, 2.0, 10.0, AnimationEngine.AnimEnums.EasingFns.smootherstep, true)
-        -- print(eprops)
         
         ---- color pulse  from sprite info test:
         -- games.color_pulse_from_current(spr_id, pid, {r = 255, g = 125, b = 125, a = 125})
-        -- print(eprops)
 
         ---- rotate in circle test
         -- games.shake_ui_element(spr_id,pid,1, 100, 10)
-        -- print(eprops)
 
         ---- fade test
-        -- games.fade_ui_element_to(spr_id, pid, 0, 2, AnimationEngine.AnimEnums.EasingFns.smootherstep, nil, true, true, AnimationEngine.AnimEnums.EasingFns.smootherstep)
-        -- print(eprops)
+        -- games.set_opacity_ui_element(spr_id,pid,128, 2, AnimationEngine.AnimEnums.EasingFns.smoothstep)
 
         ---- color pulse x -> y test
-        games.color_pulse_rgb(spr_id, pid, 122, 0, 127, 255, 125,127,155,255)
-        print(eprops)
+        -- games.color_pulse_rgb(spr_id, pid, 122, 0, 127, 255, 125,127,155,255)
+
+        ---- cursor bob test
+        games.menu_cursor_ui_element(spr_id, pid, 10, 1.1, 2,1, "horizontal")
+
+        ---- set color test
+        -- games.set_ui_element_color(spr_id, pid, 214, 124, 111, 1, AnimationEngine.AnimEnums.EasingFns.bounce_in)
     end)
     ------------------------------------------------------------------------
 
