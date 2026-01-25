@@ -163,7 +163,15 @@ Net:on("actor_interaction", function (event)
         -- end)end)end) end)end)
         --         games.animate_ui_element("points", event.player_id, {x = 161, y = 10}, 2, "linear", nil, 0)
         -- games.animate_ui_element("points", event.player_id, {opacity = 255,a = 255, r = 255, g = 125, b = 255, color_mode = 0}, {opacity = 255,a = 255, r = 255, g = 125, b = 255, color_mode = 1},2, AnimationEngine.AnimEnums.EasingFns.smoothstep, nil, true , true, AnimationEngine.AnimEnums.EasingFns.instant)
-        games.pulse_ui_element("points", event.player_id, 2.0, 2.2, 1, AnimationEngine.AnimEnums.EasingFns.linear, true, function()end)
+        -- games.pulse_ui_element("points", event.player_id, 2.0, 2.2, 1, AnimationEngine.AnimEnums.EasingFns.linear, 1, function() end)
+    --     games.apply_ui_effect("points", event.player_id, "color_pulse", {start_color = {r = 255, g = 0, b = 0, a = 255},
+    -- target_color = {r = 0, g = 0, b = 255, a = 200},
+    -- options = {
+    --     duration = 1.0,
+    --     loop = true,
+    --     ping_pong = true
+    -- }})
+    games.color_pulse_from_current("points", event.player_id, {r = 128, g = 50, b = 120, a =255}, {duration = 0.8, easing = AnimationEngine.AnimEnums.EasingFns.smootherstep, loop = true, ping_pong = false})
         -- games.animate_ui_effect("points",event.player_id, "pulse",{0.2, 0.4, 0.5,3, function() print("Shake complete!") end})
         -- games.animate_ui_element("points", event.player_id, {x = 6, y = 140} , 1, "ease_in_out", function() print("ended anim")end )
        

@@ -83,6 +83,14 @@ AnimationSequences.config = {
     fade = {
         duration = 0.3,
         easing = "ease_in_out"
+    },
+    
+    -- Color pulse animation defaults
+    color_pulse = {
+        duration = 0.8,
+        easing = "ease_in_out",
+        loop = true,
+        ping_pong = true
     }
 }
 
@@ -469,6 +477,80 @@ function AnimationSequences.pulse(object, options)
     )
 end
 
+-- Create a color pulse animation (transition between two color sets)
+function AnimationSequences.color_pulse(object, start_color, target_color, options)
+    options = options or {}
+    
+    local cfg = AnimationSequences.config.color_pulse
+    local duration = options.duration or cfg.duration
+    local easing = options.easing or cfg.easing
+    local loop = options.loop ~= nil and options.loop or cfg.loop
+    local ping_pong = options.ping_pong ~= nil and options.ping_pong or cfg.ping_pong
+    local on_complete = options.on_complete
+    local on_update = options.on_update
+    
+    -- Ensure colors have alpha values
+    local start_r = start_color.r or start_color[1] or 255
+    local start_g = start_color.g or start_color[2] or 255
+    local start_b = start_color.b or start_color[3] or 255
+    local start_a = start_color.a or start_color[4] or (object.alpha or 255)
+    
+    local target_r = target_color.r or target_color[1] or 255
+    local target_g = target_color.g or target_color[2] or 255
+    local target_b = target_color.b or target_color[3] or 255
+    local target_a = target_color.a or target_color[4] or start_a
+    
+    -- Use the AnimationEngine to create a ping-pong animation between the two colors
+    return AnimationEngine.animate(
+        {r = start_r, g = start_g, b = start_b, a = start_a},
+        {r = target_r, g = target_g, b = target_b, a = target_a},
+        duration,
+        {
+            easing = easing,
+            on_update = function(values)
+                -- Apply color and alpha to object
+                if object.setColor then
+                    object:setColor(values.r, values.g, values.b)
+                else
+                    object.r = values.r
+                    object.g = values.g
+                    object.b = values.b
+                end
+                
+                if object.setAlpha then
+                    object:setAlpha(values.a)
+                else
+                    object.alpha = values.a
+                end
+                
+                -- Call custom update if provided
+                if on_update then
+                    on_update(values)
+                end
+            end,
+            on_complete = on_complete,
+            loop = loop,
+            ping_pong = ping_pong,
+            easing_back = options.easing_back or easing
+        }
+    )
+end
+
+-- Alternative version that uses the object's current color as starting point
+function AnimationSequences.color_pulse_from_current(object, target_color, options)
+    options = options or {}
+    
+    -- Get current color from object
+    local current_color = {
+        r = object.r or 255,
+        g = object.g or 255,
+        b = object.b or 255,
+        a = object.alpha or 255
+    }
+    
+    return AnimationSequences.color_pulse(object, current_color, target_color, options)
+end
+
 -- Create a shake animation (screen shake effect)
 function AnimationSequences.shake(object, options)
     options = options or {}
@@ -700,6 +782,209 @@ function AnimationSequences.highlightCard(object, options)
 end
 
 -- ---------------------------------------------------------------------------
+-- Pre-built Animation Effects (from animation-engine.lua)
+-- ---------------------------------------------------------------------------
+
+-- Simple move animation with looping support
+function AnimationSequences.move_to(object, target_x, target_y, duration, easing, on_complete, loop, ping_pong, easing_back, discrete)
+    duration = duration or AnimationSequences.config.default_duration
+    easing = easing or AnimationSequences.config.default_easing
+    
+    return AnimationEngine.animate(
+        {x = object.x or 0, y = object.y or 0},
+        {x = target_x, y = target_y},
+        duration,
+        {
+            easing = easing,
+            easing_back = easing_back,
+            discrete = discrete,
+            on_update = function(values)
+                if object.setPosition then
+                    object:setPosition(values.x, values.y)
+                else
+                    object.x = values.x
+                    object.y = values.y
+                end
+            end,
+            on_complete = on_complete,
+            loop = loop,
+            ping_pong = ping_pong
+        }
+    )
+end
+
+-- Scale animation with looping support
+function AnimationSequences.scale_to(object, target_scale, duration, easing, on_complete, loop, ping_pong, easing_back, discrete)
+    duration = duration or AnimationSequences.config.default_duration
+    easing = easing or AnimationSequences.config.default_easing
+    
+    return AnimationEngine.animate(
+        {scale = object.scale or 1},
+        {scale = target_scale},
+        duration,
+        {
+            easing = easing,
+            easing_back = easing_back,
+            discrete = discrete,
+            on_update = function(values)
+                if object.setScale then
+                    object:setScale(values.scale)
+                else
+                    object.scale = values.scale
+                end
+            end,
+            on_complete = on_complete,
+            loop = loop,
+            ping_pong = ping_pong
+        }
+    )
+end
+
+-- Rotation animation with looping support
+function AnimationSequences.rotate_to(object, target_angle, duration, easing, on_complete, loop, ping_pong, easing_back, discrete)
+    duration = duration or AnimationSequences.config.default_duration
+    easing = easing or AnimationSequences.config.default_easing
+    
+    return AnimationEngine.animate(
+        {angle = object.angle or 0},
+        {angle = target_angle},
+        duration,
+        {
+            easing = easing,
+            easing_back = easing_back,
+            discrete = discrete,
+            on_update = function(values)
+                if object.setRotation then
+                    object:setRotation(values.angle)
+                else
+                    object.angle = values.angle
+                end
+            end,
+            on_complete = on_complete,
+            loop = loop,
+            ping_pong = ping_pong
+        }
+    )
+end
+
+-- Fade animation with looping support
+function AnimationSequences.fade_to(object, target_alpha, duration, easing, on_complete, loop, ping_pong, easing_back, discrete)
+    duration = duration or AnimationSequences.config.default_duration
+    easing = easing or AnimationSequences.config.default_easing
+    
+    return AnimationEngine.animate(
+        {alpha = object.alpha or 255},
+        {alpha = target_alpha},
+        duration,
+        {
+            easing = easing,
+            easing_back = easing_back,
+            discrete = discrete,
+            on_update = function(values)
+                if object.setAlpha then
+                    object:setAlpha(values.alpha)
+                else
+                    object.alpha = values.alpha
+                end
+            end,
+            on_complete = on_complete,
+            loop = loop,
+            ping_pong = ping_pong
+        }
+    )
+end
+
+-- Color tint animation with looping support
+function AnimationSequences.tint_to(object, target_r, target_g, target_b, duration, easing, on_complete, loop, ping_pong, easing_back, discrete)
+    duration = duration or AnimationSequences.config.default_duration
+    easing = easing or AnimationSequences.config.default_easing
+    
+    return AnimationEngine.animate(
+        {r = object.r or 255, g = object.g or 255, b = object.b or 255},
+        {r = target_r, g = target_g, b = target_b},
+        duration,
+        {
+            easing = easing,
+            easing_back = easing_back,
+            discrete = discrete,
+            on_update = function(values)
+                if object.setColor then
+                    object:setColor(values.r, values.g, values.b)
+                else
+                    object.r = values.r
+                    object.g = values.g
+                    object.b = values.b
+                end
+            end,
+            on_complete = on_complete,
+            loop = loop,
+            ping_pong = ping_pong
+        }
+    )
+end
+
+-- Color pulse animation with looping support (convenience wrapper)
+function AnimationSequences.color_pulse_to(object, target_r, target_g, target_b, target_a, duration, easing, on_complete, loop, ping_pong, easing_back, discrete)
+    duration = duration or 0.8
+    easing = easing or "ease_in_out"
+    loop = loop ~= nil and loop or true
+    ping_pong = ping_pong ~= nil and ping_pong or true
+    
+    -- Get current color from object
+    local current_color = {
+        r = object.r or 255,
+        g = object.g or 255,
+        b = object.b or 255,
+        a = object.alpha or 255
+    }
+    
+    local target_color = {
+        r = target_r,
+        g = target_g,
+        b = target_b,
+        a = target_a or current_color.a
+    }
+    
+    return AnimationSequences.color_pulse(object, current_color, target_color, {
+        duration = duration,
+        easing = easing,
+        on_complete = on_complete,
+        loop = loop,
+        ping_pong = ping_pong,
+        easing_back = easing_back,
+        discrete = discrete
+    })
+end
+
+-- Discrete-first move animation
+function AnimationSequences.move_to_discrete_first(object, target_x, target_y, duration, easing, on_complete, loop, ping_pong, easing_back, discrete)
+    duration = duration or AnimationSequences.config.default_duration
+    easing = easing or AnimationSequences.config.default_easing
+    
+    return AnimationEngine.animate_discrete_first(
+        {x = object.x or 0, y = object.y or 0},
+        {x = target_x, y = target_y},
+        duration,
+        {
+            easing = easing,
+            easing_back = easing_back,
+            discrete = discrete,
+            on_update = function(values)
+                if object.setPosition then
+                    object:setPosition(values.x, values.y)
+                else
+                    object.x = values.x
+                    object.y = values.y
+                end
+            end,
+            on_complete = on_complete,
+            loop = loop,
+            ping_pong = ping_pong
+        }
+    )
+end
+
+-- ---------------------------------------------------------------------------
 -- Utility Functions
 -- ---------------------------------------------------------------------------
 
@@ -760,6 +1045,36 @@ AnimationSequences.bob(mySprite, {
     distance = 3,
     duration = 1.0
 })
+
+-- Color pulse animation
+AnimationSequences.color_pulse(mySprite,
+    {r = 255, g = 100, b = 100, a = 255},  -- Start color (red)
+    {r = 100, g = 100, b = 255, a = 200},  -- Target color (blue)
+    {
+        duration = 1.0,
+        easing = "ease_in_out",
+        loop = true,
+        ping_pong = true,
+        on_complete = function()
+            print("Color pulse complete!")
+        end
+    }
+)
+
+-- Or using the convenience function
+AnimationSequences.color_pulse_to(mySprite,
+    255, 0, 0, 200,  -- Target color: red with 200 alpha
+    0.8, "elastic_in_out",
+    function() print("Red pulse complete!") end
+)
+
+-- Single pulse (one cycle)
+AnimationSequences.color_pulse_to(mySprite,
+    0, 255, 0, 255,  -- Green flash
+    0.5, "ease_out",
+    function() print("Flash complete!") end,
+    1, true  -- loop = 1 (single cycle), ping_pong = true
+)
 
 -- Shake animation
 AnimationSequences.shake(mySprite, {

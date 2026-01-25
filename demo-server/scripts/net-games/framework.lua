@@ -8,6 +8,7 @@
 
 local Displayer = require("scripts/net-games/displayer/displayer") --module by D3str0y3d to handle text, timers, countdowns using v2.1
 local AnimationEngine = require("scripts/net-games/animation-engine/animation-engine") -- Animation engine for sprite animations
+local AnimationSequences = require("scripts/net-games/animation-engine/animation-sequences") -- Pre-built animation sequences
 
 if not Displayer:init() or not Displayer:isValid() then
     print("Failed to initialize Displayer API")
@@ -129,6 +130,23 @@ local function fixOffsets(a, b)
     return a_final, b_final
 end
 
+-- Helper function to normalize color tables
+local function normalize_color(color)
+    if not color then return nil end
+    
+    if type(color) == "table" then
+        -- Check if it's a table with r,g,b,a keys
+        if color.r or color[1] then
+            return {
+                r = color.r or color[1] or 255,
+                g = color.g or color[2] or 255,
+                b = color.b or color[3] or 255,
+                a = color.a or color[4] or 255
+            }
+        end
+    end
+    return nil
+end
 
 --purpose: Shorthand for async
 local function async(p)
@@ -397,6 +415,122 @@ end
 
 -- UI FUNCTIONS
 -- Functions to add, animate, and remove sprites based on camera's view (not map position)
+
+-- NEW FUNCTION: Apply color pulse animation to UI element
+function frame.color_pulse_ui_element(sprite_id, player_id, start_color, target_color, options)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    
+    local element = ui_cache[player_id][sprite_id]
+    options = options or {}
+    
+    -- Normalize colors
+    start_color = normalize_color(start_color)
+    target_color = normalize_color(target_color)
+    
+    -- If start_color is not provided, use current color from element
+    if not start_color then
+        start_color = {
+            r = element.r or 255,
+            g = element.g or 255,
+            b = element.b or 255,
+            a = element.opacity or 255
+        }
+    end
+    
+    -- Create a proxy object for the UI element
+    local proxy = {
+        r = element.r or 255,
+        g = element.g or 255,
+        b = element.b or 255,
+        opacity = element.opacity or 255,
+        
+        setColor = function(self, r, g, b)
+            element.r = r
+            element.g = g
+            element.b = b
+            frame.update_ui_element(sprite_id, player_id, {r = r, g = g, b = b})
+        end,
+        
+        setAlpha = function(self, alpha)
+            element.opacity = alpha
+            frame.update_ui_element(sprite_id, player_id, {opacity = alpha})
+        end
+    }
+    
+    -- Use AnimationSequences.color_pulse
+    local anim_id = AnimationSequences.color_pulse(proxy, start_color, target_color, options)
+    
+    -- Track animation
+    if not element.animations then
+        element.animations = {}
+    end
+    element.animations[anim_id] = true
+    
+    return anim_id
+end
+
+-- NEW FUNCTION: Apply color pulse from current color
+function frame.color_pulse_from_current(sprite_id, player_id, target_color, options)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    
+    -- Use current color as start
+    local element = ui_cache[player_id][sprite_id]
+    local current_color = {
+        r = element.r or 255,
+        g = element.g or 255,
+        b = element.b or 255,
+        a = element.opacity or 255
+    }
+    
+    return frame.color_pulse_ui_element(sprite_id, player_id, current_color, target_color, options)
+end
+
+-- NEW FUNCTION: Simple color pulse with RGB values
+function frame.color_pulse_rgb(sprite_id, player_id, start_r, start_g, start_b, start_a, 
+                               target_r, target_g, target_b, target_a, options)
+    local start_color = {
+        r = start_r or 255,
+        g = start_g or 255,
+        b = start_b or 255,
+        a = start_a or 255
+    }
+    
+    local target_color = {
+        r = target_r or 255,
+        g = target_g or 255,
+        b = target_b or 255,
+        a = target_a or start_color.a
+    }
+    
+    return frame.color_pulse_ui_element(sprite_id, player_id, start_color, target_color, options)
+end
+
+-- NEW FUNCTION: Apply color pulse effect using apply_ui_effect
+function frame.apply_color_pulse_effect(sprite_id, player_id, effect_params)
+    effect_params = effect_params or {}
+    
+    if effect_params.start_color and effect_params.target_color then
+        return frame.color_pulse_ui_element(sprite_id, player_id, 
+            effect_params.start_color, effect_params.target_color, effect_params.options)
+    elseif effect_params.target_color then
+        return frame.color_pulse_from_current(sprite_id, player_id, 
+            effect_params.target_color, effect_params.options)
+    elseif effect_params.r and effect_params.g and effect_params.b then
+        return frame.color_pulse_rgb(sprite_id, player_id,
+            effect_params.start_r, effect_params.start_g, effect_params.start_b, effect_params.start_a,
+            effect_params.r, effect_params.g, effect_params.b, effect_params.a, effect_params.options)
+    else
+        print("[games] Invalid parameters for color pulse effect")
+        return nil
+    end
+end
+
 -- NEW FUNCTION: Check if a UI element has active animations
 function frame.has_active_animations(sprite_id, player_id)
     if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
@@ -578,7 +712,6 @@ end
 
 -- purpose: apply an animation sequence from AnimationSequences to a UI element
 function frame.apply_animation_sequence(sprite_id, player_id, sequence_name, ...)
-    local AnimationSequences = require("scripts/net-games/animation-engine/animation-sequences")
     local proxy = frame.get_ui_element_proxy(sprite_id, player_id)
     
     if not proxy then
@@ -676,7 +809,6 @@ function frame.apply_ui_effect(sprite_id, player_id, effect_type, params)
             end
         }
         
-        local AnimationSequences = require("scripts/net-games/animation-engine/animation-sequences")
         return AnimationSequences.bob(seq_object, params.options or {})
             
     elseif effect_type == "pulse" then
@@ -695,7 +827,6 @@ function frame.apply_ui_effect(sprite_id, player_id, effect_type, params)
             end
         }
         
-        local AnimationSequences = require("scripts/net-games/animation-engine/animation-sequences")
         return AnimationSequences.pulse(seq_object, params.options or {})
             
     elseif effect_type == "shake" then
@@ -720,6 +851,9 @@ function frame.apply_ui_effect(sprite_id, player_id, effect_type, params)
             
     elseif effect_type == "highlight_card" then
         return frame.apply_animation_sequence(sprite_id, player_id, "highlightCard", params.options or {})
+            
+    elseif effect_type == "color_pulse" then
+        return frame.apply_color_pulse_effect(sprite_id, player_id, params)
     end
     
     return nil
@@ -1301,6 +1435,9 @@ function frame.animate_ui_effect(sprite_id, player_id, effect_type, params)
             params.duration,
             params.frequency,
             params.on_complete)
+            
+    elseif effect_type == "color_pulse" then
+        return frame.apply_color_pulse_effect(sprite_id, player_id, params)
     end
     
     return nil
@@ -1597,6 +1734,9 @@ Net:on("player_disconnect", function(event)
     avatar_cache[event.player_id] = nil
     ui_cache[event.player_id] = nil
     ui_update[event.player_id] = nil
+    
+    -- Clean up any active animations for this player
+    AnimationEngine.clear_all() -- This will clear all animations, sequences, and callbacks
 
     if Net.is_bot(event.player_id.."-double") then
         Net.remove_bot(event.player_id.."-double",false)
@@ -1629,6 +1769,9 @@ local tick_gap = 6
 
 Net:on("tick", function(event)
 
+    -- Update the AnimationEngine
+    AnimationEngine.tick(event.delta_time)
+    
     --manages emitting state = 4 if player is using a button to scroll
     for player_id,buttons in next,button_states do
         if not tracking_state[player_id] then

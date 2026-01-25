@@ -31,7 +31,8 @@ AnimationEnums.animation_types = {
     PULSE = "pulse",
     SHAKE = "shake",
     FADE = "fade",
-    TINT = "tint"
+    TINT = "tint",
+    COLOR_PULSE = "color_pulse"
 }
 
 -- Animation property enums
@@ -45,7 +46,8 @@ AnimationEnums.animation_properties = {
     ALPHA = "alpha",
     COLOR_R = "r",
     COLOR_G = "g",
-    COLOR_B = "b"
+    COLOR_B = "b",
+    COLOR_A = "a"
 }
 
 -- Animation direction enums
@@ -77,7 +79,8 @@ AnimationEnums.presets = {
     NOTIFICATION = "notification",
     DAMAGE_FLASH = "damage_flash",
     VICTORY = "victory",
-    DEFEAT = "defeat"
+    DEFEAT = "defeat",
+    COLOR_PULSE = "color_pulse"
 }
 
 return {
