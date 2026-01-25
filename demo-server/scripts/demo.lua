@@ -184,12 +184,13 @@ Net:on("actor_interaction", function (event)
         ------------------------------------------------------------------------
     
         -- summon test
-        games.summon_ui_element("points",event.player_id, 120, 0, 0.5,
-            0, 140, 2.0, 3, 24, 1.35, 5, function() end)
-        await(Async.sleep(3))        
+        -- games.summon_ui_element("points",event.player_id, 120, 0, 0.5, 0, 140, 2.0, 3, 24, 1.35, 5, function() 
+        -- end)
+
+        -- await(Async.sleep(3))        
         ---- complex summon test
-        games.complex_summon_ui_element(spr_id,pid, eprops.x or 0, eprops.y or 0, 2.0, 4, 141, 2.0)
-        await(Async.sleep(2))
+        -- games.complex_summon_ui_element(spr_id,pid, 110, 50, 2.0, 4, 141, 2.0)
+        -- await(Async.sleep(2))
 
         ---- bob test:
         -- games.bob_ui_element(spr_id, pid, 10, 2, AnimationEngine.AnimEnums.EasingFns.smootherstep, true, false)
@@ -209,11 +210,17 @@ Net:on("actor_interaction", function (event)
         ---- color pulse x -> y test
         -- games.color_pulse_rgb(spr_id, pid, 122, 0, 127, 255, 125,127,155,255)
 
+        ---- slide test
+        games.slide_ui_element(spr_id, pid, 4, 141, 12, AnimationEngine.AnimEnums.EasingFns.cubic)
+
         ---- cursor bob test
         games.menu_cursor_ui_element(spr_id, pid, 10, 1.1, 2,1, "horizontal")
 
         ---- set color test
         -- games.set_ui_element_color(spr_id, pid, 214, 124, 111, 1, AnimationEngine.AnimEnums.EasingFns.bounce_in)
+
+        ---- second slide test
+        games.slide_ui_element(spr_id,pid,4, 4, 10, AnimationEngine.AnimEnums.EasingFns.linear)
     end)
     ------------------------------------------------------------------------
 

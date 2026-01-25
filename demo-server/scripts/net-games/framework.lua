@@ -480,7 +480,7 @@ function frame.add_ui_element(sprite_id, player_id, texture_path, animation_path
         id = sprite_id .. "_obj",
         x = (x or 0) * 2,
         y = (y or 0) * 2,
-        z = (z or 0) * 2,
+        z = (z or 0),
         sx = sx,
         sy = sy,
         ro = 0,
@@ -603,6 +603,7 @@ function frame.get_ui_element_proxy(sprite_id, player_id)
     return {
         x = element.x,
         y = element.y,
+        z = element.z,
         sx = element.sx,
         sy = element.sy,
         ro = element.ro,
@@ -652,6 +653,337 @@ end
 -- ===========================================================
 -- UI ANIMATION FUNCTIONS
 -- ===========================================================
+
+-- ===========================================================
+-- UI ANIMATION FUNCTIONS (ADDITIONS)
+-- ===========================================================
+
+-- Purpose: Smoothly slide/move a UI element from current position to target position
+function frame.slide_ui_element(sprite_id, player_id, target_x, target_y, duration, easing, on_complete)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    
+    local element = ui_cache[player_id][sprite_id]
+    duration = duration or 0.3
+    easing = easing or "linear"
+    
+    -- Get current position
+    local current_x = element.x
+    local current_y = element.y
+    
+    local anim_id = nil
+    
+    anim_id = AnimationEngine.animate(
+        {x = current_x, y = current_y},
+        {x = target_x, y = target_y},
+        duration,
+        {
+            easing = easing,
+            easing_back = easing,  -- For consistency with other functions
+            on_update = function(values)
+                frame.update_ui_element(sprite_id, player_id, {
+                    x = values.x,
+                    y = values.y
+                })
+            end,
+            on_complete = function(values, interrupted)
+                -- Ensure final position is set
+                
+                -- Call user callback if provided
+                if on_complete then
+                    on_complete(values, interrupted)
+                end
+                
+                -- Clean up animation tracking
+                if element.animations and anim_id then
+                    element.animations[anim_id] = nil
+                end
+            end,
+            loop = false,        -- One-time animation
+            ping_pong = false,   -- Don't return to start
+            max_cycles = nil     -- No cycling
+        }
+    )
+    
+    if not element.animations then
+        element.animations = {}
+    end
+    element.animations[anim_id] = true
+    
+    return anim_id
+end
+
+-- Purpose: Smoothly slide/move a UI element from specified start to target position
+function frame.set_slide_ui_element(sprite_id, player_id, start_x, start_y, target_x, target_y, duration, easing, on_complete)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    
+    local element = ui_cache[player_id][sprite_id]
+    duration = duration or 0.3
+    easing = easing or "ease_in_out"
+    
+    -- Set starting position immediately
+    frame.update_ui_element(sprite_id, player_id, {x = start_x, y = start_y})
+    
+    local anim_id = nil
+    
+    anim_id = AnimationEngine.animate(
+        {x = start_x, y = start_y},
+        {x = target_x, y = target_y},
+        duration,
+        {
+            easing = easing,
+            easing_back = easing,
+            on_update = function(values)
+                frame.update_ui_element(sprite_id, player_id, {
+                    x = values.x,
+                    y = values.y
+                })
+            end,
+            on_complete = function(values, interrupted)
+                if not interrupted then
+                    frame.update_ui_element(sprite_id, player_id, {
+                        x = target_x,
+                        y = target_y
+                    })
+                end
+                
+                if on_complete then
+                    on_complete(values, interrupted)
+                end
+                
+                if element.animations and anim_id then
+                    element.animations[anim_id] = nil
+                end
+            end,
+            loop = false,
+            ping_pong = false,
+            max_cycles = nil
+        }
+    )
+    
+    if not element.animations then
+        element.animations = {}
+    end
+    element.animations[anim_id] = true
+    
+    return anim_id
+end
+
+-- Purpose: Smoothly move a UI element relative to its current position
+function frame.move_ui_element(sprite_id, player_id, offset_x, offset_y, duration, easing, on_complete)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    
+    local element = ui_cache[player_id][sprite_id]
+    duration = duration or 0.3
+    easing = easing or "ease_in_out"
+    
+    -- Get current position
+    local current_x = element.x or 0
+    local current_y = element.y or 0
+    
+    -- Calculate target position
+    local target_x = current_x + offset_x
+    local target_y = current_y + offset_y
+    
+    return frame.slide_ui_element(sprite_id, player_id, target_x, target_y, duration, easing, on_complete)
+end
+
+-- Purpose: Smoothly scale a UI element (consistent with slide pattern)
+function frame.scale_ui_element(sprite_id, player_id, target_scale, duration, easing, on_complete)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    
+    local element = ui_cache[player_id][sprite_id]
+    duration = duration or 0.3
+    easing = easing or "ease_in_out"
+    
+    -- Get current scale (use sx as reference)
+    local current_scale = element.sx or 2.0
+    
+    local anim_id = nil
+    
+    anim_id = AnimationEngine.animate(
+        {scale = current_scale},
+        {scale = target_scale},
+        duration,
+        {
+            easing = easing,
+            easing_back = easing,
+            on_update = function(values)
+                frame.update_ui_element(sprite_id, player_id, {
+                    sx = values.scale,
+                    sy = values.scale
+                })
+            end,
+            on_complete = function(values, interrupted)
+                if not interrupted then
+                    frame.update_ui_element(sprite_id, player_id, {
+                        sx = target_scale,
+                        sy = target_scale
+                    })
+                end
+                
+                if on_complete then
+                    on_complete(values, interrupted)
+                end
+                
+                if element.animations and anim_id then
+                    element.animations[anim_id] = nil
+                end
+            end,
+            loop = false,
+            ping_pong = false,
+            max_cycles = nil
+        }
+    )
+    
+    if not element.animations then
+        element.animations = {}
+    end
+    element.animations[anim_id] = true
+    
+    return anim_id
+end
+
+-- Purpose: Smoothly rotate a UI element (consistent with slide pattern)
+function frame.rotate_ui_element(sprite_id, player_id, target_rotation, duration, easing, on_complete)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    
+    local element = ui_cache[player_id][sprite_id]
+    duration = duration or 0.3
+    easing = easing or "ease_in_out"
+    
+    -- Get current rotation
+    local current_rotation = element.ro or 0
+    
+    local anim_id = nil
+    
+    anim_id = AnimationEngine.animate(
+        {rotation = current_rotation},
+        {rotation = target_rotation},
+        duration,
+        {
+            easing = easing,
+            easing_back = easing,
+            on_update = function(values)
+                frame.update_ui_element(sprite_id, player_id, {
+                    ro = values.rotation
+                })
+            end,
+            on_complete = function(values, interrupted)
+                if not interrupted then
+                    frame.update_ui_element(sprite_id, player_id, {
+                        ro = target_rotation
+                    })
+                end
+                
+                if on_complete then
+                    on_complete(values, interrupted)
+                end
+                
+                if element.animations and anim_id then
+                    element.animations[anim_id] = nil
+                end
+            end,
+            loop = false,
+            ping_pong = false,
+            max_cycles = nil
+        }
+    )
+    
+    if not element.animations then
+        element.animations = {}
+    end
+    element.animations[anim_id] = true
+    
+    return anim_id
+end
+
+-- Purpose: Complex animation that combines slide, scale, and rotation
+function frame.transform_ui_element(sprite_id, player_id, properties, duration, easing, on_complete)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    
+    local element = ui_cache[player_id][sprite_id]
+    duration = duration or 0.3
+    easing = easing or "ease_in_out"
+    
+    -- Get current properties
+    local current_props = {
+        x = element.x or 0,
+        y = element.y or 0,
+        sx = element.sx or 2.0,
+        sy = element.sy or 2.0,
+        ro = element.ro or 0,
+        opacity = element.opacity or 255
+    }
+    
+    -- Merge with target properties
+    local target_props = {}
+    for key, value in pairs(current_props) do
+        target_props[key] = properties[key] or value
+    end
+    
+    local anim_id = nil
+    
+    anim_id = AnimationEngine.animate(
+        current_props,
+        target_props,
+        duration,
+        {
+            easing = easing,
+            easing_back = easing,
+            on_update = function(values)
+                frame.update_ui_element(sprite_id, player_id, {
+                    x = values.x,
+                    y = values.y,
+                    sx = values.sx,
+                    sy = values.sy,
+                    ro = values.ro,
+                    opacity = values.opacity
+                })
+            end,
+            on_complete = function(values, interrupted)
+                if not interrupted then
+                    frame.update_ui_element(sprite_id, player_id, target_props)
+                end
+                
+                if on_complete then
+                    on_complete(values, interrupted)
+                end
+                
+                if element.animations and anim_id then
+                    element.animations[anim_id] = nil
+                end
+            end,
+            loop = false,
+            ping_pong = false,
+            max_cycles = nil
+        }
+    )
+    
+    if not element.animations then
+        element.animations = {}
+    end
+    element.animations[anim_id] = true
+    
+    return anim_id
+end
 
 -- Purpose: Apply Bob animation to a UI element
 function frame.bob_ui_element(sprite_id, player_id, distance, duration, easing, loop, ping_pong)
@@ -1154,46 +1486,34 @@ function frame.menu_cursor_ui_element(sprite_id, player_id, bob_distance, pulse_
     end
     
     local element = ui_cache[player_id][sprite_id]
-    bob_distance = bob_distance or 2
+
     pulse_scale = pulse_scale or 1.1
+    bob_distance = bob_distance or 3
     bob_duration = bob_duration or 0.8
     pulse_duration = pulse_duration or (bob_duration * 1.5)
     easing = easing or "smootherstep"
     back_easing = back_easing or "smootherstep"
-
-    local initial_pos = nil
-    local end_pos = nil
     
     local orientation = orientation or "vertical"
-
-    if orientation ~= nil then
+    
+    local axis = nil
         if orientation == "vertical" then
-            initial_pos = {y = element.y}
-            end_pos = {y = element.y - bob_distance}
-        elseif orientation == "horizontal" then
-            initial_pos = {x = element.x}
-            end_pos = {x = element.x - bob_distance}
+            axis = "y"
         else
-            print('Please provide a valid orientation; Your options are: ["vertical" or "horizontal"]')
-            return nil
+            axis = "x"
         end
-    end
 
     local start_scale = element.sy or 2.0
     
     local bob_id = AnimationEngine.animate(
-        initial_pos,
-        end_pos,
+        {axis = element[axis]},
+        {axis = element[axis] - bob_distance},
         bob_duration,
         {
             easing = easing,
             easing_back = back_easing,
             on_update = function(values)
-                if orientation == "vertical" then
-                    frame.update_ui_element(sprite_id, player_id, {y = values.y})
-                else
-                frame.update_ui_element(sprite_id, player_id, {x = values.x})
-                end
+                frame.update_ui_element(sprite_id,player_id,{axis = values[axis]})
             end,
             loop = true,
             ping_pong = true
@@ -1265,6 +1585,7 @@ function frame.shake_ui_element(sprite_id, player_id, intensity, duration, frequ
         end
     }
     local seq_id = nil
+
     seq_id = AnimationSequences.shake(shake_object, {
         intensity = intensity,
         duration = duration,
