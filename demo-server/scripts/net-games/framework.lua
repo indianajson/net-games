@@ -421,25 +421,9 @@ function frame.remove_map_element(name,player_id)
     end
 end
 
--- UI FUNCTIONS
--- Functions to add, animate, and remove sprites based on camera's view (not map position)
-
 -- UI ANIMATION FUNCTIONS USING PRE-BUILT SEQUENCES
 -- Functions that apply pre-built animation sequences from animation-sequences.lua to UI elements
 
--- purpose: Apply summon animation to UI element (flies with arc)
-function frame.summon_ui_element(sprite_id, player_id, start_x, start_y, start_scale, 
-                                end_x, end_y, end_scale, options)
-    return frame.apply_ui_effect(sprite_id, player_id, "summon", {
-        start_x = start_x,
-        start_y = start_y,
-        start_scale = start_scale,
-        end_x = end_x,
-        end_y = end_y,
-        end_scale = end_scale,
-        options = options
-    })
-end
 
 -- purpose: Apply set animation to UI element (with flip and rotation)
 function frame.set_ui_element(sprite_id, player_id, start_x, start_y, start_scale, start_ro,
@@ -486,203 +470,638 @@ function frame.slide_in_ui_element(sprite_id, player_id, start_x, start_y, end_x
     })
 end
 
--- purpose: Apply bob animation (up and down movement)
-function frame.bob_ui_element(sprite_id, player_id, options)
-    return frame.apply_ui_effect(sprite_id, player_id, "bob", options)
+---------------------------------------------
+-- TESTED AND WORKING PRE-BUILT ANIMATIONS --
+---------------------------------------------
+
+
+-- Purpose: Apply Bob to a UI element with proper implementation --
+function frame.bob_ui_element(sprite_id, player_id, distance, duration, easing, loop, ping_pong)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    
+    local element = ui_cache[player_id][sprite_id]
+    local start_y = element.y or 0
+    distance = distance or 3
+    duration = duration or 1.0
+    easing = easing or "smoothstep"
+    loop = loop or true
+    ping_pong = ping_pong or true
+    
+    -- Create a proxy object that the AnimationEngine can work with
+    local proxy = {
+        y = start_y,
+        setPosition = function(self, x, y)
+            element.y = y
+            frame.update_ui_element(sprite_id, player_id, {y = y})
+        end
+    }
+    
+    -- Use AnimationEngine directly for bob animation
+    local anim_id = AnimationEngine.animate(
+        {y = start_y},
+        {y = start_y - distance},
+        duration,
+        {
+            easing = easing,
+            on_update = function(values)
+                element.y = values.y
+                frame.update_ui_element(sprite_id, player_id, {x= values.x, y = values.y})
+            end,
+            loop = loop,
+            ping_pong = ping_pong
+        }
+    )
+    
+    -- Track animation
+    if not element.animations then
+        element.animations = {}
+    end
+    element.animations[anim_id] = true
+    
+    return anim_id
 end
 
+-- Purpose: Pulse the scale of a UI element (scale up and down)
+function frame.pulse_scale_ui_element(sprite_id, player_id, min_scale, max_scale, pulse_duration, easing, loops, on_complete)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    
+    local element = ui_cache[player_id][sprite_id]
+    local current_scale = element.sx or 2.0
+    min_scale = min_scale or current_scale * 0.9
+    max_scale = max_scale or current_scale * 1.1
+    pulse_duration = pulse_duration or 0.5
+    
+    local anim_id = AnimationEngine.animate(
+        {scale = min_scale},
+        {scale = max_scale},
+        pulse_duration / 2,
+        {
+            easing = easing or "ease_in_out",
+            on_update = function(values)
+                local update_props = {sx = values.scale, sy = values.scale}
+                frame.update_ui_element(sprite_id, player_id, update_props)
+            end,
+            on_complete = on_complete,
+            loop = loops or 1,
+            ping_pong = true
+        }
+    )
+    
+    -- Track animation
+    if not element.animations then
+        element.animations = {}
+    end
+    element.animations[anim_id] = true
+    
+    return anim_id
+end
 
--- purpose: Apply fade animation
-function frame.fade_ui_element_to(sprite_id, player_id, target_opacity, options)
-    return frame.apply_ui_effect(sprite_id, player_id, "fade", {
-        target_opacity = target_opacity,
-        options = options
+-- Purpose: Apply color pulse from current color to a UI element (go from original color to target_color)
+function frame.color_pulse_from_current(sprite_id, player_id, target_color)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    
+    -- Use current color as start
+    local element = ui_cache[player_id][sprite_id]
+    local current_color = {
+        r = element.r or 255,
+        g = element.g or 255,
+        b = element.b or 255,
+        a = element.a or 255
+    }
+    
+    return frame.color_pulse_scale_ui_element(sprite_id, player_id, current_color, target_color)
+end
+
+-- purpose: Apply summon animation to UI element (flies with arc)
+function frame.summon_ui_element(sprite_id, player_id, start_x, start_y, start_scale, 
+                                end_x, end_y, end_scale, duration, arc_height, peak_scale_mul, wobble_deg, easing, on_complete)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    
+    local element = ui_cache[player_id][sprite_id]
+    
+    -- Get animation parameters from options or use defaults
+    local duration = duration or 0.25
+    local arc_height = arc_height or 24
+    local peak_scale_mul = peak_scale_mul or 1.35
+    local wobble_deg = wobble_deg or 5
+    local easing = easing or "ease_in_out"
+    local on_complete = on_complete
+    
+    -- Set initial position and scale
+    frame.update_ui_element(sprite_id, player_id, {
+        x = start_x,
+        y = start_y,
+        sx = start_scale,
+        sy = start_scale
     })
+    
+    -- Calculate control point for the quadratic bezier (arc)
+    local control_x = (start_x + end_x) * 0.5
+    local control_y = (start_y + end_y) * 0.5 - arc_height
+    local anim_id = nil
+    -- Use AnimationEngine.animate with a custom on_update for the arc movement
+    anim_id = AnimationEngine.animate(
+        {progress = 0},
+        {progress = 1},
+        duration,
+        {
+            easing = easing,
+            on_update = function(values)
+                local t = values.progress
+                
+                -- Calculate bezier position
+                local u = 1 - t
+                local x = u*u*start_x + 2*u*t*control_x + t*t*end_x
+                local y = u*u*start_y + 2*u*t*control_y + t*t*end_y
+                
+                -- Calculate scale with pulse
+                local base_scale = start_scale + (end_scale - start_scale) * t
+                local pulse = 1.0 + ((peak_scale_mul - 1.0) * math.sin(math.pi * t))
+                local current_scale = base_scale * pulse
+                
+                -- Calculate rotation wobble
+                local rotation = 0
+                if wobble_deg ~= 0 then
+                    rotation = math.sin(math.pi * 2 * t) * wobble_deg * (1 - t)
+                end
+                
+                -- Update the UI element
+                frame.update_ui_element(sprite_id, player_id, {
+                    x = x,
+                    y = y,
+                    sx = current_scale,
+                    sy = current_scale,
+                    ro = rotation
+                })
+            end,
+            on_complete = function(values, interrupted)
+                -- Ensure we end at the target position and scale
+                if not interrupted then
+                    frame.update_ui_element(sprite_id, player_id, {
+                        x = end_x,
+                        y = end_y,
+                        sx = end_scale,
+                        sy = end_scale,
+                        ro = 0
+                    })
+                end
+                
+                -- Call user callback if provided
+                if on_complete then
+                    on_complete(values, interrupted)
+                end
+                
+                -- Clean up animation tracking
+                if element.animations and anim_id then
+                    element.animations[anim_id] = nil
+                end
+            end
+        }
+    )
+    
+    -- Track animation
+    if not element.animations then
+        element.animations = {}
+    end
+    element.animations[anim_id] = true
+    
+    return anim_id
 end
 
--- purpose: Apply tint animation (color change)
-function frame.tint_ui_element_to(sprite_id, player_id, r, g, b, options)
-    return frame.apply_ui_effect(sprite_id, player_id, "tint", {
-        r = r,
-        g = g,
-        b = b,
-        options = options
-    })
-end
+
+---------------------------------------------
+-- TESTED AND WORKING PRE-BUILT ANIMATIONS --
+---------------------------------------------
 
 -- purpose: Apply complex summon animation (all effects)
 function frame.complex_summon_ui_element(sprite_id, player_id, start_x, start_y, start_scale,
-                                        end_x, end_y, end_scale, options)
-    return frame.apply_ui_effect(sprite_id, player_id, "complex_summon", {
-        start_x = start_x,
-        start_y = start_y,
-        start_scale = start_scale,
-        end_x = end_x,
-        end_y = end_y,
-        end_scale = end_scale,
-        options = options
-    })
-end
-
--- purpose: Apply menu cursor animation (bob + pulse)
-function frame.menu_cursor_ui_element(sprite_id, player_id, options)
-    return frame.apply_ui_effect(sprite_id, player_id, "menu_cursor", options)
-end
-
--- purpose: Apply card highlight animation (lift + glow)
-function frame.highlight_card_ui_element(sprite_id, player_id, options)
-    return frame.apply_ui_effect(sprite_id, player_id, "highlight_card", options)
-end
-
--- purpose: Apply simple move animation with looping support
-function frame.move_ui_element_to(sprite_id, player_id, target_x, target_y, duration, easing, 
-                                 on_complete, loop, ping_pong, easing_back, discrete)
-    local options = {
-        target_x = target_x,
-        target_y = target_y,
-        duration = duration,
-        easing = easing,
-        on_complete = on_complete,
-        loop = loop,
-        ping_pong = ping_pong,
-        easing_back = easing_back,
-        discrete = discrete
-    }
-    return frame.apply_animation_sequence(sprite_id, player_id, "move_to", target_x, target_y, 
-                                         duration, easing, on_complete, loop, ping_pong, 
-                                         easing_back, discrete)
-end
-
--- purpose: Apply scale animation with looping support
-function frame.scale_ui_element_to(sprite_id, player_id, target_scale, duration, easing, 
-                                  on_complete, loop, ping_pong, easing_back, discrete)
-    local options = {
-        target_scale = target_scale,
-        duration = duration,
-        easing = easing,
-        on_complete = on_complete,
-        loop = loop,
-        ping_pong = ping_pong,
-        easing_back = easing_back,
-        discrete = discrete
-    }
-    return frame.apply_animation_sequence(sprite_id, player_id, "scale_to", target_scale, 
-                                         duration, easing, on_complete, loop, ping_pong, 
-                                         easing_back, discrete)
-end
-
--- purpose: Apply rotation animation with looping support
-function frame.rotate_ui_element_to(sprite_id, player_id, target_angle, duration, easing, 
-                                   on_complete, loop, ping_pong, easing_back, discrete)
-    local options = {
-        target_rotation = target_angle,
-        duration = duration,
-        easing = easing,
-        on_complete = on_complete,
-        loop = loop,
-        ping_pong = ping_pong,
-        easing_back = easing_back,
-        discrete = discrete
-    }
-    return frame.apply_animation_sequence(sprite_id, player_id, "rotate_to", target_angle, 
-                                         duration, easing, on_complete, loop, ping_pong, 
-                                         easing_back, discrete)
-end
-
--- purpose: Apply fade animation with looping support
-function frame.fade_ui_element_to_with_loop(sprite_id, player_id, target_alpha, duration, easing, 
-                                           on_complete, loop, ping_pong, easing_back, discrete)
-    local options = {
-        target_opacity = target_alpha,
-        duration = duration,
-        easing = easing,
-        on_complete = on_complete,
-        loop = loop,
-        ping_pong = ping_pong,
-        easing_back = easing_back,
-        discrete = discrete
-    }
-    return frame.apply_animation_sequence(sprite_id, player_id, "fade_to", target_alpha, 
-                                         duration, easing, on_complete, loop, ping_pong, 
-                                         easing_back, discrete)
-end
-
--- purpose: Apply color tint animation with looping support
-function frame.tint_ui_element_to_with_loop(sprite_id, player_id, r, g, b, duration, easing, 
-                                           on_complete, loop, ping_pong, easing_back, discrete)
-    local options = {
-        r = r,
-        g = g,
-        b = b,
-        duration = duration,
-        easing = easing,
-        on_complete = on_complete,
-        loop = loop,
-        ping_pong = ping_pong,
-        easing_back = easing_back,
-        discrete = discrete
-    }
-    return frame.apply_animation_sequence(sprite_id, player_id, "tint_to", r, g, b, 
-                                         duration, easing, on_complete, loop, ping_pong, 
-                                         easing_back, discrete)
-end
-
--- purpose: Apply discrete-first move animation (discrete values change immediately)
-function frame.move_ui_element_discrete_first(sprite_id, player_id, target_x, target_y, 
-                                             duration, easing, on_complete, loop, ping_pong, 
-                                             easing_back, discrete)
-    local options = {
-        target_x = target_x,
-        target_y = target_y,
-        duration = duration,
-        easing = easing,
-        on_complete = on_complete,
-        loop = loop,
-        ping_pong = ping_pong,
-        easing_back = easing_back,
-        discrete = discrete
-    }
-    return frame.apply_animation_sequence(sprite_id, player_id, "move_to_discrete_first", 
-                                         target_x, target_y, duration, easing, on_complete, 
-                                         loop, ping_pong, easing_back, discrete)
-end
-
--- purpose: Apply color pulse animation (transition between two colors)
-function frame.color_pulse_ui_element_to(sprite_id, player_id, target_r, target_g, target_b, 
-                                        target_a, duration, easing, on_complete, loop, 
-                                        ping_pong, easing_back, discrete)
-    local options = {
-        r = target_r,
-        g = target_g,
-        b = target_b,
-        a = target_a,
-        duration = duration,
-        easing = easing,
-        on_complete = on_complete,
-        loop = loop,
-        ping_pong = ping_pong,
-        easing_back = easing_back,
-        discrete = discrete
-    }
-    return frame.apply_animation_sequence(sprite_id, player_id, "color_pulse_to", target_r, 
-                                         target_g, target_b, target_a, duration, easing, 
-                                         on_complete, loop, ping_pong, easing_back, discrete)
-end
-
--- purpose: Get list of all available animation sequences
-function frame.get_available_animation_sequences()
-    local sequences = {}
-    for name, _ in pairs(AnimationSequences) do
-        if type(AnimationSequences[name]) == "function" then
-            table.insert(sequences, name)
-        end
+                                        end_x, end_y, end_scale, arc_duration, wobble_duration, settle_duration, arc_height, peak_scale_mul, wobble_deg, easing, on_complete, on_update_step1, on_update_step2, on_update_step3)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
     end
-    return sequences
+    
+    local element = ui_cache[player_id][sprite_id]
+    
+    -- Get animation parameters from options or use defaults
+    local arc_duration = arc_duration or 0.25
+    local wobble_duration = wobble_duration or 0.1
+    local settle_duration = settle_duration or 0.05
+    local arc_height = arc_height or 40
+    local peak_scale_mul = peak_scale_mul or 1.35
+    local wobble_deg = wobble_deg or 10
+    local easing = easing or "ease_in_out"
+    local on_complete = on_complete
+    local on_update_step1 = on_update_step1
+    local on_update_step2 = on_update_step2
+    local on_update_step3 = on_update_step3
+    
+    -- Set initial position and scale
+    frame.update_ui_element(sprite_id, player_id, {
+        x = start_x,
+        y = start_y,
+        sx = start_scale,
+        sy = start_scale,
+        ro = 0
+    })
+    
+    -- Calculate control point for the quadratic bezier (arc)
+    local control_x = (start_x + end_x) * 0.5
+    local control_y = (start_y + end_y) * 0.5 - arc_height
+    
+    -- Create a sequence for the complex summon (arc -> wobble -> settle)
+    local sequence_steps = {}
+    
+    -- Step 1: Arc movement with scale pulse
+    table.insert(sequence_steps, {
+        type = "animate",
+        duration = arc_duration,
+        easing = easing,
+        on_update = function(values, t, phase)
+            -- Calculate bezier position for arc
+            local u = 1 - t
+            local x = u*u*start_x + 2*u*t*control_x + t*t*end_x
+            local y = u*u*start_y + 2*u*t*control_y + t*t*end_y
+            
+            -- Calculate scale with pulse
+            local base_scale = start_scale + (end_scale - start_scale) * t
+            local pulse = 1.0 + ((peak_scale_mul - 1.0) * math.sin(math.pi * t))
+            local current_scale = base_scale * pulse
+            
+            -- Update the UI element
+            frame.update_ui_element(sprite_id, player_id, {
+                x = x,
+                y = y,
+                sx = current_scale,
+                sy = current_scale,
+                ro = 0
+            })
+            
+            if on_update_step1 then
+                on_update_step1({x = x, y = y, scale = current_scale, progress = t})
+            end
+        end
+    })
+    
+    -- Step 2: Rotation wobble (if wobble_deg is specified)
+    if wobble_deg and wobble_deg > 0 then
+        table.insert(sequence_steps, {
+            type = "animate",
+            duration = wobble_duration,
+            easing = "elastic_out",
+            on_update = function(values, t, phase)
+                -- Calculate decaying wobble rotation
+                local wobble = math.sin(t * math.pi * 4) * wobble_deg * (1 - t)
+                
+                -- Update only rotation, keep position and scale from previous step
+                frame.update_ui_element(sprite_id, player_id, {
+                    ro = wobble
+                })
+                
+                if on_update_step2 then
+                    on_update_step2({rotation = wobble, progress = t})
+                end
+            end
+        })
+    end
+    
+    -- Step 3: Final settle
+    table.insert(sequence_steps, {
+        type = "animate",
+        duration = settle_duration,
+        easing = "bounce_out",
+        on_update = function(values, t, phase)
+            -- Final scale adjustment (slight overshoot and settle)
+            local settle_scale = end_scale * (1 - 0.05 * (1 - t))
+            
+            -- Update scale and reset rotation
+            frame.update_ui_element(sprite_id, player_id, {
+                sx = settle_scale,
+                sy = settle_scale,
+                ro = 0
+            })
+            
+            if on_update_step3 then
+                on_update_step3({scale = settle_scale, progress = t})
+            end
+        end,
+        on_complete = function(values, interrupted)
+            -- Ensure we end at the exact target position and scale
+            if not interrupted then
+                frame.update_ui_element(sprite_id, player_id, {
+                    x = end_x,
+                    y = end_y,
+                    sx = end_scale,
+                    sy = end_scale,
+                    ro = 0
+                })
+            end
+            
+            -- Call user callback if provided
+            if on_complete then
+                on_complete(values, interrupted)
+            end
+        end
+    })
+    
+    local seq_id = nil
+    -- Create and start the sequence
+    seq_id = AnimationEngine.create_sequence(sequence_steps, {
+        id = "complex_summon_" .. sprite_id .. "_" .. player_id .. "_" .. math.random(1000, 9999),
+        on_complete = function()
+            -- Clean up sequence tracking
+            if element.animations and seq_id then
+                element.animations[seq_id] = nil
+            end
+        end
+    })
+    
+    -- Track animation
+    if not element.animations then
+        element.animations = {}
+    end
+    element.animations[seq_id] = true
+    
+    -- Start the sequence
+    AnimationEngine.start_sequence(seq_id)
+    
+    return seq_id
+end
+-- purpose: Apply fade animation to UI element
+function frame.fade_ui_element_to(sprite_id, player_id, target_opacity, duration, easing, on_complete, loop, ping_pong, easing_back)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    
+    local element = ui_cache[player_id][sprite_id]
+    
+    duration = duration or 0.3
+    easing = easing or "ease_in_out"
+    loop = loop or false
+    ping_pong = ping_pong or false
+    easing_back = easing_back or easing
+    
+    -- Get current opacity
+    local current_opacity = element.opacity or 255
+    target_opacity = math.max(0, math.min(255, target_opacity or 0))
+    
+    -- Use AnimationEngine for fade animation
+    local anim_id = AnimationEngine.animate(
+        {opacity = current_opacity},
+        {opacity = target_opacity},
+        duration,
+        {
+            easing = easing,
+            easing_back = easing_back,
+            on_update = function(values)
+                frame.update_ui_element(sprite_id, player_id, {opacity = math.floor(values.opacity)})
+            end,
+            on_complete = function(values, interrupted)
+                -- Ensure final opacity is set
+                if not interrupted then
+                    frame.update_ui_element(sprite_id, player_id, {opacity = target_opacity})
+                end
+                
+                -- Call user callback if provided
+                if on_complete then
+                    on_complete(values, interrupted)
+                end
+                
+                -- Clean up animation tracking
+                if element.animations and anim_id then
+                    element.animations[anim_id] = nil
+                end
+            end,
+            loop = loop,
+            ping_pong = ping_pong,
+            max_cycles = type(loop) == "number" and loop or nil
+        }
+    )
+    
+    -- Track animation
+    if not element.animations then
+        element.animations = {}
+    end
+    element.animations[anim_id] = true
+    
+    return anim_id
 end
 
--- purpose: Apply a named animation sequence with specific parameters
-function frame.apply_named_sequence(sprite_id, player_id, sequence_name, ...)
-    return frame.apply_animation_sequence(sprite_id, player_id, sequence_name, ...)
+-- purpose: Apply tint animation (color change) to UI element
+function frame.tint_ui_element_to(sprite_id, player_id, r, g, b, duration, easing, on_complete, loop, ping_pong, easing_back)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    
+    local element = ui_cache[player_id][sprite_id]
+    
+    duration = duration or 0.25
+    easing = easing or "ease_in_out"
+    loop = loop or false
+    ping_pong = ping_pong or false
+    easing_back = easing_back or easing
+    
+    -- Get current color
+    local current_r = element.r or 255
+    local current_g = element.g or 255
+    local current_b = element.b or 255
+    
+    -- Clamp target values
+    r = math.max(0, math.min(255, r or 255))
+    g = math.max(0, math.min(255, g or 255))
+    b = math.max(0, math.min(255, b or 255))
+    
+    -- Use AnimationEngine for tint animation
+    local anim_id = AnimationEngine.animate(
+        {r = current_r, g = current_g, b = current_b},
+        {r = r, g = g, b = b},
+        duration,
+        {
+            easing = easing,
+            easing_back = easing_back,
+            on_update = function(values)
+                frame.update_ui_element(sprite_id, player_id, {
+                    r = math.floor(values.r),
+                    g = math.floor(values.g),
+                    b = math.floor(values.b)
+                })
+            end,
+            on_complete = function(values, interrupted)
+                -- Ensure final color is set
+                if not interrupted then
+                    frame.update_ui_element(sprite_id, player_id, {
+                        r = r,
+                        g = g,
+                        b = b
+                    })
+                end
+                
+                -- Call user callback if provided
+                if on_complete then
+                    on_complete(values, interrupted)
+                end
+                
+                -- Clean up animation tracking
+                if element.animations and anim_id then
+                    element.animations[anim_id] = nil
+                end
+            end,
+            loop = loop,
+            ping_pong = ping_pong,
+            max_cycles = type(loop) == "number" and loop or nil
+        }
+    )
+    
+    -- Track animation
+    if not element.animations then
+        element.animations = {}
+    end
+    element.animations[anim_id] = true
+    
+    return anim_id
+end
+
+-- purpose: Apply menu cursor animation (bob + pulse) to UI element
+function frame.menu_cursor_ui_element(sprite_id, player_id, bob_distance, pulse_scale, bob_duration, pulse_duration, on_complete)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    
+    local element = ui_cache[player_id][sprite_id]
+    
+    bob_distance = bob_distance or 2
+    pulse_scale = pulse_scale or 1.1
+    bob_duration = bob_duration or 0.8
+    pulse_duration = pulse_duration or (bob_duration * 1.5)
+    
+    local start_y = element.y or 0
+    local start_scale = element.sx or 2.0
+    
+    -- Start bob animation
+    local bob_id = AnimationEngine.animate(
+        {y = start_y},
+        {y = start_y - bob_distance},
+        bob_duration,
+        {
+            easing = "smoothstep",
+            on_update = function(values)
+                frame.update_ui_element(sprite_id, player_id, {y = values.y})
+            end,
+            loop = true,
+            ping_pong = true
+        }
+    )
+    
+    -- Start pulse animation
+    local pulse_id = AnimationEngine.animate(
+        {scale = 1.0},
+        {scale = pulse_scale},
+        pulse_duration,
+        {
+            easing = "ease_in_out",
+            on_update = function(values)
+                local scale = start_scale * values.scale
+                frame.update_ui_element(sprite_id, player_id, {
+                    sx = scale,
+                    sy = scale
+                })
+            end,
+            loop = true,
+            ping_pong = true
+        }
+    )
+    
+    -- Track animations
+    if not element.animations then
+        element.animations = {}
+    end
+    element.animations[bob_id] = true
+    element.animations[pulse_id] = true
+    
+    -- Return animation IDs for potential control
+    return {
+        bob = bob_id,
+        pulse = pulse_id,
+        stop = function()
+            AnimationEngine.stop_animation(bob_id)
+            AnimationEngine.stop_animation(pulse_id)
+            if element.animations then
+                element.animations[bob_id] = nil
+                element.animations[pulse_id] = nil
+            end
+            if on_complete then
+                on_complete()
+            end
+        end
+    }
+end
+
+-- purpose: Apply card highlight animation (lift + glow) to UI element
+function frame.highlight_card_ui_element(sprite_id, player_id, lift_amount, glow_alpha, duration, easing, on_complete)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    
+    local element = ui_cache[player_id][sprite_id]
+    
+    lift_amount = lift_amount or 5
+    glow_alpha = glow_alpha or 100
+    duration = duration or 0.15
+    easing = easing or "ease_out"
+    
+    local start_y = element.y or 0
+    local start_alpha = element.opacity or 255
+    local anim_id = nil
+    -- Use AnimationEngine for highlight animation
+    anim_id = AnimationEngine.animate(
+        {y = start_y, alpha = start_alpha},
+        {y = start_y - lift_amount, alpha = glow_alpha},
+        duration,
+        {
+            easing = easing,
+            on_update = function(values)
+                frame.update_ui_element(sprite_id, player_id, {
+                    y = values.y,
+                    opacity = math.floor(values.alpha)
+                })
+            end,
+            on_complete = function(values, interrupted)
+                -- Clean up animation tracking
+                if element.animations and anim_id then
+                    element.animations[anim_id] = nil
+                end
+                
+                -- Call user callback if provided
+                if on_complete and not interrupted then
+                    on_complete()
+                end
+            end
+        }
+    )
+    
+    -- Track animation
+    if not element.animations then
+        element.animations = {}
+    end
+    element.animations[anim_id] = true
+    
+    return anim_id
 end
 
 -- purpose: Apply instant transition (no animation)
@@ -733,25 +1152,15 @@ function frame.reset_ui_element(sprite_id, player_id, initial_values)
     frame.set_ui_element_instant(sprite_id, player_id, reset_props)
 end
 
--- purpose: Create and play a custom animation sequence
-function frame.create_custom_sequence(sprite_id, player_id, steps, options)
-    return frame.create_ui_sequence(sprite_id, player_id, steps, options)
-end
-
--- purpose: Start a previously created animation sequence
-function frame.start_custom_sequence(sprite_id, player_id, seq_id)
-    return frame.start_ui_sequence(sprite_id, player_id, seq_id)
-end
 
 -- NEW FUNCTION: Apply color pulse animation to UI element
-function frame.color_pulse_ui_element(sprite_id, player_id, start_color, target_color, options)
+function frame.color_pulse_ui_element(sprite_id, player_id, start_color, target_color)
     if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
         print("[games] UI element not found: " .. sprite_id)
         return nil
     end
     
     local element = ui_cache[player_id][sprite_id]
-    options = options or {}
     
     -- Normalize colors
     start_color = normalize_color(start_color)
@@ -763,7 +1172,7 @@ function frame.color_pulse_ui_element(sprite_id, player_id, start_color, target_
             r = element.r or 255,
             g = element.g or 255,
             b = element.b or 255,
-            a = element.opacity or 255
+            a = element.a or 255
         }
     end
     
@@ -772,7 +1181,7 @@ function frame.color_pulse_ui_element(sprite_id, player_id, start_color, target_
         r = element.r or 255,
         g = element.g or 255,
         b = element.b or 255,
-        opacity = element.opacity or 255,
+        a = element.a or 255,
         
         setColor = function(self, r, g, b)
             element.r = r
@@ -783,12 +1192,12 @@ function frame.color_pulse_ui_element(sprite_id, player_id, start_color, target_
         
         setAlpha = function(self, alpha)
             element.opacity = alpha
-            frame.update_ui_element(sprite_id, player_id, {opacity = alpha})
+            frame.update_ui_element(sprite_id, player_id, {a = alpha})
         end
     }
     
     -- Use AnimationSequences.color_pulse
-    local anim_id = AnimationSequences.color_pulse(proxy, start_color, target_color, options)
+    local anim_id = AnimationSequences.color_pulse(proxy, start_color, target_color)
     
     -- Track animation
     if not element.animations then
@@ -799,28 +1208,10 @@ function frame.color_pulse_ui_element(sprite_id, player_id, start_color, target_
     return anim_id
 end
 
--- NEW FUNCTION: Apply color pulse from current color
-function frame.color_pulse_from_current(sprite_id, player_id, target_color, options)
-    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
-        print("[games] UI element not found: " .. sprite_id)
-        return nil
-    end
-    
-    -- Use current color as start
-    local element = ui_cache[player_id][sprite_id]
-    local current_color = {
-        r = element.r or 255,
-        g = element.g or 255,
-        b = element.b or 255,
-        a = element.opacity or 255
-    }
-    
-    return frame.color_pulse_ui_element(sprite_id, player_id, current_color, target_color, options)
-end
 
 -- NEW FUNCTION: Simple color pulse with RGB values
 function frame.color_pulse_rgb(sprite_id, player_id, start_r, start_g, start_b, start_a, 
-                               target_r, target_g, target_b, target_a, options)
+                               target_r, target_g, target_b, target_a)
     local start_color = {
         r = start_r or 255,
         g = start_g or 255,
@@ -835,27 +1226,7 @@ function frame.color_pulse_rgb(sprite_id, player_id, start_r, start_g, start_b, 
         a = target_a or start_color.a
     }
     
-    return frame.color_pulse_ui_element(sprite_id, player_id, start_color, target_color, options)
-end
-
--- NEW FUNCTION: Apply color pulse effect using apply_ui_effect
-function frame.apply_color_pulse_effect(sprite_id, player_id, effect_params)
-    effect_params = effect_params or {}
-    
-    if effect_params.start_color and effect_params.target_color then
-        return frame.color_pulse_ui_element(sprite_id, player_id, 
-            effect_params.start_color, effect_params.target_color, effect_params.options)
-    elseif effect_params.target_color then
-        return frame.color_pulse_from_current(sprite_id, player_id, 
-            effect_params.target_color, effect_params.options)
-    elseif effect_params.r and effect_params.g and effect_params.b then
-        return frame.color_pulse_rgb(sprite_id, player_id,
-            effect_params.start_r, effect_params.start_g, effect_params.start_b, effect_params.start_a,
-            effect_params.r, effect_params.g, effect_params.b, effect_params.a, effect_params.options)
-    else
-        print("[games] Invalid parameters for color pulse effect")
-        return nil
-    end
+    return frame.color_pulse_ui_element(sprite_id, player_id, start_color, target_color)
 end
 
 -- NEW FUNCTION: Check if a UI element has active animations
@@ -868,23 +1239,6 @@ function frame.has_active_animations(sprite_id, player_id)
     return element.animations and next(element.animations) ~= nil
 end
 
--- NEW FUNCTION: Get current animation IDs for a UI element
-function frame.get_active_animation_ids(sprite_id, player_id)
-    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
-        return {}
-    end
-    
-    local element = ui_cache[player_id][sprite_id]
-    if not element.animations then
-        return {}
-    end
-    
-    local ids = {}
-    for id, _ in pairs(element.animations) do
-        table.insert(ids, id)
-    end
-    return ids
-end
 
 -- NEW FUNCTION: Check if a specific animation is running on a UI element
 function frame.is_animation_running(sprite_id, player_id, anim_id)
@@ -944,284 +1298,6 @@ function frame.get_ui_element_properties(sprite_id, player_id)
     }
 end
 
--- purpose: get a proxy object for a UI element that can be used with AnimationSequences
-function frame.get_ui_element_proxy(sprite_id, player_id)
-    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
-        return nil
-    end
-    
-    local element = ui_cache[player_id][sprite_id]
-    
-    local proxy = {
-        x = element.x,
-        y = element.y,
-        sx = element.sx,
-        sy = element.sy,
-        ro = element.ro,
-        opacity = element.opacity,
-        r = element.r,
-        g = element.g,
-        b = element.b,
-        color_mode = element.color_mode,
-        animation_state = element.animation_state
-    }
-    
-    -- Setter methods that update both the proxy and the actual UI element
-    function proxy:setPosition(x, y)
-        self.x = x
-        self.y = y
-        element.x = x
-        element.y = y
-        frame.update_ui_element(sprite_id, player_id, {x = x, y = y})
-    end
-    
-    function proxy:setSx(sx)
-        self.sx = sx
-        element.sx = sx
-        frame.update_ui_element(sprite_id, player_id, {sx = sx})
-    end
-    
-    function proxy:setSy(sy)
-        self.sy = sy
-        element.sy = sy
-        frame.update_ui_element(sprite_id, player_id, {sy = sy})
-    end
-    
-    function proxy:setScale(scale)
-        self.sx = scale
-        self.sy = scale
-        element.sx = scale
-        element.sy = scale
-        frame.update_ui_element(sprite_id, player_id, {sx = scale, sy = scale})
-    end
-    
-    function proxy:setRo(ro)
-        self.ro = ro
-        element.ro = ro
-        frame.update_ui_element(sprite_id, player_id, {ro = ro})
-    end
-    
-    function proxy:setOpacity(opacity)
-        self.opacity = opacity
-        element.opacity = opacity
-        frame.update_ui_element(sprite_id, player_id, {opacity = opacity})
-    end
-    
-    function proxy:setColor(r, g, b)
-        self.r = r
-        self.g = g
-        self.b = b
-        element.r = r
-        element.g = g
-        element.b = b
-        frame.update_ui_element(sprite_id, player_id, {r = r, g = g, b = b})
-    end
-    
-    function proxy:setAnimationState(state)
-        self.animation_state = state
-        element.animation_state = state
-        frame.set_ui_animation(sprite_id, player_id, state)
-    end
-    
-    function proxy:setColorMode(mode)
-        self.color_mode = mode
-        element.color_mode = mode
-        frame.update_ui_element(sprite_id, player_id, {color_mode = mode})
-    end
-    
-    -- Getter for scale (average of sx and sy)
-    function proxy:getScale()
-        return (self.sx + self.sy) / 2
-    end
-    
-    return proxy
-end
-
--- purpose: apply an animation sequence from AnimationSequences to a UI element
-function frame.apply_animation_sequence(sprite_id, player_id, sequence_name, ...)
-    local proxy = frame.get_ui_element_proxy(sprite_id, player_id)
-    
-    if not proxy then
-        print("[games] UI element not found: " .. sprite_id)
-        return nil
-    end
-    
-    -- Convert proxy to AnimationSequences-compatible object
-    local seq_object = {
-        x = proxy.x,
-        y = proxy.y,
-        sx = proxy.sx,
-        sy = proxy.sy,
-        ro = proxy.ro,
-        opacity = proxy.opacity,
-        r = proxy.r,
-        g = proxy.g,
-        b = proxy.b,
-        -- Map getters for AnimationSequences
-        getScale = function(self)
-            return (self.sx + self.sy) / 2
-        end,
-        -- Map setters back to proxy
-        setPosition = function(self, x, y)
-            proxy:setPosition(x, y)
-        end,
-        setScale = function(self, scale)
-            proxy:setScale(scale)
-        end,
-        setSx = function(self, sx)
-            proxy:setSx(sx)
-        end,
-        setSy = function(self, sy)
-            proxy:setSy(sy)
-        end,
-        setRo = function(self, ro)
-            proxy:setRo(ro)
-        end,
-        setOpacity = function(self, opacity)
-            proxy:setOpacity(opacity)
-        end,
-        setColor = function(self, r, g, b)
-            proxy:setColor(r, g, b)
-        end,
-        setAnimationState = function(self, state)
-            proxy:setAnimationState(state)
-        end
-    }
-    
-    if AnimationSequences[sequence_name] then
-        return AnimationSequences[sequence_name](seq_object, ...)
-    else
-        print("[games] Unknown animation sequence: " .. sequence_name)
-        return nil
-    end
-end
-
--- purpose: apply a pre-built animation effect to a UI element
-function frame.apply_ui_effect(sprite_id, player_id, effect_type, params)
-    params = params or {}
-    local proxy = frame.get_ui_element_proxy(sprite_id, player_id)
-    if not proxy then return nil end
-
-
-    if effect_type == "summon" then
-        return frame.apply_animation_sequence(sprite_id, player_id, "summon",
-            params.start_x, params.start_y, params.start_scale or 0.5,
-            params.end_x, params.end_y, params.end_scale or 2.0,
-            params.options or {})
-            
-    elseif effect_type == "set" then
-        return frame.apply_animation_sequence(sprite_id, player_id, "set",
-            params.start_x, params.start_y, params.start_scale or 0.5, params.start_ro or 0,
-            params.end_x, params.end_y, params.end_scale or 2.0, params.end_ro or 0,
-            params.options or {})
-            
-    elseif effect_type == "position_change" then
-        return frame.apply_animation_sequence(sprite_id, player_id, "positionChange",
-            params.start_ro or 0, params.end_ro or 0, params.options or {})
-            
-    elseif effect_type == "attack" then
-        return frame.apply_animation_sequence(sprite_id, player_id, "attack",
-            params.recoil_offset or -10, params.lunge_offset or 20, params.options or {})
-            
-    elseif effect_type == "slide_in" then
-        return frame.apply_animation_sequence(sprite_id, player_id, "slideIn",
-            params.start_x, params.start_y, params.end_x, params.end_y, params.options or {})
-            
-    elseif effect_type == "bob" then
-        
-        local seq_object = {
-            x = proxy.x,
-            y = proxy.y,
-            setPosition = function(self, x, y)
-                proxy:setPosition(x, y)
-            end
-        }
-        
-        return AnimationSequences.bob(seq_object, params.options or {})
-            
-    elseif effect_type == "pulse" then
-        local proxy = frame.get_ui_element_proxy(sprite_id, player_id)
-        if not proxy then return nil end
-        
-        local seq_object = {
-            sx = proxy.sx,
-            sy = proxy.sy,
-            opacity = proxy.opacity,
-            setScale = function(self, scale)
-                proxy:setScale(scale)
-            end,
-            setOpacity = function(self, opacity)
-                proxy:setOpacity(opacity)
-            end
-        }
-        
-        return AnimationSequences.pulse(seq_object, params.options or {})
-            
-    elseif effect_type == "shake" then
-        return frame.apply_animation_sequence(sprite_id, player_id, "shake", params.options or {})
-            
-    elseif effect_type == "fade" then
-        return frame.apply_animation_sequence(sprite_id, player_id, "fade", 
-            params.target_opacity or 0, params.options or {})
-            
-    elseif effect_type == "tint" then
-        return frame.apply_animation_sequence(sprite_id, player_id, "tint",
-            params.r or 255, params.g or 255, params.b or 255, params.options or {})
-            
-    elseif effect_type == "complex_summon" then
-        return frame.apply_animation_sequence(sprite_id, player_id, "complexSummon",
-            params.start_x, params.start_y, params.start_scale or 0.5,
-            params.end_x, params.end_y, params.end_scale or 2.0,
-            params.options or {})
-            
-    elseif effect_type == "menu_cursor" then
-        return frame.apply_animation_sequence(sprite_id, player_id, "menuCursor", params.options or {})
-            
-    elseif effect_type == "highlight_card" then
-        return frame.apply_animation_sequence(sprite_id, player_id, "highlightCard", params.options or {})
-            
-    elseif effect_type == "color_pulse" then
-        return frame.apply_color_pulse_effect(sprite_id, player_id, params)
-            
-    elseif effect_type == "move_to" then
-        return frame.apply_animation_sequence(sprite_id, player_id, "move_to",
-            params.target_x, params.target_y, params.duration, params.easing, 
-            params.on_complete, params.loop, params.ping_pong, params.easing_back, params.discrete)
-            
-    elseif effect_type == "scale_to" then
-        return frame.apply_animation_sequence(sprite_id, player_id, "scale_to",
-            params.target_scale, params.duration, params.easing, params.on_complete,
-            params.loop, params.ping_pong, params.easing_back, params.discrete)
-            
-    elseif effect_type == "rotate_to" then
-        return frame.apply_animation_sequence(sprite_id, player_id, "rotate_to",
-            params.target_rotation, params.duration, params.easing, params.on_complete,
-            params.loop, params.ping_pong, params.easing_back, params.discrete)
-            
-    elseif effect_type == "fade_to" then
-        return frame.apply_animation_sequence(sprite_id, player_id, "fade_to",
-            params.target_opacity, params.duration, params.easing, params.on_complete,
-            params.loop, params.ping_pong, params.easing_back, params.discrete)
-            
-    elseif effect_type == "tint_to" then
-        return frame.apply_animation_sequence(sprite_id, player_id, "tint_to",
-            params.r, params.g, params.b, params.duration, params.easing, params.on_complete,
-            params.loop, params.ping_pong, params.easing_back, params.discrete)
-            
-    elseif effect_type == "color_pulse_to" then
-        return frame.apply_animation_sequence(sprite_id, player_id, "color_pulse_to",
-            params.r, params.g, params.b, params.a, params.duration, params.easing, params.on_complete,
-            params.loop, params.ping_pong, params.easing_back, params.discrete)
-            
-    elseif effect_type == "move_to_discrete_first" then
-        return frame.apply_animation_sequence(sprite_id, player_id, "move_to_discrete_first",
-            params.target_x, params.target_y, params.duration, params.easing, params.on_complete,
-            params.loop, params.ping_pong, params.easing_back, params.discrete)
-    end
-    
-    return nil
-end
-
 --purpose: places a UI element on screen... that's it. Yes, it's complicated. No, I won't explain it. Blame Jams!
 function frame.add_ui_element(sprite_id,player_id,texture_path,animation_path,animation_state,x,y,z,sx,sy)
 
@@ -1265,8 +1341,8 @@ function frame.add_ui_element(sprite_id,player_id,texture_path,animation_path,an
     Net.player_draw_sprite(player_id, new_sprite_id,
         {
             id = sprite_id .. "_obj",
-            x = x*2, 
-            y = y*2,
+            x = x*2 or 0, 
+            y = y*2 or 0,
             z = z*2 or 0, 
             sx = sx,
             sy = sy,
@@ -1382,172 +1458,7 @@ function frame.update_ui_element(sprite_id,player_id,properties)
     Net.player_draw_sprite(player_id, ui_cache[player_id][sprite_id]["sprite_id"], sprite_data)
 end
 
--- UPDATED FUNCTION: Animate UI element using AnimationEngine with full looping support
-function frame.animate_ui_element(sprite_id, player_id, start_value, target_properties, duration, easing, on_complete, loop, ping_pong, easing_back)
-    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
-        print("[games] UI element not found: " .. sprite_id)
-        return nil
-    end
-    
-    local element = ui_cache[player_id][sprite_id]
-    local anim_id = nil
-
-    -- Create start values from current element state
-    local current_values = {
-        x = element.x,
-        y = element.y,
-        z = element.z,
-        sx = element.sx,
-        sy = element.sy,
-        ro = element.ro,
-        opacity = element.opacity,
-        a = element.a,
-        r = element.r,
-        g = element.g,
-        b = element.b,
-        color_mode = element.color_mode,
-        animation_state = element.animation_state
-    }
-
-    if start_value ~= nil and #start_value >= 1 then
-        if start_value.x ~= nil then current_values.x = start_value.x end
-        if start_value.y ~= nil then current_values.y = start_value.y end
-        if start_value.z ~= nil then current_values.z = start_value.z end
-        if start_value.sx ~= nil then current_values.sx = start_value.sx end
-        if start_value.sy ~= nil then current_values.sy = start_value.sy end
-        if start_value.ro ~= nil then current_values.ro = start_value.ro end
-        if start_value.opacity ~= nil then current_values.opacity = start_value.opacity end
-        if start_value.a ~= nil then current_values.a = start_value.a end
-        if start_value.r ~= nil then current_values.r = start_value.r end
-        if start_value.g ~= nil then current_values.g = start_value.g end
-        if start_value.b ~= nil then current_values.b = start_value.b end
-        if start_value.color_mode ~= nil then current_values.color_mode = start_value.color_mode end
-        if start_value.animation_state ~= nil then current_values.animation_state = start_value.animation_state end
-    end
-  
-    anim_id = AnimationEngine.animate_discrete_first(current_values, target_properties, duration or 1.0, {
-        easing = easing or "linear",
-        easing_back = easing_back or easing or "linear",
-        on_update = function(values, t, phase)
-            -- Update the UI element with animated values
-            local update_props = {}
-            
-            -- Convert x,y from UI coordinates to sprite coordinates (x2)
-            if values.x ~= nil then update_props.x = values.x end
-            if values.y ~= nil then update_props.y = values.y end
-            if values.z ~= nil then update_props.z = values.z end
-            if values.sx ~= nil then update_props.sx = values.sx end
-            if values.sy ~= nil then update_props.sy = values.sy end
-            if values.ro ~= nil then update_props.ro = values.ro end
-            if values.opacity ~= nil then update_props.opacity = math.floor(values.opacity) end
-            if values.a ~= nil then update_props.a = math.floor(values.a) end
-            if values.r ~= nil then update_props.r = math.floor(values.r) end
-            if values.g ~= nil then update_props.g = math.floor(values.g) end
-            if values.b ~= nil then update_props.b = math.floor(values.b) end
-            if values.color_mode ~= nil then update_props.color_mode = values.color_mode end
-            if values.animation_state ~= nil then update_props.animation_state = values.animation_state end
-            
-            frame.update_ui_element(sprite_id, player_id, update_props)
-        end,
-        on_complete = function(values, interrupted)
-            -- Clean up animation tracking
-            if element.animations and anim_id then
-                element.animations[anim_id] = nil
-            end
-            
-            -- Call user callback if provided
-            if on_complete then
-                on_complete(values, interrupted)
-            end
-        end,
-        loop = loop or false,
-        ping_pong = ping_pong or false,
-        max_cycles = type(loop) == "number" and loop or nil
-    })
-    
-    -- Track animation
-    if not element.animations then
-        element.animations = {}
-    end
-    element.animations[anim_id] = true
-    
-    return anim_id
-end
-
--- NEW FUNCTION: Animate specific UI property with discrete support
-function frame.animate_ui_property(sprite_id, player_id, property_name, target_value, duration, easing, on_complete, loop, ping_pong, easing_back)
-    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
-        print("[games] UI element not found: " .. sprite_id)
-        return nil
-    end
-    
-    local target_props = {}
-    target_props[property_name] = target_value
-    
-    return frame.animate_ui_element(sprite_id, player_id, target_props, duration, easing, on_complete, loop, ping_pong, easing_back)
-end
-
--- NEW FUNCTION: Fade UI element with full looping support
-function frame.fade_ui_element(sprite_id, player_id, target_opacity, duration, easing, on_complete, loop, ping_pong, easing_back)
-    return frame.animate_ui_property(sprite_id, player_id, "opacity", target_opacity, duration, easing, on_complete, loop, ping_pong, easing_back)
-end
-
--- NEW FUNCTION: Scale UI element with full looping support
-function frame.scale_ui_element(sprite_id, player_id, target_scale, duration, easing, on_complete, loop, ping_pong, easing_back)
-    local target_props = {sx = target_scale, sy = target_scale}
-    return frame.animate_ui_element(sprite_id, player_id, target_props, duration, easing, on_complete, loop, ping_pong, easing_back)
-end
-
--- NEW FUNCTION: Rotate UI element with full looping support
-function frame.rotate_ui_element(sprite_id, player_id, target_ro, duration, easing, on_complete, loop, ping_pong, easing_back)
-    return frame.animate_ui_property(sprite_id, player_id, "ro", target_ro, duration, easing, on_complete, loop, ping_pong, easing_back)
-end
-
--- NEW FUNCTION: Color tint UI element with full looping support
-function frame.tint_ui_element(sprite_id, player_id, r, g, b, duration, easing, on_complete, loop, ping_pong, easing_back)
-    local target_props = {r = r, g = g, b = b}
-    return frame.animate_ui_element(sprite_id, player_id, target_props, duration, easing, on_complete, loop, ping_pong, easing_back)
-end
-
--- NEW FUNCTION: Pulse UI element (scale up and down)
-function frame.pulse_ui_element(sprite_id, player_id, min_scale, max_scale, pulse_duration, easing, loops, on_complete)
-    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
-        print("[games] UI element not found: " .. sprite_id)
-        return nil
-    end
-    
-    local element = ui_cache[player_id][sprite_id]
-    local current_scale = element.sx or 2.0
-    min_scale = min_scale or current_scale * 0.9
-    max_scale = max_scale or current_scale * 1.1
-    pulse_duration = pulse_duration or 0.5
-    
-    local anim_id = AnimationEngine.animate(
-        {scale = min_scale},
-        {scale = max_scale},
-        pulse_duration / 2,
-        {
-            easing = easing or "ease_in_out",
-            on_update = function(values)
-                local update_props = {sx = values.scale, sy = values.scale}
-                frame.update_ui_element(sprite_id, player_id, update_props)
-            end,
-            on_complete = on_complete,
-            loop = loops or 1,
-            ping_pong = true
-        }
-    )
-    
-    -- Track animation
-    if not element.animations then
-        element.animations = {}
-    end
-    element.animations[anim_id] = true
-    
-    return anim_id
-end
-
--- NEW FUNCTION: Shake UI element effect
+-- purpose: Apply shake animation to UI element (screen shake effect)
 function frame.shake_ui_element(sprite_id, player_id, intensity, duration, frequency, on_complete)
     if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
         print("[games] UI element not found: " .. sprite_id)
@@ -1555,54 +1466,56 @@ function frame.shake_ui_element(sprite_id, player_id, intensity, duration, frequ
     end
     
     local element = ui_cache[player_id][sprite_id]
-    local original_x = element.x
-    local original_y = element.y
     intensity = intensity or 5
     duration = duration or 0.5
-    frequency = frequency or 0.05
+    frequency = frequency or 15
     
-    local start_time = os.clock()
-    local shake_anim_id = "shake_" .. sprite_id .. "_" .. player_id .. "_" .. math.random(1000, 9999)
+    -- Create a proxy object for AnimationSequences.shake
+    local proxy = frame.get_ui_element_proxy(sprite_id, player_id)
+    if not proxy then return nil end
     
-    local function shake_update()
-        if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
-            return
+    -- Create an object that matches what AnimationSequences.shake expects
+    local shake_object = {
+        x = proxy.x,
+        y = proxy.y,
+        rotation = 0,
+        setPosition = function(self, x, y)
+            proxy:setPosition(x, y)
+        end,
+        setRotation = function(self, rotation)
+            proxy:setRo(rotation)
         end
-        
-        local elapsed = os.clock() - start_time
-        if elapsed >= duration then
-            -- Return to original position
-            frame.update_ui_element(sprite_id, player_id, {x = original_x, y = original_y})
-            
+    }
+    local seq_id = nil    
+    -- Call AnimationSequences.shake with proper parameters
+    seq_id = AnimationSequences.shake(shake_object, {
+        intensity = intensity,
+        duration = duration,
+        frequency = frequency,
+        on_complete = function()
             -- Clean up
             if element.animations then
-                element.animations[shake_anim_id] = nil
+                element.animations[seq_id] = nil
             end
             
             if on_complete then
                 on_complete()
             end
-            return
+        end,
+        on_update = function (value)
+            print(value)
+            shake_object:setPosition(value.x, value.y)
+            shake_object:setRotation(value.ro)
         end
-        
-        -- Calculate shake offset
-        local progress = elapsed / duration
-        local current_intensity = intensity * (1 - progress) -- Reduce intensity over time
-        local offset_x = (math.random() * 2 - 1) * current_intensity
-        local offset_y = (math.random() * 2 - 1) * current_intensity
-        
-        frame.update_ui_element(sprite_id, player_id, {x = original_x + offset_x, y = original_y + offset_y})
-        
-        -- Schedule next shake
-        AnimationEngine.delay(frequency, shake_update)
+    })
+    
+    -- Track animation
+    if not element.animations then
+        element.animations = {}
     end
+    element.animations[seq_id] = true
     
-    -- Start shaking
-    element.animations = element.animations or {}
-    element.animations[shake_anim_id] = true
-    shake_update()
-    
-    return shake_anim_id
+    return seq_id
 end
 
 -- UPDATED FUNCTION: Stop UI element animation
@@ -1639,80 +1552,6 @@ function frame.stop_ui_animation(sprite_id, player_id, anim_id)
     end
 end
 
--- UPDATED FUNCTION: Create animation sequence for UI element with enhanced parameters
-function frame.create_ui_sequence(sprite_id, player_id, steps, options)
-    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
-        print("[games] UI element not found: " .. sprite_id)
-        return nil
-    end
-    
-    local element = ui_cache[player_id][sprite_id]
-    options = options or {}
-    
-    -- Create the sequence steps with proper on_update callbacks
-    local sequence_steps = {}
-    
-    for i, step in ipairs(steps) do
-        if step.type == "animate" then
-            local step_copy = {
-                type = "animate",
-                target = step.target,
-                duration = step.duration,
-                easing = step.easing or "linear",
-                discrete = step.discrete or {},
-                easing_back = step.easing_back
-            }
-            
-            -- Add on_update callback to update the UI element
-            step_copy.on_update = function(values, t, phase)
-                local update_props = {}
-                
-                if values.x ~= nil then update_props.x = values.x end
-                if values.y ~= nil then update_props.y = values.y end
-                if values.sx ~= nil then update_props.sx = values.sx end
-                if values.sy ~= nil then update_props.sy = values.sy end
-                if values.ro ~= nil then update_props.ro = values.ro end
-                if values.opacity ~= nil then update_props.opacity = math.floor(values.opacity) end
-                if values.a ~= nil then update_props.a = math.floor(values.a) end
-                if values.r ~= nil then update_props.r = math.floor(values.r) end
-                if values.g ~= nil then update_props.g = math.floor(values.g) end
-                if values.b ~= nil then update_props.b = math.floor(values.b) end
-                if values.color_mode ~= nil then update_props.color_mode = values.color_mode end
-                if values.animation_state ~= nil then update_props.animation_state = values.animation_state end
-                
-                frame.update_ui_element(sprite_id, player_id, update_props)
-            end
-            
-            table.insert(sequence_steps, step_copy)
-        else
-            table.insert(sequence_steps, step)
-        end
-    end
-    
-    local seq_id = AnimationEngine.create_sequence(sequence_steps, {
-        id = options.id,
-        loop = options.loop,
-        on_complete = function()
-            -- Clean up sequence tracking
-            if element.animations and seq_id then
-                element.animations[seq_id] = nil
-            end
-            
-            if options.on_complete then
-                options.on_complete()
-            end
-        end
-    })
-    
-    -- Track sequence
-    if not element.animations then
-        element.animations = {}
-    end
-    element.animations[seq_id] = true
-    
-    return seq_id
-end
-
 -- NEW FUNCTION: Start UI animation sequence
 function frame.start_ui_sequence(sprite_id, player_id, seq_id)
     if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
@@ -1720,90 +1559,6 @@ function frame.start_ui_sequence(sprite_id, player_id, seq_id)
     end
     
     return AnimationEngine.start_sequence(seq_id)
-end
-
--- NEW FUNCTION: Apply pre-built animation effects to UI element with full looping support
-function frame.animate_ui_effect(sprite_id, player_id, effect_type, params)
-    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
-        print("[games] UI element not found: " .. sprite_id)
-        return nil
-    end
-    
-    local element = ui_cache[player_id][sprite_id]
-    
-    if effect_type == "move_to" then
-        return frame.animate_ui_element(sprite_id, player_id, 
-            {x = params.x, y = params.y}, 
-            params.duration or 1.0, 
-            params.easing or "linear",
-            params.on_complete,
-            params.loop,
-            params.ping_pong,
-            params.easing_back)
-            
-    elseif effect_type == "scale_to" then
-        return frame.scale_ui_element(sprite_id, player_id,
-            params.scale,
-            params.duration or 1.0,
-            params.easing or "linear",
-            params.on_complete,
-            params.loop,
-            params.ping_pong,
-            params.easing_back)
-            
-    elseif effect_type == "rotate_to" then
-        return frame.rotate_ui_element(sprite_id, player_id,
-            params.ro,
-            params.duration or 1.0,
-            params.easing or "linear",
-            params.on_complete,
-            params.loop,
-            params.ping_pong,
-            params.easing_back)
-            
-    elseif effect_type == "fade_to" then
-        return frame.fade_ui_element(sprite_id, player_id,
-            params.opacity,
-            params.duration or 1.0,
-            params.easing or "linear",
-            params.on_complete,
-            params.loop,
-            params.ping_pong,
-            params.easing_back)
-            
-    elseif effect_type == "tint_to" then
-        return frame.tint_ui_element(sprite_id, player_id,
-            params.r or 255,
-            params.g or 255,
-            params.b or 255,
-            params.duration or 1.0,
-            params.easing or "linear",
-            params.on_complete,
-            params.loop,
-            params.ping_pong,
-            params.easing_back)
-            
-    elseif effect_type == "pulse" then
-        return frame.pulse_ui_element(sprite_id, player_id,
-            params.min_scale,
-            params.max_scale,
-            params.duration or 0.5,
-            params.easing or "ease_in_out",
-            params.loops,
-            params.on_complete)
-            
-    elseif effect_type == "shake" then
-        return frame.shake_ui_element(sprite_id, player_id,
-            params.intensity,
-            params.duration,
-            params.frequency,
-            params.on_complete)
-            
-    elseif effect_type == "color_pulse" then
-        return frame.apply_color_pulse_effect(sprite_id, player_id, params)
-    end
-    
-    return nil
 end
 
 --purpose: change the animation state of existing UI element
@@ -1818,15 +1573,23 @@ function frame.set_ui_animation(sprite_id,player_id,animation_state)
 end
 
 --purpose: move existing UI element (immediate)
-function frame.move_ui_element(sprite_id,player_id,x,Y,Z)
+function frame.move_ui_element(sprite_id,player_id,x,y,z)
     Net.player_draw_sprite(player_id, ui_cache[player_id][sprite_id]["sprite_id"],
     {
         id = sprite_id .. "_obj",
         x = x*2,
-        y = Y*2,
-        z = Z    
+        y = y*2,
+        z = z*2    
     }
     )
+end
+
+-- UPDATED FUNCTION: slide_ui_element now supports full AnimationEngine features
+function frame.slide_ui_element(sprite_id, player_id, x, y, duration, easing, on_complete, loop, ping_pong, easing_back)
+    -- Use the new animation system
+    local target_props = {x = x, y = y}
+    return frame.animate_ui_element(sprite_id, player_id, target_props, duration or 1.0, 
+                                    easing or "ease_in_out", on_complete, loop, ping_pong, easing_back)
 end
 
 function frame.update_ui_position(sprite_id, player_id, x, Y, Z)
@@ -1850,13 +1613,6 @@ function frame.update_ui_position(sprite_id, player_id, x, Y, Z)
     end
 end
 
--- UPDATED FUNCTION: slide_ui_element now supports full AnimationEngine features
-function frame.slide_ui_element(sprite_id, player_id, x, y, duration, easing, on_complete, loop, ping_pong, easing_back)
-    -- Use the new animation system
-    local target_props = {x = x, y = y}
-    return frame.animate_ui_element(sprite_id, player_id, target_props, duration or 1.0, 
-                                    easing or "ease_in_out", on_complete, loop, ping_pong, easing_back)
-end
 
 --purpose: make camera pannable freely with arrows but without player following. 
 function frame.detach_camera(player_id)

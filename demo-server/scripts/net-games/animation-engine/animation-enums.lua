@@ -70,24 +70,10 @@ AnimationEnums.triggers = {
     ON_START = "on_start"
 }
 
--- Animation preset enums
-AnimationEnums.presets = {
-    CARD_SUMMON = "card_summon",
-    CARD_SET = "card_set",
-    MENU_SLIDE = "menu_slide",
-    BUTTON_PRESS = "button_press",
-    NOTIFICATION = "notification",
-    DAMAGE_FLASH = "damage_flash",
-    VICTORY = "victory",
-    DEFEAT = "defeat",
-    COLOR_PULSE = "color_pulse"
-}
-
 return {
     EasingFns = AnimationEnums.easing_function_names,
     AnimationTypes = AnimationEnums.animation_types,
     Properties = AnimationEnums.animation_properties,
     Directions = AnimationEnums.directions,
-    Triggers = AnimationEnums.triggers,
-    Presets = AnimationEnums.presets
+    Triggers = AnimationEnums.triggers
 }

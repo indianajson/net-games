@@ -13,6 +13,15 @@ NetHelpers.patch_net()
 
 NetHelpers.safe_require("scripts/net-games/dialogue/startup")
 
+--purpose: Shorthand for async
+local function async(p)
+    local co = coroutine.create(p)
+    return Async.promisify(co)
+end
+
+--purpose: Shorthand for await
+local function await(v) return Async.await(v) end
+
 -------------------------------------------
 -- DEMO CODE FOR NPC THAT LITTERALLY JUST TALK (WOW) --
 -------------------------------------------
@@ -153,75 +162,61 @@ Net:on("actor_interaction", function (event)
         points = 8
         Net.message_player(event.player_id, "Press Left Shoulder to incfease and Right Shoulder to decrease. Press any arrow key to stop.","","") 
         Net.lock_player_input(event.player_id)
-        games.add_ui_element("points",event.player_id,"/server/assets/demo/order_points.png","/server/assets/demo/order_points.animation","8POINT",161,2,0, 2,2)
-        -- games.slide_ui_element("points", event.player_id,161, 4, 1)
-        -- games.animate_ui_element("points", event.player_id, {x = 161, y = 10}, 2, AnimationEngine.AnimEnums.EasingFns.cubic, function() 
-        -- games.animate_ui_element("points", event.player_id, {x = 161, y = 10}, 2, "linear", function() 
-        -- games.animate_ui_element("points", event.player_id,{sx = 3.0, sy = 3.0}, 2, AnimationEngine.AnimEnums.EasingFns.bound_in_out, function()
-        -- games.animate_ui_element("points", event.player_id,{sx = 2.0, sy = 2.0}, 2, "elastic_out", function()
-        -- games.animate_ui_element("points", event.player_id, {opacity = 255, r = 125,g = 0,b= 122, color_mode = 1}, 2, AnimationEngine.AnimEnums.EasingFns.linear, function ()
-        -- end)end)end) end)end)
-        --         games.animate_ui_element("points", event.player_id, {x = 161, y = 10}, 2, "linear", nil, 0)
-        -- games.animate_ui_element("points", event.player_id, {opacity = 255,a = 255, r = 255, g = 125, b = 255, color_mode = 0}, {opacity = 255,a = 255, r = 255, g = 125, b = 255, color_mode = 1},2, AnimationEngine.AnimEnums.EasingFns.smoothstep, nil, true , true, AnimationEngine.AnimEnums.EasingFns.instant)
-        -- games.pulse_ui_element("points", event.player_id, 2.0, 2.2, 1, AnimationEngine.AnimEnums.EasingFns.linear, 1, function() end)
-    --     games.apply_ui_effect("points", event.player_id, "color_pulse", {start_color = {r = 255, g = 0, b = 0, a = 255},
-    -- target_color = {r = 0, g = 0, b = 255, a = 200},
-    -- options = {
-    --     duration = 1.0,
-    --     loop = true,
-    --     ping_pong = true
-    -- }})
-    -- games.color_pulse_from_current("points", event.player_id, {r = 128, g = 50, b = 120, a =255}, {duration = 0.8, easing = AnimationEngine.AnimEnums.EasingFns.smootherstep, loop = true, ping_pong = false})
-        -- games.animate_ui_effect("points",event.player_id, "pulse",{0.2, 0.4, 0.5,3, function() print("Shake complete!") end})
-        -- games.animate_ui_element("points", event.player_id, {x = 6, y = 140} , 1, "ease_in_out", function() print("ended anim")end )
-    -- games.apply_ui_effect("points", event.player_id, "summon", {
-    --     start_x = 240, start_y = 0, start_scale =  0.5,
-    --     end_x = 0 , end_y = 160, end_scale = 2.0, 
-    --     options = {
-    --         arc_height = 24,
-    --         peak_scale_mul = 1.35,
-    --         wobble_ro_deg = 5,
-    --         duration = 0.25,
-    --         z_offset = 10
-    --         }
-    --     }
-    -- ) 
+        
+    ------------------------------------------------------------------------
+    ----- re-use for initial params for most games.{x_name}_ui_element -----
+    ------------------------------------------------------------------------
+    local spr_id = "points"
+    local pid = event.player_id
+    ------------------------------------------------------------------------
     
-    local updates = games.get_ui_element_proxy("points", event.player_id)
+    ------------------------------------------------------------------------
+    ---- TESTED AND WORKING FRAMEWORK API CALLS FOR {X_NAME}_UI_ELEMENT ----
+    ------------------------------------------------------------------------
+    games.add_ui_element(spr_id,pid,"/server/assets/demo/order_points.png","/server/assets/demo/order_points.animation","8POINT",161,2,0, 2,2)
     
-    local seq_id = games.summon_ui_element("points",event.player_id, 120, 0, 0.5,
-        0, 140, 2.0, {
-            start_x = 161, start_y = 2, start_scale = 0,
-            end_x = 0, end_y = 130, end_scale = 2.0,
-        duration = 3,     -- Animation duration in seconds
-        arc_height = 24,     -- How high the arc goes
-        peak_scale_mul = 1.35, -- Scale multiplier at peak of arc
-        wobble_deg = 5,      -- Rotation wobble in degrees   
-        on_complete = function ()
-            
-        end,
-        on_update = function (value)
-            print(value)
-            updates:setScale(value.scale)
-            updates:setPosition(value.x, value.y)
-            updates:setRo(value.rotation)
-        end
-    })
-    games.update_ui_element("points", event.player_id, updates)
-    print(updates)
-    --    {
-    --        start_x = 240, start_y = 160, start_scale = 0.5,
-    --        end_x = 0, end_y = 160, end_scale = 2.0,
-    --        options = {
-    --            duration = 2,           
-    --            peak_scale_mul = 1.15,     
-    --            flip_min = 0.06,           
-    --            swap_t = 0.5,              
-    --            easing = "ease_in_out",    
-    --            on_complete = function() end,  
-    --            on_update = function() end
-    --        }
-    --    })
+    async(function()
+        ------------------------------------------------------------------------
+        ---------------- DEBUGGING REMOVE WHEN NO LONGER NEEDED ----------------
+        ------------------------------------------------------------------------
+        local eprops = games.get_ui_element_properties(spr_id,pid)
+        print(eprops)
+        ------------------------------------------------------------------------
+    
+        -- summon test
+        -- games.summon_ui_element("points",event.player_id, 120, 0, 0.5,
+        --     0, 140, 2.0, 3, 24, 1.35, 5, function() end)
+        -- print(eprops)
+        ---- complex summon test
+        games.complex_summon_ui_element(spr_id,pid, eprops.x or 0, eprops.y or 0, 2.0, 4, 150, 2.0)
+        print(eprops)
+        await(Async.sleep(2))
+        ---- bob test:
+        -- games.bob_ui_element(spr_id, pid, 10, 2, AnimationEngine.AnimEnums.EasingFns.smootherstep, true, false)
+        -- print(eprops)
+
+        ---- pulse scale test:
+        -- games.pulse_scale_ui_element(spr_id, pid, 0.0, 2.0, 10.0, AnimationEngine.AnimEnums.EasingFns.smootherstep, true)
+        -- print(eprops)
+        
+        ---- color pulse  from sprite info test:
+        -- games.color_pulse_from_current(spr_id, pid, {r = 255, g = 125, b = 125, a = 125})
+        -- print(eprops)
+
+        ---- rotate in circle test
+        -- games.shake_ui_element(spr_id,pid,1, 100, 10)
+        -- print(eprops)
+
+        ---- fade test
+        -- games.fade_ui_element_to(spr_id, pid, 0, 2, AnimationEngine.AnimEnums.EasingFns.smootherstep, nil, true, true, AnimationEngine.AnimEnums.EasingFns.smootherstep)
+        -- print(eprops)
+
+        ---- color pulse x -> y test
+        games.color_pulse_rgb(spr_id, pid, 122, 0, 127, 255, 125,127,155,255)
+        print(eprops)
+    end)
+    ------------------------------------------------------------------------
+
 
     bat_active[event.player_id] = true
     end 
