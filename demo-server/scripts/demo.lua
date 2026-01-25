@@ -171,11 +171,25 @@ Net:on("actor_interaction", function (event)
     --     loop = true,
     --     ping_pong = true
     -- }})
-    games.color_pulse_from_current("points", event.player_id, {r = 128, g = 50, b = 120, a =255}, {duration = 0.8, easing = AnimationEngine.AnimEnums.EasingFns.smootherstep, loop = true, ping_pong = false})
+    -- games.color_pulse_from_current("points", event.player_id, {r = 128, g = 50, b = 120, a =255}, {duration = 0.8, easing = AnimationEngine.AnimEnums.EasingFns.smootherstep, loop = true, ping_pong = false})
         -- games.animate_ui_effect("points",event.player_id, "pulse",{0.2, 0.4, 0.5,3, function() print("Shake complete!") end})
         -- games.animate_ui_element("points", event.player_id, {x = 6, y = 140} , 1, "ease_in_out", function() print("ended anim")end )
-       
-        bat_active[event.player_id] = true
+    games.animate_ui_effect("points", event.player_id, "summon", 
+        {
+            start_x = 240, start_y = 160, start_scale = 0.5,
+            end_x = 0, end_y = 160, end_scale = 2.0,
+            options = {
+                duration = 2,           
+                peak_scale_mul = 1.15,     
+                flip_min = 0.06,           
+                swap_t = 0.5,              
+                easing = "ease_in_out",    
+                on_complete = function() end,  
+                on_update = function() end
+            }
+        })
+
+    bat_active[event.player_id] = true
     end 
 end)
 

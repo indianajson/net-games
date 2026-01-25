@@ -8,6 +8,7 @@ _G.AnimationSequences = AnimationSequences
 -- Load the animation engine
 local AnimationEngine = _G.AnimationEngine or require("scripts/net-games/animation-engine/animation-engine")
 local AnimationEnums = _G.AnimationEnums or require("scripts/net-games/animation-engine/animation-enums")
+local MathUtils = require("scripts/net-games/animation-engine/math-utils")
 
 -- ---------------------------------------------------------------------------
 -- Configuration
@@ -95,26 +96,6 @@ AnimationSequences.config = {
 }
 
 -- ---------------------------------------------------------------------------
--- Math Utilities
--- ---------------------------------------------------------------------------
-local function clamp01(t)
-    return t < 0 and 0 or (t > 1 and 1 or t)
-end
-
-local function lerp(a, b, t)
-    return a + (b - a) * t
-end
-
-local function smoothstep(t)
-    return t * t * (3 - 2 * t)
-end
-
-local function quadratic_bezier(p0, p1, p2, t)
-    local u = 1 - t
-    return u*u*p0.x + 2*u*t*p1.x + t*t*p2.x, u*u*p0.y + 2*u*t*p1.y + t*t*p2.y
-end
-
--- ---------------------------------------------------------------------------
 -- Core Animation Sequences
 -- ---------------------------------------------------------------------------
 
@@ -152,7 +133,7 @@ function AnimationSequences.summon(object, start_x, start_y, start_scale,
             easing = easing,
             on_update = function(values, t, phase)
                 -- Calculate bezier position
-                local x, y = quadratic_bezier(
+                local x, y = MathUtils.quadratic_bezier(
                     {x = start_x, y = start_y},
                     {x = control_x, y = control_y},
                     {x = end_x, y = end_y},
@@ -160,12 +141,12 @@ function AnimationSequences.summon(object, start_x, start_y, start_scale,
                 )
                 
                 -- Calculate scale with pulse
-                local base_scale = lerp(start_scale, end_scale, t)
+                local base_scale = MathUtils.lerp(start_scale, end_scale, t)
                 local pulse = 1.0 + ((peak_scale_mul - 1.0) * math.sin(math.pi * t))
                 local current_scale = base_scale * pulse
                 
                 -- Calculate rotation with wobble
-                local base_rotation = lerp(0, 0, t) -- No base rotation
+                local base_rotation = MathUtils.lerp(0, 0, t) -- No base rotation
                 local wobble = wobble_deg ~= 0 and math.sin(math.pi * 2 * t) * wobble_deg or 0
                 local current_rotation = base_rotation + wobble
                 
@@ -215,14 +196,14 @@ function AnimationSequences.set(object, start_x, start_y, start_scale, start_rot
             easing = easing,
             on_update = function(values, t, phase)
                 -- Linear interpolation for position
-                local x = lerp(start_x, end_x, t)
-                local y = lerp(start_y, end_y, t)
+                local x = MathUtils.lerp(start_x, end_x, t)
+                local y = MathUtils.lerp(start_y, end_y, t)
                 
                 -- Linear interpolation for rotation
-                local rotation = lerp(start_rotation, end_rotation, t)
+                local rotation = MathUtils.lerp(start_rotation, end_rotation, t)
                 
                 -- Calculate scale with midpoint pulse
-                local base_scale = lerp(start_scale, end_scale, t)
+                local base_scale = MathUtils.lerp(start_scale, end_scale, t)
                 local pulse = 1.0 + ((peak_scale_mul - 1.0) * math.sin(math.pi * t))
                 local current_scale = base_scale * pulse
                 
@@ -281,7 +262,7 @@ function AnimationSequences.positionChange(object, start_rotation, end_rotation,
             easing = easing,
             on_update = function(values, t, phase)
                 -- Interpolate rotation
-                local rotation = lerp(start_rotation, end_rotation, t)
+                local rotation = MathUtils.lerp(start_rotation, end_rotation, t)
                 
                 -- Scale pulse at midpoint
                 local pulse = 1.0 + ((peak_scale_mul - 1.0) * math.sin(math.pi * t))
@@ -337,16 +318,16 @@ function AnimationSequences.attack(object, recoil_offset, lunge_offset, options)
                 -- Three-phase movement: recoil -> lunge -> return
                 if t < t1 then
                     -- Recoil phase
-                    local u = smoothstep(t / t1)
-                    offset_y = lerp(0, recoil_offset, u)
+                    local u = MathUtils.easing_functions.smoothstep(t / t1)
+                    offset_y = MathUtils.lerp(0, recoil_offset, u)
                 elseif t < t2 then
                     -- Lunge phase
-                    local u = smoothstep((t - t1) / (t2 - t1))
-                    offset_y = lerp(recoil_offset, lunge_offset, u)
+                    local u = MathUtils.easing_functions.smoothstep((t - t1) / (t2 - t1))
+                    offset_y = MathUtils.lerp(recoil_offset, lunge_offset, u)
                 else
                     -- Return phase
-                    local u = smoothstep((t - t2) / (1 - t2))
-                    offset_y = lerp(lunge_offset, 0, u)
+                    local u = MathUtils.easing_functions.smoothstep((t - t2) / (1 - t2))
+                    offset_y = MathUtils.lerp(lunge_offset, 0, u)
                 end
                 
                 -- Apply movement
@@ -616,16 +597,25 @@ function AnimationSequences.fade(object, target_alpha, options)
     local on_complete = options.on_complete
     local discrete = options.discrete
     
-    return AnimationEngine.fade_to(
-        object,
-        target_alpha,
+    return AnimationEngine.animate(
+        {alpha = object.alpha or 255},
+        {alpha = target_alpha},
         duration,
-        easing,
-        on_complete,
-        options.loop,
-        options.ping_pong,
-        options.easing_back,
-        discrete
+        {
+            easing = easing,
+            discrete = discrete,
+            on_update = function(values)
+                if object.setAlpha then
+                    object:setAlpha(values.alpha)
+                else
+                    object.alpha = values.alpha
+                end
+            end,
+            on_complete = on_complete,
+            loop = options.loop,
+            ping_pong = options.ping_pong,
+            easing_back = options.easing_back
+        }
     )
 end
 
@@ -638,16 +628,27 @@ function AnimationSequences.tint(object, target_r, target_g, target_b, options)
     local on_complete = options.on_complete
     local discrete = options.discrete
     
-    return AnimationEngine.tint_to(
-        object,
-        target_r, target_g, target_b,
+    return AnimationEngine.animate(
+        {r = object.r or 255, g = object.g or 255, b = object.b or 255},
+        {r = target_r, g = target_g, b = target_b},
         duration,
-        easing,
-        on_complete,
-        options.loop,
-        options.ping_pong,
-        options.easing_back,
-        discrete
+        {
+            easing = easing,
+            discrete = discrete,
+            on_update = function(values)
+                if object.setColor then
+                    object:setColor(values.r, values.g, values.b)
+                else
+                    object.r = values.r
+                    object.g = values.g
+                    object.b = values.b
+                end
+            end,
+            on_complete = on_complete,
+            loop = options.loop,
+            ping_pong = options.ping_pong,
+            easing_back = options.easing_back
+        }
     )
 end
 
@@ -668,7 +669,7 @@ function AnimationSequences.complexSummon(object, start_x, start_y, start_scale,
             local control_x = (start_x + end_x) * 0.5
             local control_y = (start_y + end_y) * 0.5 - (options.arc_height or 24)
             
-            local x, y = quadratic_bezier(
+            local x, y = MathUtils.quadratic_bezier(
                 {x = start_x, y = start_y},
                 {x = control_x, y = control_y},
                 {x = end_x, y = end_y},
@@ -676,7 +677,7 @@ function AnimationSequences.complexSummon(object, start_x, start_y, start_scale,
             )
             
             -- Scale with pulse
-            local base_scale = lerp(start_scale, end_scale, t)
+            local base_scale = MathUtils.lerp(start_scale, end_scale, t)
             local pulse = 1.0 + ((options.peak_scale_mul or 1.35) - 1.0) * math.sin(math.pi * t)
             local current_scale = base_scale * pulse
             

@@ -5,6 +5,7 @@ _G.AnimationEngine = AnimationEngine
 AnimationEngine.__index = AnimationEngine
 
 AnimationEngine.AnimEnums = require("scripts/net-games/animation-engine/animation-enums")
+local MathUtils = require("scripts/net-games/animation-engine/math-utils")
 
 -- ---------------------------------------------------------------------------
 -- Configuration
@@ -17,81 +18,7 @@ local cfg = {
     default_scale_speed = 2, -- scale change per second
     
     -- Easing functions
-    easing_functions = {
-        instant = function(t)
-            -- Returns 1 for any t > 0, meaning immediate transition to target
-            return t > 0 and 1 or 0
-        end,
-        linear = function(t) return t end,
-        square=function(t) return t*t end,
-        cubic=function(t) return t*t*t end,
-        ease_in = function(t) return t * t end,
-        ease_out = function(t) return t * (2 - t) end,
-        ease_in_out = function(t)
-            if t < 0.5 then
-                return 2 * t * t
-            else
-                return -1 + (4 - 2 * t) * t
-            end
-        end,
-        smoothstep = function(t) return t * t * (3 - 2 * t) end,
-        smootherstep = function(t) return t * t * t * (t * (6 * t - 15) + 10) end,
-        -- Elastic easing functions
-        elastic_in = function(t)
-            if t == 0 or t == 1 then return t end
-            local p = 0.3
-            local s = p / 4
-            return -(2^(10 * (t - 1))) * math.sin((t - 1 - s) * (2 * math.pi) / p)
-        end,
-        elastic_out = function(t)
-            if t == 0 or t == 1 then return t end
-            local p = 0.3
-            local s = p / 4
-            return 2^(-10 * t) * math.sin((t - s) * (2 * math.pi) / p) + 1
-        end,
-        bounce_out = function(t)
-            if t < 1 / 2.75 then
-                return 7.5625 * t * t
-            elseif t < 2 / 2.75 then
-                t = t - 1.5 / 2.75
-                return 7.5625 * t * t + 0.75
-            elseif t < 2.5 / 2.75 then
-                t = t - 2.25 / 2.75
-                return 7.5625 * t * t + 0.9375
-            else
-                t = t - 2.625 / 2.75
-                return 7.5625 * t * t + 0.984375
-            end
-        end,
-        bounce_in = function(t)
-            t = 1 - t
-            if t < 1 / 2.75 then
-                return 1 - 7.5625 * t * t
-            elseif t < 2 / 2.75 then
-                t = t - 1.5 / 2.75
-                return 1 - (7.5625 * t * t + 0.75)
-            elseif t < 2.5 / 2.75 then
-                t = t - 2.25 / 2.75
-                return 1 - (7.5625 * t * t + 0.9375)
-            else
-                t = t - 2.625 / 2.75
-                return 1 - (7.5625 * t * t + 0.984375)
-            end
-        end,
-        elastic_in_out = function(t)
-            if t == 0 or t == 1 then return t end
-            local p = 0.3
-            local s = p / 4
-
-            if t < 0.5 then
-                t = t * 2  -- Scale t to [0, 1]
-                return -0.5 * (2^(10 * (t - 1))) * math.sin((t - 1 - s) * (2 * math.pi) / p)
-            else
-                t = (t - 0.5) * 2  -- Scale t to [0, 1]
-                return 0.5 * (2^(-10 * t)) * math.sin((t - s) * (2 * math.pi) / p) + 0.5
-            end
-        end,
-    },
+    easing_functions = MathUtils.easing_functions,
     
     -- Logging
     debug = true,
@@ -142,7 +69,7 @@ function AnimationEngine.interpolate(start, target, t, easing, discrete)
     end
     
     if type(start) == "number" and type(target) == "number" then
-        return start + (target - start) * eased_t
+        return MathUtils.lerp(start, target, eased_t)
     elseif type(start) == "table" and type(target) == "table" then
         local result = {}
         for key, start_value in pairs(start) do
@@ -158,7 +85,7 @@ function AnimationEngine.interpolate(start, target, t, easing, discrete)
                 end
             elseif type(start_value) == "number" and type(target_value) == "number" then
                 -- Regular interpolation for numeric values
-                result[key] = start_value + (target_value - start_value) * eased_t
+                result[key] = MathUtils.lerp(start_value, target_value, eased_t)
             else
                 -- Non-numeric or mismatched types - set to target immediately
                 result[key] = target_value or start_value
@@ -326,7 +253,7 @@ function AnimationEngine.update(dt)
         end
         
         local elapsed = current_time - anim.start_time
-        local t = math.min(elapsed / anim.duration, 1.0)
+        local t = MathUtils.clamp01(elapsed / anim.duration)
         
         -- Determine which easing to use based on phase
         local current_easing = anim.phase == 1 and anim.easing or anim.easing_back
