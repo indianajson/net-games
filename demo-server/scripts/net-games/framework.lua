@@ -1082,7 +1082,7 @@ function frame.color_pulse_from_current(sprite_id, player_id, target_color)
         a = element.a or 255
     }
     
-    return frame.color_pulse_scale_ui_element(sprite_id, player_id, current_color, target_color)
+    return frame.color_pulse_ui_element(sprite_id, player_id, current_color, target_color)
 end
 
 -- Purpose: Apply summon animation to UI element (flies with arc)
