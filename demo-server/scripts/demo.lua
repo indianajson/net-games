@@ -190,8 +190,8 @@ Net:on("actor_interaction", function (event)
 
         -- await(Async.sleep(3))        
         ---- complex summon test
-        -- games.complex_summon_ui_element(spr_id,pid, 110, 50, 2.0, 4, 141, 2.0)
-        -- await(Async.sleep(2))
+        games.complex_summon_ui_element(spr_id,pid, 110, 50, 2.0, 4, 141, 2.0)
+        await(Async.sleep(2))
 
         ---- bob test:
         -- games.bob_ui_element(spr_id, pid, 10, 2, AnimationEngine.AnimEnums.EasingFns.smootherstep, true, false)
@@ -203,7 +203,7 @@ Net:on("actor_interaction", function (event)
         -- games.color_pulse_from_current(spr_id, pid, {r = 255, g = 125, b = 125, a = 125})
 
         ---- rotate in circle test
-        -- games.shake_ui_element(spr_id,pid,1, 100, 10)
+        games.shake_ui_element(spr_id.."b",pid,1, 100, 10)
 
         ---- fade test
         -- games.set_opacity_ui_element(spr_id,pid,128, 2, AnimationEngine.AnimEnums.EasingFns.smoothstep)
@@ -306,6 +306,7 @@ Net:on("actor_interaction", function (event)
         games.draw_text("roll_label",event.player_id,"<Roll_EXE>",40,40,100,"BATTLE")
         games.draw_text("megaman_label",event.player_id,"Megaman_EXE",40,60,100,"BATTLE")
         games.draw_text("protoman_label",event.player_id,"<PROTOMAN_EXE>",40,80,100,"BATTLE")
+        games.menu_cursor_ui_element("navi_changer", event.player_id, 3, 1.1, 2, 2, "horizontal")
 
     end 
 end)
