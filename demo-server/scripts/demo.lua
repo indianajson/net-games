@@ -68,11 +68,10 @@ Net:on("actor_interaction", function(event)
 end)
 
 
-
 ----------------------------------------------------------
 -- DEMO CODE FOR BASIC MARQUEE EXAMPLE [IN DEVELOPMENT] --
 ----------------------------------------------------------
-
+local holoshine = require("scripts/net-games/animation-engine/holoshine")
 local marquee_active = {}
 
 Net.create_bot("marquee_demo", { 
@@ -113,6 +112,17 @@ end)
 
 Net:on("player_join", function(event)
     marquee_active[event.player_id] = false
+
+-- Change palette later
+-- holoshine.change_holoshine_colors(overlay, 2)  -- Switch to rainbow
+
+-- Stop animation
+-- holoshine.stop_holoshine_animation(overlay)
+
+-- Clean up
+-- holoshine.remove_holoshine_overlay(overlay)
+-- Remove when done
+-- holoshine.remove_holoshine_overlay(overlay, event.player_id)
 end)
 
 Net:on("player_disconnect", function(event)
@@ -301,7 +311,9 @@ Net:on("actor_interaction", function (event)
         }
         -- games.add_ui_element("navi_changer", event.player_id, green_cursor_texture, green_cursor_anim, "CURSOR_RIGHT", cursor_options.selections[1].x, cursor_options.selections[1].y, cursor_options.selections[1].z)
         games.spawn_cursor("navi_changer", event.player_id, cursor_options)
-        games.menu_cursor_ui_element("navi_changer", event.player_id, 4, 1.2, 5, 1, "vertical")
+        games.menu_cursor_ui_element("navi_changer", event.player_id, 20, 1.8, 1, 10, "horizontal")
+        games.color_pulse_from_current("navi_changer", event.player_id, {r = 0, g = 0, b = 255, a = 128})
+        -- games.slide_ui_element("navi_changer", event.player_id, 100, 100, 2)
         games.draw_text("roll_label",event.player_id,"<Roll_EXE>",40,40,100,"BATTLE")
         games.draw_text("megaman_label",event.player_id,"Megaman_EXE",40,60,100,"BATTLE")
         games.draw_text("protoman_label",event.player_id,"<PROTOMAN_EXE>",40,80,100,"BATTLE")

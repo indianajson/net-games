@@ -1430,17 +1430,19 @@ function frame.color_pulse_ui_element(sprite_id, player_id, start_color, target_
         g = element.g or 255,
         b = element.b or 255,
         a = element.a or 255,
-        
         setColor = function(self, r, g, b)
             element.r = r
             element.g = g
             element.b = b
             frame.update_ui_element(sprite_id, player_id, {r = r, g = g, b = b})
         end,
-        
         setAlpha = function(self, alpha)
-            element.opacity = alpha
+            element.a = alpha
             frame.update_ui_element(sprite_id, player_id, {a = alpha})
+        end,
+        setOpacity = function(self,opacity)
+            element.opacity = opacity
+            frame.update_ui_element(sprite_id, player_id, {o = opacity})
         end
     }
     
