@@ -49,7 +49,6 @@ require("scripts/net-games/npcs/prog_shop")
 -------------------------------------------
 
 Net.create_bot("cosmo", { area_id="default", warp_in=false, texture_path="/server/assets/demo/roll.png", animation_path="/server/assets/demo/roll.animation", x=25.5, y=18.5, z=0, solid=true})
-
 local cosmo = {}
 
 Net:on("actor_interaction", function(event)
@@ -134,18 +133,18 @@ Net:on("virtual_input", function(event)
             if button.name == "Shoulder R" and button.state == 1 then 
                 if points > 0 then
                     points = points - 1 
-                    games.set_ui_animation("points",event.player_id,tostring(points.."POINT"),true)
+                    games.set_ui_animation("points",event.player_id,tostring(points.."POINT"))
                 else
                     points = 8
-                    games.set_ui_animation("points",event.player_id,tostring(points.."POINT"),true)
+                    games.set_ui_animation("points",event.player_id,tostring(points.."POINT"))
                 end
             elseif button.name == "Shoulder L" and button.state == 1 then
                 if points < 8 then
                     points = points + 1 
-                    games.set_ui_animation("points",event.player_id,tostring(points.."POINT"),true)
+                    games.set_ui_animation("points",event.player_id,tostring(points.."POINT"))
                 else
                     points = 0
-                    games.set_ui_animation("points",event.player_id,tostring(points.."POINT"),true)
+                    games.set_ui_animation("points",event.player_id,tostring(points.."POINT"))
                 end
             elseif button.name == "Move Down" or button.name == "Move Left" or button.name == "Move Right" or button.name == "Move Up" and button.state == 1 then
                 games.remove_ui_element("points",event.player_id)
@@ -286,11 +285,10 @@ Net:on("cursor_selection", function(event)
 end)
 
 Net:on("actor_interaction", function (event)
-
     if event.actor_id == "changer" and event.button == 0 then
-
         local green_cursor_texture = "/server/assets/net-games/text_cursor.png"
         local green_cursor_anim = "/server/assets/net-games/text_cursor.animation"
+        local cursor_options
         cursor_options = {
             texture=green_cursor_texture,
             animation=green_cursor_anim,
@@ -299,14 +297,14 @@ Net:on("actor_interaction", function (event)
                 { x=35,y=45,z=0,name='roll',state="CURSOR_RIGHT" },
                 { x=35,y=65,z=0,name='megaman',state="CURSOR_RIGHT" },
                 { x=35,y=85,z=0,name='protoman',state="CURSOR_RIGHT" }
-            }
+            }, 
         }
-
-        games.spawn_cursor("navi_changer",event.player_id,cursor_options)
+        -- games.add_ui_element("navi_changer", event.player_id, green_cursor_texture, green_cursor_anim, "CURSOR_RIGHT", cursor_options.selections[1].x, cursor_options.selections[1].y, cursor_options.selections[1].z)
+        games.spawn_cursor("navi_changer", event.player_id, cursor_options)
+        games.menu_cursor_ui_element("navi_changer", event.player_id, 4, 1.2, 5, 1, "vertical")
         games.draw_text("roll_label",event.player_id,"<Roll_EXE>",40,40,100,"BATTLE")
         games.draw_text("megaman_label",event.player_id,"Megaman_EXE",40,60,100,"BATTLE")
         games.draw_text("protoman_label",event.player_id,"<PROTOMAN_EXE>",40,80,100,"BATTLE")
-        games.menu_cursor_ui_element("navi_changer", event.player_id, 3, 1.1, 2, 2, "horizontal")
-
     end 
+
 end)

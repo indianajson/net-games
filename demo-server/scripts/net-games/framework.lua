@@ -28,13 +28,11 @@ local last_position_cache = {}
 local button_states = {}
 local tracking_state = {}
 local cosmetic_cache = {}
-local cursor_cache = {}
 local avatar_cache = {}
 local ui_cache = {}
 local map_elements = {}
 local ui_update = {}
 local online_players = {}
-local cursor_tick = 0
 
 -- ===========================================================
 -- HELPER FUNCTIONS
@@ -513,7 +511,9 @@ function frame.add_ui_element(sprite_id, player_id, texture_path, animation_path
         color_mode = 0,
         animation_state = animation_state,
         opacity = 255,
-        animations = {}
+        animations = {},
+        has_children = false,
+        children = {}
     }
 end
 
@@ -649,10 +649,6 @@ function frame.get_ui_element_proxy(sprite_id, player_id)
         end
     }
 end
-
--- ===========================================================
--- UI ANIMATION FUNCTIONS
--- ===========================================================
 
 -- ===========================================================
 -- UI ANIMATION FUNCTIONS (ADDITIONS)
@@ -1733,6 +1729,163 @@ function frame.get_ui_element_properties(sprite_id, player_id)
 end
 
 -- ===========================================================
+-- CURSOR FUNCTIONS (UPDATED FOR UI INTEGRATION)
+-- ===========================================================
+
+-- Purpose: Spawn a cursor that integrates with UI element system
+function frame.spawn_cursor(sprite_id, player_id, options)
+        Net.lock_player_input(player_id)
+        
+        -- Get initial selection
+        local initial_selection = options.selections[1]
+        
+        -- Create cursor as a UI element
+        frame.add_ui_element(sprite_id, player_id, 
+            options.texture, 
+            options.animation or "", 
+            initial_selection.state, 
+            initial_selection.x, 
+            initial_selection.y, 
+            initial_selection.z or 0,
+            2, 2  -- Default scale
+        )
+        
+        -- Store cursor options in UI element's cursor_options
+        if ui_cache[player_id] and ui_cache[player_id][sprite_id] then
+            local obj_cache = ui_cache[player_id][sprite_id]
+            obj_cache.x = obj_cache.x or 0
+            obj_cache.y = obj_cache.y or 0
+            obj_cache.z = obj_cache.z or 0
+            obj_cache.sx = obj_cache.sx or 2.0
+            obj_cache.sy = obj_cache.sy or 2.0
+            obj_cache.is_cursor = true
+            obj_cache.cursor_options = {
+                selections = options.selections,
+                movement = options.movement or "vertical",
+                current_index = 1,
+                locked = false,
+                name = sprite_id
+            }
+        end
+end
+
+-- Purpose: Remove a cursor
+function frame.remove_cursor(cursor_id, player_id)
+    -- Check if this is actually a cursor
+    if ui_cache[player_id] and ui_cache[player_id][cursor_id] and ui_cache[player_id][cursor_id]["sprite_id"] then
+        frame.remove_ui_element(cursor_id, player_id)
+        Net.unlock_player_input(player_id)
+    else
+        print("[games] No cursor found with ID: " .. cursor_id)
+    end
+end
+
+-- Purpose: Move cursor to specific selection using AnimationEngine
+function frame.move_cursor_to_selection(cursor_id, player_id, selection_name)
+    if not ui_cache[player_id] or not ui_cache[player_id][cursor_id] or not ui_cache[player_id][cursor_id]["sprite_id"] then
+        return false
+    end
+    
+    local cursor_element = ui_cache[player_id][cursor_id]
+    local cursor_options = cursor_element.cursor_options
+    local selections = cursor_options.selections
+    
+    -- Find selection by name
+    for i, selection in ipairs(selections) do
+        if selection.name == selection_name then
+            cursor_options.current_index = i
+            
+            -- Use AnimationEngine to smoothly move the cursor
+            frame.slide_ui_element(cursor_id, player_id, 
+                selection.x, 
+                selection.y, 
+                0.15,  -- duration
+                "ease_out_quad",  -- easing
+                function()
+                    -- Update animation state after movement completes
+                    frame.update_ui_element(cursor_id, player_id, {
+                        animation_state = selection.state
+                    })
+                    
+                    -- Emit hover event
+                    Net:emit("cursor_hover", {
+                        player_id = player_id,
+                        cursor = cursor_id,
+                        selection = selection_name
+                    })
+                end
+            )
+            
+            return true
+        end
+    end
+    
+    return false
+end
+
+-- Purpose: Get current cursor selection
+function frame.get_current_cursor_selection(cursor_id, player_id)
+    if not ui_cache[player_id] or not ui_cache[player_id][cursor_id] or not ui_cache[player_id][cursor_id]["sprite_id"].is_cursor then
+        return nil
+    end
+    
+    local cursor_options = ui_cache[player_id][cursor_id]["sprite_id"].cursor_options
+    local current_index = cursor_options.current_index
+    
+    if current_index and cursor_options.selections[current_index] then
+        return cursor_options.selections[current_index]
+    end
+    
+    return nil
+end
+
+-- Purpose: Lock cursor movement
+function frame.lock_cursor(cursor_id, player_id, locked)
+    if not ui_cache[player_id] or not ui_cache[player_id][cursor_id] or not ui_cache[player_id][cursor_id].is_cursor then
+        return false
+    end
+    
+    local cursor_options = ui_cache[player_id][cursor_id].cursor_options
+    cursor_options.locked = locked ~= false
+    return true
+end
+
+-- Purpose: Check if cursor is locked
+function frame.is_cursor_locked(cursor_id, player_id)
+    if not ui_cache[player_id] or not ui_cache[player_id][cursor_id] or not ui_cache[player_id][cursor_id].is_cursor then
+        return false
+    end
+    
+    local cursor_options = ui_cache[player_id][cursor_id].cursor_options
+    return cursor_options.locked or false
+end
+
+-- Purpose: Update cursor options
+function frame.update_cursor_options(cursor_id, player_id, new_options)
+    if not ui_cache[player_id] or not ui_cache[player_id][cursor_id] or not ui_cache[player_id][cursor_id].is_cursor then
+        return false
+    end
+    
+    local cursor_options = ui_cache[player_id][cursor_id].cursor_options
+    
+    -- Merge new options with existing ones
+    if new_options.selections then
+        cursor_options.selections = new_options.selections
+    end
+    if new_options.movement then
+        cursor_options.movement = new_options.movement
+    end
+    if new_options.current_index then
+        cursor_options.current_index = new_options.current_index
+    end
+    if new_options.locked ~= nil then
+        cursor_options.locked = new_options.locked
+    end
+    
+    return true
+end
+
+-- ===========================================================
 -- CAMERA FUNCTIONS
 -- ===========================================================
 
@@ -1839,60 +1992,6 @@ function frame.update_countdown(countdown_id, player_id, duration)
 end
 
 -- ===========================================================
--- CURSOR FUNCTIONS
--- ===========================================================
-
-function frame.spawn_cursor(cursor_id, player_id, options)
-    return async(function()
-        Net.lock_player_input(player_id)
-        
-        if cursor_cache[player_id] and next(cursor_cache[player_id]) ~= nil then
-            print("[games] You already got a cursor for that user, remove it first.") 
-            return 
-        end
-        
-        cursor_cache[player_id] = options
-        cursor_cache[player_id]["name"] = cursor_id
-        
-        local selection = cursor_cache[player_id]["selections"][1]
-        local animation_path = options["animation"] or ""
-        
-        if animation_path ~= "" then
-            Net.provide_asset_for_player(player_id, options["animation"])
-        end
-        Net.provide_asset_for_player(player_id, options["texture"])
-        
-        Net.player_alloc_sprite(player_id, cursor_id, {
-            texture_path = options["texture"],
-            anim_path = options["animation"],
-            anim_state = selection["state"]
-        })
-        
-        Net.player_draw_sprite(player_id, cursor_id, {
-            id = cursor_id .. "_obj",
-            x = selection["x"] * 2,
-            y = selection["y"] * 2,
-            z = selection["z"],
-            sx = 2,
-            sy = 2,
-            anim_state = selection["state"]
-        })
-        
-        if not cursor_cache[player_id]["sprites"] then
-            cursor_cache[player_id]["sprites"] = {}
-        end
-        
-        cursor_cache[player_id]["current"] = 1
-        cursor_cache[player_id]["locked"] = false
-    end)
-end
-
-function frame.remove_cursor(cursor_id, player_id)
-    cursor_cache[player_id] = nil
-    Net.player_erase_sprite(player_id, cursor_id .. "_obj")
-end
-
--- ===========================================================
 -- UTILITY FUNCTIONS
 -- ===========================================================
 
@@ -1915,33 +2014,93 @@ end
 -- EVENT HANDLERS
 -- ===========================================================
 
--- Cursor movement logic
+-- Cursor movement logic using UI element system
 Net:on("cursor_move", function(event)
-    local cursor_data = cursor_cache[event.player_id]
-    if not cursor_data then return end
+    local player_id = event.player_id
+    local cursor_found = false
     
-    local last_selection = cursor_data["current"]
-    local direction = event.button
-    
-    if direction == "Move Left" or direction == "Shoulder L" or direction == "Move Up" then
-        cursor_data["current"] = (last_selection == 1) and #cursor_data["selections"] or (last_selection - 1)
-    elseif direction == "Move Right" or direction == "Move Down" or direction == "Shoulder R" then
-        cursor_data["current"] = (last_selection == #cursor_data["selections"]) and 1 or (last_selection + 1)
+    -- Find the cursor for this player
+    for cursor_id, element in pairs(ui_cache[player_id] or {}) do
+        if element.is_cursor then
+            local cursor_options = element.cursor_options
+            
+            -- Check if cursor is locked
+            if cursor_options.locked then
+                return
+            end
+            
+            local last_selection = cursor_options.current_index or 1
+            local direction = event.button
+            local movement = cursor_options.movement or "vertical"
+            
+            -- Determine movement direction
+            local move_forward = false
+            local move_backward = false
+            
+            if movement == "vertical" then
+                if direction == "Move Up" or direction == "Shoulder L" then
+                    move_backward = true
+                elseif direction == "Move Down" or direction == "Shoulder R" then
+                    move_forward = true
+                end
+            elseif movement == "horizontal" then
+                if direction == "Move Left" or direction == "Shoulder L" then
+                    move_backward = true
+                elseif direction == "Move Right" or direction == "Shoulder R" then
+                    move_forward = true
+                end
+            elseif movement == "shoulder" then
+                if direction == "Shoulder L" then
+                    move_backward = true
+                elseif direction == "Shoulder R" then
+                    move_forward = true
+                end
+            end
+            
+            -- Calculate new selection index
+            local selections = cursor_options.selections
+            local new_index = last_selection
+            
+            if move_forward then
+                new_index = (last_selection == #selections) and 1 or (last_selection + 1)
+            elseif move_backward then
+                new_index = (last_selection == 1) and #selections or (last_selection - 1)
+            end
+            
+            cursor_options.current_index = new_index
+            local selection = selections[new_index]
+            
+            -- Animate cursor movement using AnimationEngine
+            frame.slide_ui_element(cursor_id, player_id, 
+                selection.x, 
+                selection.y, 
+                0.1,  -- fast movement for responsive feel
+                "ease_out_back",  -- slight bounce effect
+                function()
+                    -- Update animation state after movement
+                    frame.update_ui_element(cursor_id, player_id, {
+                        x = selection.x, y = selection.y,
+                        sx = element.sx,
+                        animation_state = selection.state
+                    })
+                    
+                    -- Emit hover event
+                    Net:emit("cursor_hover", {
+                        player_id = player_id,
+                        cursor = cursor_id,
+                        selection = selection.name
+                    })
+                end
+            )
+            
+            cursor_found = true
+            break
+        end
     end
     
-    local selection = cursor_data["selections"][cursor_data["current"]]
-    
-    Net.player_draw_sprite(event.player_id, event.cursor, {
-        id = event.cursor .. "_obj",
-        x = selection["x"] * 2,
-        y = selection["y"] * 2
-    })
-    
-    Net:emit("cursor_hover", {
-        player_id = event.player_id,
-        cursor = cursor_data["name"],
-        selection = selection["name"]
-    })
+    if not cursor_found then
+        print("[games] No cursor found for player " .. player_id)
+    end
 end)
 
 -- Player join event
@@ -1950,7 +2109,6 @@ Net:on("player_join", function(event)
     
     -- Reset all caches on join
     ui_cache[event.player_id] = {}
-    cursor_cache[event.player_id] = {}
     avatar_cache[event.player_id] = {}
     
     -- Hide player exclusive cosmetics
@@ -1966,7 +2124,6 @@ end)
 -- Player disconnect event
 Net:on("player_disconnect", function(event)
     -- Clear all caches on disconnect
-    cursor_cache[event.player_id] = nil
     avatar_cache[event.player_id] = nil
     ui_cache[event.player_id] = nil
     ui_update[event.player_id] = nil
@@ -2042,7 +2199,7 @@ Net:on("tick", function(event)
     end
 end)
 
--- Virtual input event for cursor handling
+-- Virtual input event for cursor handling using UI element system
 Net:on("virtual_input", function(event)
     -- Pass inputs to cache
     if not button_states[event.player_id] then
@@ -2053,36 +2210,78 @@ Net:on("virtual_input", function(event)
         button_states[event.player_id][button.name] = button.state
     end
     
-    -- Cursor logic
-    local cursor_data = cursor_cache[event.player_id]
-    if not cursor_data then return end
+    -- Find cursor for this player
+    local cursor_id = nil
+    local cursor_element = nil
+    local cursor_options = nil
     
-    local direction = cursor_data["movement"]
+    for id, element in pairs(ui_cache[event.player_id] or {}) do
+        if element.is_cursor then
+            cursor_id = id
+            cursor_element = element
+            cursor_options = element.cursor_options
+            break
+        end
+    end
+    
+    if not cursor_id then
+        return
+    end
+    
+    -- Check if cursor is locked
+    if cursor_options.locked then
+        return
+    end
+    
+    local direction = cursor_options.movement or "vertical"
     
     for _, button in ipairs(event.events) do
         -- Cursor movement
-        if ((button.name == "Move Down" or button.name == "Move Up") and direction == "vertical" and 
-            (button.state == 1 or button.state == 4)) or
-           ((button.name == "Move Left" or button.name == "Move Right") and direction == "horizontal" and 
-            (button.state == 1 or button.state == 4)) or
-           ((button.name == "Shoulder L" or button.name == "Shoulder R") and direction == "shoulder" and 
-            (button.state == 1 or button.state == 4)) then
+        local should_move = false
+        local move_direction = nil
+        
+        if direction == "vertical" then
+            if (button.name == "Move Down" and (button.state == 1 or button.state == 4)) then
+                should_move = true
+                move_direction = "Move Down"
+            elseif (button.name == "Move Up" and (button.state == 1 or button.state == 4)) then
+                should_move = true
+                move_direction = "Move Up"
+            end
+        elseif direction == "horizontal" then
+            if (button.name == "Move Right" and (button.state == 1 or button.state == 4)) then
+                should_move = true
+                move_direction = "Move Right"
+            elseif (button.name == "Move Left" and (button.state == 1 or button.state == 4)) then
+                should_move = true
+                move_direction = "Move Left"
+            end
+        elseif direction == "shoulder" then
+            if (button.name == "Shoulder R" and (button.state == 1 or button.state == 4)) then
+                should_move = true
+                move_direction = "Shoulder R"
+            elseif (button.name == "Shoulder L" and (button.state == 1 or button.state == 4)) then
+                should_move = true
+                move_direction = "Shoulder L"
+            end
+        end
+        
+        if should_move then
             Net:emit("cursor_move", {
                 player_id = event.player_id,
-                cursor = cursor_data["name"],
-                selection = cursor_data["current"],
-                button = button.name
+                cursor = cursor_id,
+                button = move_direction
             })
         
         -- Cursor selection
         elseif (button.name == "Interact" or button.name == "Confirm") and button.state == 1 then
-            local selections = cursor_data.selections
-            local idx = cursor_data.current
+            local selections = cursor_options.selections
+            local idx = cursor_options.current_index or 1
             
             if selections and idx and selections[idx] and selections[idx].name then
                 Net:emit("cursor_selection", {
                     player_id = event.player_id,
-                    cursor = cursor_data.name,
+                    cursor = cursor_id,
                     selection = selections[idx].name
                 })
             end
