@@ -484,9 +484,9 @@ function UIExpandingPanel.create_preset(preset_name)
         -- Health bar preset
         health_bar = function()
             return UIExpandingPanel:new({
-                left_texture = "/assets/ui/health_bar_left.png",
-                middle_texture = "/assets/ui/health_bar_middle.png",
-                right_texture = "/assets/ui/health_bar_right.png",
+                left_texture = "/server/assets/net-games/displayer/textbox_bn6_nameplate_left.png",
+                middle_texture = "/server/assets/net-games/displayer/textbox_bn6_nameplate_middle.png",
+                right_texture = "/server/assets/net-games/displayer/textbox_bn6_nameplate_right.png",
                 left_width = 4,
                 middle_width = 2,
                 right_width = 4,

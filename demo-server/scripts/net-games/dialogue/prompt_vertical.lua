@@ -98,7 +98,7 @@ local function ensure_tick()
   Net:on("tick", function(event)
     for player_id, inst in pairs(PromptVertical.instances) do
       -- If textbox got removed externally, kill prompt safely
-      local state = Displayer.Text.getTextBoxState(player_id, inst.box_id)
+      local state = Displayer.Text:getTextBoxState(player_id, inst.box_id)
       if not state then
         PromptVertical.close(player_id, "textbox_missing")
       else
@@ -919,8 +919,7 @@ do
       font,
       scale,
       (L.z + zadd),
-      self.draw.monies,
-      {}
+      self.draw.monies
     )
         -- Amount line under MONIES (THIN)
     if L.monies_amount_enabled then
@@ -1164,7 +1163,6 @@ end
           hx, hy,
           (L.z + 1),
           L.scale
-          {}
         )
 
 

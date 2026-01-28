@@ -399,7 +399,7 @@ function FontSystem:drawTextWithId(player_id, text, x, y, font_name, scale, z_or
 
     -- Backwards compatibility: old callers pass a "tint" table as the last param.
     -- New callers pass a full sprite-API-style props table.
-    local opts = (type(sprite_opts) == "table") and sprite_opts or nil
+    local opts = (type(sprite_opts) == "table") and sprite_opts or {}
 
     -- Resolve base transform (allow opts to override the positional args)
     local base_x = (opts and type(opts.x) == "number") and opts.x or (x or 0)
@@ -509,14 +509,14 @@ function FontSystem:drawTextWithId(player_id, text, x, y, font_name, scale, z_or
                 z = base_z,
                 sx = base_sx,
                 sy = base_sy,
-                ox = sprite_opts.ox or 0,
-                oy = sprite_opts.oy or 0,
-                ro = sprite_opts.ro or 0,
-                a = sprite_opts.a,
-                r = sprite_opts.r,
-                g = sprite_opts.g,
-                b = sprite_opts.b,
-                opacity = sprite_opts.opacity,
+                ox = opts.ox or 0,
+                oy = opts.oy or 0,
+                ro = opts.ro or 0,
+                a = opts.a or 255,
+                r = opts.r or 255,
+                g = opts.g or 255,
+                b = opts.b or 255,
+                opacity = opts.opacity or 255,
                 anim_state = state
             }
 
@@ -570,7 +570,7 @@ function FontSystem:drawText(player_id, text_id, text, x, y, z_order, font_name,
         scale,
         z_order,
         display_id,
-        sprite_opts
+        sprite_opts or nil
     )
 end
 
