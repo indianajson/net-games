@@ -10,7 +10,7 @@
 local TextDisplay = {}
 TextDisplay.__index = TextDisplay
 
-local Nameplate = require("scripts/net-games/displayer/nameplate")
+TextDisplay.Nameplate = require("scripts/net-games/displayer/nameplate")
 
 -- ===== TextBox Debug =====
 local TBDBG = true
@@ -286,7 +286,7 @@ end
 function TextDisplay:init()
     self.player_texts = {}
     self.font_system = require("scripts/net-games/displayer/font-system")
-    self.nameplate = Nameplate:new(self.font_system)
+    self.nameplate = TextDisplay.Nameplate:new(self.font_system)
 
     -- Marquee speed definitions (pixels per second)
     self.marquee_speeds = {
@@ -645,7 +645,7 @@ end
         padding_y = padding_y
     }
 
-    -- Debug identity + lifetime (restores the “lived” usefulness)
+    -- Debug identity + lifetime (restores the "lived" usefulness)
     text_box_data._dbg_created_at = _ng_now()
     text_box_data._dbg_token = tostring(box_id) .. "#" .. tostring(math.floor(text_box_data._dbg_created_at * 1000))
 
@@ -668,7 +668,7 @@ end
 
     -- Optional BN nameplate
     if self.nameplate and opts and opts.nameplate then
-      self.nameplate:attach(player_id,text_box_data, opts.nameplate)
+      self.nameplate:attach(player_id, text_box_data, opts.nameplate)
     end
 
     player_data.active_text_boxes[box_id] = text_box_data
@@ -927,9 +927,9 @@ function TextDisplay:resetTextBox(player_id, box_id, text, x, y, width, height, 
   -- - if opts.nameplate provided => (re)attach
   if self.nameplate then
     if opts.nameplate == false then
-      self.nameplate:erase(player_id, player_data, box_data)
+      self.nameplate:erase(player_id, box_data)
     elseif opts.nameplate ~= nil then
-      self.nameplate:attach(player_id, player_data, box_id, box_data, opts.nameplate)
+      self.nameplate:attach(player_id, box_data, opts.nameplate)
     end
   end
 
@@ -1538,7 +1538,7 @@ function TextDisplay:updateTextBoxes(delta)
     local to_remove = nil
 
     for box_id, box_data in pairs(player_data.active_text_boxes) do
-      -- DEBUG: log state transitions (this is the “truth meter”)
+      -- DEBUG: log state transitions (this is the "truth meter")
       if _ng_dbg_enabled() then
         box_data._dbg_last_state = box_data._dbg_last_state or box_data.state
         if box_data.state ~= box_data._dbg_last_state then
@@ -1580,7 +1580,7 @@ function TextDisplay:updateTextBoxes(delta)
       self:updateTextBoxCursor(player_id, box_id, box_data, delta)
 
       if self.nameplate then
-        self.nameplate:update(player_id, player_data, box_data, delta)
+        self.nameplate:update(player_id, box_data, delta)
       end
     end
 
@@ -1619,7 +1619,7 @@ function TextDisplay:updateTextBoxPrinting(player_id, box_id, box_data, delta)
     box_data.pause_remaining = 0
     box_data._in_pause = false
 
-    -- resume: restore talk pose once (if we’re still in printing)
+    -- resume: restore talk pose once (if we're still in printing)
     if box_data.mugshot and box_data.mugshot.enabled then
       self:drawTextBoxMugshot(player_id, box_id, box_data)
     end
@@ -2060,7 +2060,7 @@ function TextDisplay:removeTextBox(player_id, box_id)
 
   -- Remove nameplate (if any)
   if self.nameplate then
-    self.nameplate:erase(player_id, player_data, box_data)
+    self.nameplate:erase(player_id, box_data)
   end
 
   local cursor_id = box_id .. "_cursor"
@@ -2122,7 +2122,7 @@ function TextDisplay:closeTextBox(player_id, box_id, opts)
 
     -- Start nameplate close animation (reverse-unfold)
   if self.nameplate then
-    self.nameplate:begin_close(player_id, player_data, box_data)
+    self.nameplate:begin_close(player_id, box_data)
   end
 
   if opts.clear_text ~= false then

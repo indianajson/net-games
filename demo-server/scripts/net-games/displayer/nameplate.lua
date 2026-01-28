@@ -166,8 +166,8 @@ function Nameplate:erase(player_id, box_data)
   -- Clean up player data if no more nameplates
   local has_other_plates = false
   for _, data in pairs(self.players) do
-    if data.boxes and data.boxes[box_data.id] then
-      data.boxes[box_data.id] = nil
+    if data.boxes and data.boxes[box_data.box_id] then
+      data.boxes[box_data.box_id] = nil
       for _ in pairs(data.boxes) do
         has_other_plates = true
         break
@@ -254,10 +254,10 @@ function Nameplate:attach(player_id, box_data, cfg)
   end
 
   local center_x = x + (total_w / 2)
-  local idp = tostring(box_data.id) .. "_np"
+  local idp = tostring(box_data.box_id) .. "_np"  -- CHANGED: box_data.id -> box_data.box_id
 
   if type(cfg) == "table" and cfg.debug then
-    _np_dbg(player_id, box_data.id, "ATTACH",
+    _np_dbg(player_id, box_data.box_id, "ATTACH",  -- CHANGED: box_data.id -> box_data.box_id
       "idp=" .. tostring(idp) ..
       " text=" .. tostring(text) ..
       " mids_target=" .. tostring(mids_target) ..
@@ -332,14 +332,14 @@ function Nameplate:attach(player_id, box_data, cfg)
     mids_drawn = 0,
     complete = false,
 
-    text_display_id = "nameplate:" .. tostring(box_data.id),
+    text_display_id = "nameplate:" .. tostring(box_data.box_id),  -- CHANGED: box_data.id -> box_data.box_id
   }
 
   -- Track this nameplate in player data
   local player_data = self.players[player_id]
   if player_data then
     player_data.boxes = player_data.boxes or {}
-    player_data.boxes[box_data.id] = box_data
+    player_data.boxes[box_data.box_id] = box_data  -- CHANGED: box_data.id -> box_data.box_id
   end
 end
 
@@ -423,7 +423,7 @@ function Nameplate:update(player_id, box_data, dt)
     local dy = y - np._last_ay
 
     if math.abs(dx) > 0.01 or math.abs(dy) > 0.01 then
-      _np_dbg(player_id, box_data.id or "?", "ANCHOR_DRIFT",
+      _np_dbg(player_id, box_data.box_id or "?", "ANCHOR_DRIFT",  -- CHANGED: box_data.id -> box_data.box_id
         "dx=" .. string.format("%.3f", dx) ..
         " dy=" .. string.format("%.3f", dy) ..
         " left_x=" .. string.format("%.3f", left_x) ..
@@ -455,13 +455,13 @@ function Nameplate:update(player_id, box_data, dt)
     fmode = tonumber(f.color_mode) or 2
 
     if np.debug then
-      _np_dbg(player_id, box_data.id or "?", "FRAME_IDS",
+      _np_dbg(player_id, box_data.box_id or "?", "FRAME_IDS",  -- CHANGED: box_data.id -> box_data.box_id
         "idp=" .. tostring(np.idp) ..
         " LF=" .. tostring(np.idp .. "_FL") ..
         " MF0=" .. tostring(np.idp .. "_FM0") ..
         " RF=" .. tostring(np.idp .. "_FR")
       )
-      _np_dbg(player_id, box_data.id or "?", "FRAME_TINT",
+      _np_dbg(player_id, box_data.box_id or "?", "FRAME_TINT",  -- CHANGED: box_data.id -> box_data.box_id
         "r=" .. tostring(fr) .. " g=" .. tostring(fg) .. " b=" .. tostring(fb) ..
         " a=" .. tostring(fa) .. " mode=" .. tostring(fmode)
       )

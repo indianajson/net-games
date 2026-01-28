@@ -5,6 +5,7 @@ local Displayer  = require("scripts/net-games/displayer/displayer")
 local Input      = require("scripts/net-games/input/input")
 local FontSystem = require("scripts/net-games/displayer/font-system")
 
+Displayer:init()
 
 local Prompt = {}
 Prompt.instances = {}
@@ -140,7 +141,7 @@ local function join_lines(lines)
 end
 
 local function build_yesno_text_from_wrapped(question_lines, _max_lines_per_page)
-  -- Locked “official” layout:
+  -- Locked ï¿½officialï¿½ layout:
   -- line 1-2 = question text
   -- line 3   = "Yes    No"
   local MAX_LINES_PER_PAGE = 3

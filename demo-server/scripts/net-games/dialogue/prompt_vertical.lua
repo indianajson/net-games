@@ -919,7 +919,8 @@ do
       font,
       scale,
       (L.z + zadd),
-      self.draw.monies
+      self.draw.monies,
+      {}
     )
         -- Amount line under MONIES (THIN)
     if L.monies_amount_enabled then
@@ -943,6 +944,7 @@ do
         scale,
         (L.z + zadd),
         self.draw.monies_amount
+        {}
       )
     else
       FontSystem:eraseTextDisplay(self.player_id, self.draw.monies_amount)
@@ -1135,7 +1137,7 @@ end
           scale,
           (L.z + 2),
           display_id,
-          tint
+          {opacity = tint.opacity}
         )
 
 
@@ -1162,6 +1164,7 @@ end
           hx, hy,
           (L.z + 1),
           L.scale
+          {}
         )
 
 
@@ -1178,7 +1181,8 @@ end
               self.draw.cursor,
               curx, cury,
               (L.z + 3),
-              L.scale
+              L.scale,
+              {}
             )
 
         else
@@ -1234,7 +1238,8 @@ end
           track_x,
           thumb_y,
           (L.z + 3),
-          L.scale
+          L.scale,
+          {}
         )
 
   else

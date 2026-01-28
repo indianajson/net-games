@@ -7,6 +7,7 @@ local Direction = require("scripts/libs/direction")
 local Dialogue  = require("scripts/net-games/dialogue/dialogue")
 local Presets   = require("scripts/net-games/npcs/talk_presets")
 local MenuOptions  = require("scripts/net-games/npcs/menu_options")
+local Displayer = require("scripts/net-games/displayer/displayer")
 
 local Talk = {}
 
