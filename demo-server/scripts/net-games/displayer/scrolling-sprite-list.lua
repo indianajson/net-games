@@ -17,7 +17,8 @@ function ScrollingSpriteList:init()
         max_columns = 1,
         column_spacing = 5,
         row_spacing = 5,
-        align = "left"
+        align = "left",
+        text_opts = nil
     }
     
     -- Animation states
@@ -341,7 +342,8 @@ function ScrollingSpriteList:drawListEntry(player_id, list_id, entry_index, list
                 sprite_def.text_font or "THICK", 
                 sprite_def.text_scale or 2.0, 
                 config.z_order + 1,
-                list_id .. "_text_" .. entry_index
+                list_id .. "_text_" .. entry_index,
+                sprite_def.text_opts or config.text_opts
             )
             
             if text_display_id then
@@ -369,7 +371,7 @@ function ScrollingSpriteList:drawErrorPlaceholder(player_id, display_id, x, y, z
                 z = z_order,
                 sx = 16,
                 sy = 16,
-                r = 1.0, g = 0.0, b = 0.0, a = 0.7
+                r = 1.0, g = 0.0, b = 0.0, opacity = 179
             }
         )
     end)
@@ -379,11 +381,11 @@ function ScrollingSpriteList:drawErrorPlaceholder(player_id, display_id, x, y, z
     end
 end
 
-function ScrollingSpriteList:drawSpriteText(player_id, text, x, y, font, scale, z_order, display_id)
+function ScrollingSpriteList:drawSpriteText(player_id, text, x, y, font, scale, z_order, display_id, text_opts)
     local font_system_success, font_system = pcall(require, "scripts/net-games/displayer/font-system")
     
     if font_system_success and font_system and font_system.drawText then
-        return font_system:drawText(player_id, display_id, text, x, y, font, scale, z_order)
+        return font_system:drawText(player_id, display_id, text, x, y, z_order, font, scale, text_opts)
     else
         print("DEBUG: Font system not available")
     end

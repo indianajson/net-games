@@ -171,9 +171,9 @@ local function normalize_glyph(raw)
   if raw == " " then return " " end
 
   -- smart punctuation -> ascii
-  if raw == "í" then raw = "'" end
-  if raw == "ì" or raw == "î" then raw = '"' end
-  if raw == "ñ" or raw == "ó" then raw = "-" end
+  if raw == "‚Äô" then raw = "'" end
+  if raw == "‚Äú" or raw == "‚Äù" then raw = '"' end
+  if raw == "‚Äì" or raw == "‚Äî" then raw = "-" end
 
   return raw
 end
@@ -607,6 +607,7 @@ end
         font = font_name,
         scale = scale,
         z_order = z_order,
+        sprite_opts = sprite_opts,
         speed = speed,
         char_delay = char_delay,
         pages = pages,
@@ -644,7 +645,7 @@ end
         padding_y = padding_y
     }
 
-    -- Debug identity + lifetime (restores the ìlivedî usefulness)
+    -- Debug identity + lifetime (restores the ‚Äúlived‚Äù usefulness)
     text_box_data._dbg_created_at = _ng_now()
     text_box_data._dbg_token = tostring(box_id) .. "#" .. tostring(math.floor(text_box_data._dbg_created_at * 1000))
 
@@ -1535,7 +1536,7 @@ function TextDisplay:updateTextBoxes(delta)
     local to_remove = nil
 
     for box_id, box_data in pairs(player_data.active_text_boxes) do
-      -- DEBUG: log state transitions (this is the ìtruth meterî)
+      -- DEBUG: log state transitions (this is the ‚Äútruth meter‚Äù)
       if _ng_dbg_enabled() then
         box_data._dbg_last_state = box_data._dbg_last_state or box_data.state
         if box_data.state ~= box_data._dbg_last_state then
@@ -1616,7 +1617,7 @@ function TextDisplay:updateTextBoxPrinting(player_id, box_id, box_data, delta)
     box_data.pause_remaining = 0
     box_data._in_pause = false
 
-    -- resume: restore talk pose once (if weíre still in printing)
+    -- resume: restore talk pose once (if we‚Äôre still in printing)
     if box_data.mugshot and box_data.mugshot.enabled then
       self:drawTextBoxMugshot(player_id, box_id, box_data)
     end
@@ -2324,7 +2325,7 @@ end
 -- Static text
 --=====================================================
 
-function TextDisplay:drawText(player_id, text_id, text, x, y, z_order, font_name, scale)
+function TextDisplay:drawText(player_id, text_id, text, x, y, z_order, font_name, scale, sprite_opts)
     font_name = font_name or "THICK"
     scale = scale or 2.0
     z_order = z_order or 100
@@ -2344,10 +2345,11 @@ function TextDisplay:drawText(player_id, text_id, text, x, y, z_order, font_name
         scale = scale,
         z_order = z_order,
         display_id = nil,
-        character_objects = {}
+        character_objects = {},
+        sprite_opts = sprite_opts
     }
 
-    text_data.display_id = self.font_system:drawText(player_id, actual_id, text, x, y, z_order, font_name, scale)
+    text_data.display_id = self.font_system:drawText(player_id, actual_id, text, x, y, z_order, font_name, scale, sprite_opts)
     player_data.active_texts[actual_id] = text_data
     return actual_id
 end
@@ -2355,12 +2357,14 @@ end
 --=====================================================
 -- Marquee
 --=====================================================
-
-function TextDisplay:drawMarqueeText(player_id, marquee_id, text, y, font_name, scale, z_order, speed, backdrop)
+function TextDisplay:drawMarqueeText(player_id, marquee_id, text, y, font_name, scale, z_order, speed, backdrop, sprite_opts)
     font_name = font_name or "THICK"
     scale = scale or 2.0
     z_order = z_order or 100
     speed = speed or "medium"
+    
+    -- Ensure sprite_opts is a table (even if empty)
+    sprite_opts = sprite_opts or {}
 
     local player_data = self.player_texts[player_id]
     if not player_data then return nil end
@@ -2427,7 +2431,10 @@ function TextDisplay:drawMarqueeText(player_id, marquee_id, text, y, font_name, 
         keep_backdrop   = backdrop and backdrop.keep_backdrop or false,
 
         _backdrop_allocated = false,
-        backdrop_id = nil
+        backdrop_id = nil,
+        
+        -- Store sprite options
+        sprite_opts = sprite_opts
     }
 
     self:setupMarqueeCharacters(marquee_data)
@@ -2512,8 +2519,8 @@ function TextDisplay:setupMarqueeCharacters(marquee_data)
       width = char_width,
       relative_x = total_text_width,
       obj_id = nil,
-      anim_state = state,   -- <- key change
-      is_space = is_space   -- <- key change
+      anim_state = state,
+      is_space = is_space
     })
 
     total_text_width = total_text_width + char_width
@@ -2525,44 +2532,88 @@ function TextDisplay:setupMarqueeCharacters(marquee_data)
   marquee_data.total_text_width = total_text_width
 end
 
-
 function TextDisplay:drawMarqueeCharacters(player_id, marquee_id, marquee_data)
+    local sprite_opts = marquee_data.sprite_opts or {}
+    
     for i, char_data in ipairs(marquee_data.individual_chars) do
         local char_x = marquee_data.current_x + char_data.relative_x
-
+        
         local is_visible = (char_x + char_data.width >= marquee_data.bounds_left and char_x <= marquee_data.bounds_right)
-
+        
         if is_visible and char_data.anim_state then
+            -- Build sprite properties
+            local sprite_props = {
+                id = char_data.obj_id or (marquee_id .. "_char_" .. i),
+                x = char_x,
+                y = marquee_data.y,
+                z = marquee_data.z_order,
+                sx = marquee_data.scale,
+                sy = marquee_data.scale,
+                anim_state = char_data.anim_state
+            }
+            
+            -- Apply opacity (separate from a/alpha for tinting)
+            if sprite_opts.opacity ~= nil then
+                sprite_props.opacity = sprite_opts.opacity
+            end
+            
+            -- Apply tint/color properties (a, r, g, b, color_mode)
+            if sprite_opts.a ~= nil then
+                sprite_props.a = sprite_opts.a
+            end
+            
+            if sprite_opts.r ~= nil then
+                sprite_props.r = sprite_opts.r
+            end
+            
+            if sprite_opts.g ~= nil then
+                sprite_props.g = sprite_opts.g
+            end
+            
+            if sprite_opts.b ~= nil then
+                sprite_props.b = sprite_opts.b
+            end
+            
+            if sprite_opts.color_mode ~= nil then
+                sprite_props.color_mode = sprite_opts.color_mode
+            end
+            
+            -- Apply rotation
+            if sprite_opts.ro ~= nil then
+                sprite_props.ro = sprite_opts.ro
+            elseif sprite_opts.rotation ~= nil then
+                sprite_props.ro = sprite_opts.rotation
+            end
+            
+            -- Apply origin
+            if sprite_opts.ox ~= nil then
+                sprite_props.ox = sprite_opts.ox
+            end
+            
+            if sprite_opts.oy ~= nil then
+                sprite_props.oy = sprite_opts.oy
+            end
+            
+            -- Apply any other custom properties
+            for key, value in pairs(sprite_opts) do
+                if not sprite_props[key] and 
+                   key ~= "opacity" and 
+                   key ~= "a" and 
+                   key ~= "r" and key ~= "g" and key ~= "b" and 
+                   key ~= "color_mode" and key ~= "ro" and key ~= "rotation" and 
+                   key ~= "ox" and key ~= "oy" then
+                    sprite_props[key] = value
+                end
+            end
+            
             if char_data.obj_id then
-                Net.player_draw_sprite(
-                    player_id,
-                    marquee_data.font,
-                    {
-                        id = char_data.obj_id,
-                        x = char_x,
-                        y = marquee_data.y,
-                        z = marquee_data.z_order,
-                        sx = marquee_data.scale,
-                        sy = marquee_data.scale,
-                        anim_state = char_data.anim_state
-                    }
-                )
+                -- Update existing sprite
+                sprite_props.id = char_data.obj_id
+                Net.player_draw_sprite(player_id, marquee_data.font, sprite_props)
             else
-                local char_obj_id = marquee_id .. "_char_" .. i
-                Net.player_draw_sprite(
-                    player_id,
-                    marquee_data.font,
-                    {
-                        id = char_obj_id,
-                        x = char_x,
-                        y = marquee_data.y,
-                        z = marquee_data.z_order,
-                        sx = marquee_data.scale,
-                        sy = marquee_data.scale,
-                        anim_state = char_data.anim_state
-                    }
-                )
-                char_data.obj_id = char_obj_id
+                -- Create new sprite
+                char_data.obj_id = sprite_props.id
+                Net.player_draw_sprite(player_id, marquee_data.font, sprite_props)
             end
         else
             if char_data.obj_id then
@@ -2571,6 +2622,25 @@ function TextDisplay:drawMarqueeCharacters(player_id, marquee_id, marquee_data)
             end
         end
     end
+end
+
+-- Add this new function to update sprite options
+function TextDisplay:updateMarqueeSpriteOptions(player_id, marquee_id, new_sprite_opts)
+    local player_data = self.player_texts[player_id]
+    if not player_data then return false end
+    
+    local marquee_data = player_data.active_texts[marquee_id]
+    if not marquee_data or marquee_data.type ~= "marquee" then return false end
+    
+    -- Merge new options with existing ones
+    for key, value in pairs(new_sprite_opts) do
+        marquee_data.sprite_opts[key] = value
+    end
+    
+    -- Redraw characters with new options
+    self:drawMarqueeCharacters(player_id, marquee_id, marquee_data)
+    
+    return true
 end
 
 -- Draw backdrop (lazy + safe no-op)
@@ -2720,7 +2790,8 @@ function TextDisplay:updateText(player_id, text_id, new_text)
             text_data.y,
             text_data.z_order,
             text_data.font,
-            text_data.scale
+            text_data.scale,
+            text_data.sprite_opts
         )
     end
 end
@@ -2759,13 +2830,14 @@ function TextDisplay:setTextPosition(player_id, text_id, x, y)
 
         text_data.display_id = self.font_system:drawText(
             player_id,
-            nil,
+            text_id,
             text_data.text,
             x,
             y,
             text_data.z_order,
             text_data.font,
-            text_data.scale
+            text_data.scale,
+            text_data.sprite_opts
         )
     end
 end

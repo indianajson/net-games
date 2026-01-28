@@ -77,6 +77,7 @@ function ScrollingTextList:createScrollingList(player_id, list_id, x, y, width, 
     list_config.height = height or 100
     list_config.backdrop = config.backdrop
     list_config.texts = config.texts or {}
+    list_config.text_opts = config.text_opts or config.sprite_opts
     list_config.entry_states = {}
     list_config.current_state = self.states.waiting
     
@@ -175,20 +176,21 @@ function ScrollingTextList:drawListEntry(player_id, list_id, entry_index, list_d
         -- Use a unique ID for this specific entry to avoid conflicts
         local unique_display_id = list_id .. "_entry_" .. entry_index
         
-        local display_id = self.font_system:drawText(
+        local display_id = self.font_system:drawTextWithId(
             player_id,
-            nil,
             entry_state.text,
             text_x,
             text_y,
             config.font,
             config.scale,
-            config.z_order
+            config.z_order,
+            unique_display_id,
+            config.text_opts
         )
         
         table.insert(entry_state.display_objects, {
             type = "text",
-            id = display_id,
+            id = unique_display_id,
             unique_id = unique_display_id
         })
     end

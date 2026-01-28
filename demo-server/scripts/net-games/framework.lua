@@ -1,7 +1,7 @@
 --[[
 * ---------------------------------------------------------- *
-           Net Games (framework) - Version 0.08
-	     https://github.com/indianajson/net-games/   
+           Net Games (framework) - Version 0.09
+         https://github.com/indianajson/net-games/   
 * ---------------------------------------------------------- *
 ]]--
 
@@ -33,6 +33,8 @@ local ui_cache = {}
 local map_elements = {}
 local ui_update = {}
 local online_players = {}
+local text_view_cache = {}    -- NEW: Cache for text view objects
+local timer_display_cache = {} -- NEW: Cache for timer display configurations
 
 -- ===========================================================
 -- HELPER FUNCTIONS
@@ -45,48 +47,6 @@ local function round_fraction(value, denominator)
     local n = math.floor(decimal * denominator + 0.5)
     return int_part, n / denominator
 end
-
--- Purpose: Checks if a string follows a valid x,y,z pattern
--- local function validateCords(str)
---     str = str:gsub("%s+", "")
---     
---     local commaCount = 0
---     for i = 1, #str do
---         if str:sub(i, i) == "," then
---             commaCount = commaCount + 1
---         end
---     end
---     if commaCount ~= 2 then return false end
---     
---     local parts = {}
---     for part in str:gmatch("([^,]+)") do
---         table.insert(parts, part)
---     end
---     if #parts ~= 3 then return false end
---     
---     for _, part in ipairs(parts) do
---         if not part:match("^%d+$") then
---             return false
---         end
---     end
---     
---     return str:match("^%d+,%d+,%d+$") ~= nil
--- end
-
--- Purpose: Converts Net.get_bot_direction() from name to initials
--- local function simple_direction(direction)
---     local directions = {
---         ["Up Left"] = "UL",
---         ["Up Right"] = "UR",
---         ["Down Left"] = "DL",
---         ["Down Right"] = "DR",
---         ["Up"] = "U",
---         ["Down"] = "D",
---         ["Left"] = "L",
---         ["Right"] = "R"
---     }
---     return directions[direction] or direction
--- end
 
 -- Purpose: Converts h/v offsets to x/y offsets for UIs
 local function convertOffsets(horizontalOffset, verticalOffset, Z)
@@ -1731,6 +1691,457 @@ function frame.get_ui_element_properties(sprite_id, player_id)
 end
 
 -- ===========================================================
+-- TEXT FUNCTIONS (UPDATED FOR PROPER DISPLAYER API)
+-- ===========================================================
+
+-- Purpose: Create static text using Displayer.Text API
+function frame.draw_text(player_id, text_id, text, x, y, z_order, font_name, scale, sprite_opts)
+    if not player_id or not text then 
+        print("[games] Error: player_id and text are required")
+        return nil 
+    end
+    
+    -- Convert coordinates if needed (game coords to screen coords)
+    local screen_x = x and x * 2 or 0
+    local screen_y = y and y * 2 or 0
+    
+    -- Call Displayer.Text.drawText
+    local success = Displayer.Text.drawText(
+        player_id,
+        text_id or ("text_" .. tostring(math.random(1000, 9999))),
+        text,
+        screen_x,
+        screen_y,
+        z_order or 100,
+        font_name or "THICK",
+        scale or 2.0,
+        sprite_opts
+    )
+    
+    -- Cache the text
+    if not text_view_cache[player_id] then
+        text_view_cache[player_id] = {}
+    end
+    text_view_cache[player_id][text_id] = {
+        type = "static",
+        id = text_id
+    }
+    
+    return success
+end
+
+-- Purpose: Update existing text
+function frame.update_text(text_id, player_id, new_text)
+    if not player_id or not text_id or not new_text then 
+        print("[games] Error: player_id, text_id and new_text are required")
+        return false 
+    end
+    
+    return Displayer.Text.updateText(player_id, text_id, new_text)
+end
+
+-- Purpose: Remove text
+function frame.remove_text(text_id, player_id)
+    if not player_id or not text_id then 
+        print("[games] Error: player_id and text_id are required")
+        return false 
+    end
+    
+    if text_view_cache[player_id] then
+        text_view_cache[player_id][text_id] = nil
+    end
+    
+    return Displayer.Text.removeText(player_id, text_id)
+end
+
+-- Purpose: Create marquee (scrolling) text
+function frame.draw_marquee_text(player_id, marquee_id, text, y, font_name, scale, z_order, speed, backdrop, sprite_opts)
+    if not player_id or not marquee_id or not text then 
+        print("[games] Error: player_id, marquee_id and text are required")
+        return nil 
+    end
+    
+    -- Convert coordinates if needed (game coords to screen coords)
+    local screen_y = y and y * 2 or 0
+    
+    -- Call Displayer.Text.drawMarqueeText with ALL parameters
+    local success = Displayer.Text.drawMarqueeText(
+        player_id,
+        marquee_id,
+        text,
+        screen_y,
+        font_name or "THICK",
+        scale or 2.0,
+        z_order or 100,
+        speed or "medium",
+        backdrop,
+        sprite_opts or {}
+    )
+    
+    -- Cache the marquee
+    if not text_view_cache[player_id] then
+        text_view_cache[player_id] = {}
+    end
+    text_view_cache[player_id][marquee_id] = {
+        type = "marquee",
+        id = marquee_id
+    }
+    
+    return success
+end
+
+-- Purpose: Set marquee position
+function frame.set_marquee_position(player_id, marquee_id, x, y)
+    if not player_id or not marquee_id then 
+        print("[games] Error: player_id and marquee_id are required")
+        return false 
+    end
+    
+    -- Use setTextPosition which works for all text types
+    return Displayer.Text.setTextPosition(player_id, marquee_id, (x or 0) * 2, (y or 0) * 2)
+end
+
+-- Purpose: Set marquee speed
+function frame.set_marquee_speed(player_id, marquee_id, speed)
+    if not player_id or not marquee_id then 
+        print("[games] Error: player_id and marquee_id are required")
+        return false 
+    end
+    
+    return Displayer.Text.setMarqueeSpeed(player_id, marquee_id, speed)
+end
+
+-- Purpose: Update marquee sprite options
+function frame.update_marquee_sprite_options(player_id, marquee_id, sprite_opts)
+    if not player_id or not marquee_id or not sprite_opts then 
+        print("[games] Error: player_id, marquee_id and sprite_opts are required")
+        return false 
+    end
+    
+    return Displayer.Text.updateMarqueeSpriteOptions(player_id, marquee_id, sprite_opts)
+end
+
+-- Purpose: Create textbox with typewriter effect
+function frame.draw_textbox(player_id, box_id, text, x, y, width, height, font_name, scale, z_order, backdrop_config, speed, opts)
+    if not player_id or not box_id or not text then 
+        print("[games] Error: player_id, box_id and text are required")
+        return nil 
+    end
+    
+    local screen_x = x and x * 2 or 0
+    local screen_y = y and y * 2 or 0
+    local screen_width = width and width * 2 or 200
+    local screen_height = height and height * 2 or 100
+    
+    -- Call Displayer.Text.createTextBox
+    local success = Displayer.Text.createTextBox(
+        player_id,
+        box_id,
+        text,
+        screen_x,
+        screen_y,
+        screen_width,
+        screen_height,
+        font_name or "THICK",
+        scale or 2.0,
+        z_order or 100,
+        backdrop_config,
+        speed or 30,
+        opts
+    )
+    
+    -- Cache the textbox
+    if not text_view_cache[player_id] then
+        text_view_cache[player_id] = {}
+    end
+    text_view_cache[player_id][box_id] = {
+        type = "textbox",
+        id = box_id
+    }
+    
+    return success
+end
+
+-- Purpose: Advance textbox to next page
+function frame.textbox_next_page(textbox_id, player_id)
+    if not player_id or not textbox_id then 
+        print("[games] Error: player_id and textbox_id are required")
+        return false 
+    end
+    
+    return Displayer.Text.advanceTextBox(player_id, textbox_id)
+end
+
+-- Purpose: Skip textbox to end - use resetTextBox with the same text
+function frame.textbox_skip_to_end(textbox_id, player_id)
+    if not player_id or not textbox_id then 
+        print("[games] Error: player_id and textbox_id are required")
+        return false 
+    end
+    
+    -- Get current textbox data to get the text
+    local data = Displayer.Text.getTextBoxData(player_id, textbox_id)
+    if not data or not data.text then
+        print("[games] Could not get textbox data for: " .. textbox_id)
+        return false
+    end
+    
+    -- Reset the textbox with the same text but immediately show it all
+    return Displayer.Text.resetTextBox(
+        player_id,
+        textbox_id,
+        data.text,
+        data.x or 0,
+        data.y or 0,
+        data.width or 200,
+        data.height or 100,
+        data.font_name or "THICK",
+        data.scale or 2.0,
+        data.z_order or 100,
+        data.backdrop_config,
+        0, -- Set speed to 0 for instant display
+        data.opts
+    )
+end
+
+-- Purpose: Set text position
+function frame.set_text_position(text_id, player_id, x, y)
+    if not player_id or not text_id then 
+        print("[games] Error: player_id and text_id are required")
+        return false 
+    end
+    
+    return Displayer.Text.setTextPosition(player_id, text_id, (x or 0) * 2, (y or 0) * 2)
+end
+
+-- Purpose: Get text view object for advanced control
+function frame.get_text_view(text_id, player_id)
+    if not text_view_cache[player_id] or not text_view_cache[player_id][text_id] then
+        return nil
+    end
+    
+    -- Return a proxy object that maps to Displayer functions
+    local cache_entry = text_view_cache[player_id][text_id]
+    return {
+        id = cache_entry.id,
+        type = cache_entry.type,
+        updateText = function(text)
+            return Displayer.Text.updateText(player_id, text_id, text)
+        end,
+        setPosition = function(x, y)
+            return Displayer.Text.setTextPosition(player_id, text_id, (x or 0) * 2, (y or 0) * 2)
+        end,
+        remove = function()
+            return Displayer.Text.removeText(player_id, text_id)
+        end,
+        -- Textbox specific methods
+        advance = function()
+            if cache_entry.type == "textbox" then
+                return Displayer.Text.advanceTextBox(player_id, text_id)
+            end
+            return false
+        end,
+        getState = function()
+            if cache_entry.type == "textbox" then
+                return Displayer.Text.getTextBoxState(player_id, text_id)
+            end
+            return nil
+        end,
+        isCompleted = function()
+            if cache_entry.type == "textbox" then
+                return Displayer.Text.isTextBoxCompleted(player_id, text_id)
+            end
+            return true
+        end,
+        -- Marquee specific methods
+        setSpeed = function(speed)
+            if cache_entry.type == "marquee" then
+                return Displayer.Text.setMarqueeSpeed(player_id, text_id, speed)
+            end
+            return false
+        end,
+        updateSpriteOptions = function(sprite_opts)
+            if cache_entry.type == "marquee" then
+                return Displayer.Text.updateMarqueeSpriteOptions(player_id, text_id, sprite_opts)
+            end
+            return false
+        end
+    }
+end
+
+-- ===========================================================
+-- TIMER FUNCTIONS (UPDATED WITH OPTIONS SUPPORT)
+-- ===========================================================
+
+function frame.spawn_timer(timer_id, player_id, x, y, duration, loop, options)
+    loop = loop or false
+    options = options or {}
+    
+    -- Cache timer display configuration
+    if not timer_display_cache[player_id] then
+        timer_display_cache[player_id] = {}
+    end
+    
+    timer_display_cache[player_id][timer_id] = {
+        type = "timer",
+        x = x,
+        y = y,
+        options = options
+    }
+    
+    -- Create timer with callback
+    Displayer.Timer.createPlayerTimer(
+        player_id, 
+        timer_id, 
+        duration, 
+        function(_, timer_id, value)
+            if value <= 0 then
+                Net:emit("timer_ended", {player_id = player_id, timer_id = timer_id})
+            end
+        end,
+        loop
+    )
+    
+    -- Create timer display with options
+    local config_name = options.config_name or "default"
+    Displayer.TimerDisplay.createPlayerTimerDisplay(player_id, timer_id, (x or 0) * 2, (y or 0) * 2, config_name)
+    
+    return timer_id
+end
+
+function frame.resume_timer(timer_id, player_id)
+    Displayer.Timer.resumePlayerTimer(player_id, timer_id)
+end
+
+function frame.pause_timer(timer_id, player_id)
+    Displayer.Timer.pausePlayerTimer(player_id, timer_id)
+end
+
+function frame.remove_timer(timer_id, player_id)
+    Displayer.Timer.removePlayerTimer(player_id, timer_id)
+    Displayer.TimerDisplay.removePlayerDisplay(player_id, timer_id)
+    
+    if timer_display_cache[player_id] then
+        timer_display_cache[player_id][timer_id] = nil
+    end
+end
+
+function frame.update_timer(timer_id, player_id, duration)
+    -- Note: There's no direct update function in displayer.lua for timers
+    -- We need to remove and recreate or use a different approach
+    print("[games] Timer update not directly supported. Remove and recreate instead.")
+    return false
+end
+
+-- Purpose: Set timer display position
+function frame.set_timer_position(timer_id, player_id, x, y)
+    Displayer.TimerDisplay.setDisplayPosition(player_id, timer_id, (x or 0) * 2, (y or 0) * 2)
+    
+    -- Update cache
+    if timer_display_cache[player_id] and timer_display_cache[player_id][timer_id] then
+        timer_display_cache[player_id][timer_id].x = x
+        timer_display_cache[player_id][timer_id].y = y
+    end
+end
+
+-- ===========================================================
+-- COUNTDOWN FUNCTIONS (UPDATED WITH OPTIONS SUPPORT)
+-- ===========================================================
+
+function frame.spawn_countdown(countdown_id, player_id, x, y, duration, loop, options)
+    loop = loop or false
+    options = options or {}
+    
+    -- Cache countdown display configuration
+    if not timer_display_cache[player_id] then
+        timer_display_cache[player_id] = {}
+    end
+    
+    timer_display_cache[player_id][countdown_id] = {
+        type = "countdown",
+        x = x,
+        y = y,
+        options = options
+    }
+    
+    -- Create countdown with callback
+    Displayer.Timer.createPlayerCountdown(
+        player_id, 
+        countdown_id, 
+        duration, 
+        function(_, countdown_id, value)
+            if value <= 0 then
+                Net:emit("countdown_ended", {player_id = player_id, countdown_id = countdown_id})
+            end
+        end,
+        loop
+    )
+    
+    -- Create countdown display with options
+    local config_name = options.config_name or "default"
+    Displayer.TimerDisplay.createPlayerCountdownDisplay(player_id, countdown_id, (x or 0) * 2, (y or 0) * 2, config_name)
+    
+    return countdown_id
+end
+
+function frame.resume_countdown(countdown_id, player_id)
+    Displayer.Timer.resumePlayerCountdown(player_id, countdown_id)
+end
+
+function frame.pause_countdown(countdown_id, player_id)
+    Displayer.Timer.pausePlayerCountdown(player_id, countdown_id)
+end
+
+function frame.remove_countdown(countdown_id, player_id)
+    Displayer.Timer.removePlayerCountdown(player_id, countdown_id)
+    Displayer.TimerDisplay.removePlayerDisplay(player_id, countdown_id)
+    
+    if timer_display_cache[player_id] then
+        timer_display_cache[player_id][countdown_id] = nil
+    end
+end
+
+function frame.update_countdown(countdown_id, player_id, duration)
+    -- Note: There's no direct update function in displayer.lua for countdowns
+    print("[games] Countdown update not directly supported. Remove and recreate instead.")
+    return false
+end
+
+-- Purpose: Set countdown display position
+function frame.set_countdown_position(countdown_id, player_id, x, y)
+    Displayer.TimerDisplay.setDisplayPosition(player_id, countdown_id, (x or 0) * 2, (y or 0) * 2)
+    
+    -- Update cache
+    if timer_display_cache[player_id] and timer_display_cache[player_id][countdown_id] then
+        timer_display_cache[player_id][countdown_id].x = x
+        timer_display_cache[player_id][countdown_id].y = y
+    end
+end
+
+-- ===========================================================
+-- TEXT UTILITY FUNCTIONS
+-- ===========================================================
+
+-- Purpose: Get text width using Displayer.Font API
+function frame.get_text_width(text, font_name, scale)
+    if not text then
+        print("[games] Error: text is required")
+        return 0
+    end
+    
+    return Displayer.Font.getTextWidth(text, font_name or "THICK", scale or 2.0)
+end
+
+-- Purpose: Calculate text dimensions (width and estimated height)
+function frame.calculate_text_dimensions(text, font_name, scale)
+    local width = frame.get_text_width(text, font_name, scale)
+    -- Estimate height based on font scale
+    local height = (scale or 2.0) * 8  -- Rough estimate: 8px per line at scale 1.0
+    
+    return width, height
+end
+
+-- ===========================================================
 -- CURSOR FUNCTIONS (UPDATED FOR UI INTEGRATION)
 -- ===========================================================
 
@@ -1897,103 +2308,6 @@ function frame.detach_camera(player_id)
 end
 
 -- ===========================================================
--- TEXT FUNCTIONS
--- ===========================================================
-
-function frame.draw_text(text_id, player_id, text, x, y, z, font, scale)
-    Displayer.Text.drawText(player_id, text_id, text, tonumber(x) * 2, tonumber(y) * 2, z, font, scale)
-end
-
-function frame.update_text(text_id, player_id, text)
-    Displayer.Text.updateText(player_id, text_id, tostring(text))
-end
-
-function frame.remove_text(text_id, player_id)
-    Displayer.Text.removeText(player_id, text_id)
-end
-
--- Marquee Text Functions
-function frame.draw_marquee_text(marquee_id, player_id, text, y, font, scale, z_order, speed, backdrop)
-    Displayer.Text.drawMarqueeText(player_id, marquee_id, text, y, font, scale, z_order, speed, backdrop)
-end
-
-function frame.set_marquee_position(player_id, marquee_id, x, y)
-    Displayer.Text.setMarqueePosition(player_id, marquee_id, x, y)
-end
-
-function frame.set_marquee_speed(player_id, marquee_id, speed)
-    Displayer.Text.setMarqueeSpeed(player_id, marquee_id, speed)
-end
-
--- ===========================================================
--- TIMER FUNCTIONS
--- ===========================================================
-
-function frame.spawn_timer(timer_id, player_id, x, y, duration, loop)
-    loop = loop or false
-    Displayer.Timer.createPlayerTimer(
-        player_id, 
-        timer_id, 
-        duration, 
-        function(_, timer_id, value) end,
-        loop
-    )
-    Displayer.TimerDisplay.createPlayerTimerDisplay(player_id, timer_id, x * 2, y * 2, "default")
-end
-
-function frame.resume_timer(timer_id, player_id)
-    Displayer.Timer.resumePlayerTimer(player_id, timer_id)
-end
-
-function frame.pause_timer(timer_id, player_id)
-    Displayer.Timer.pausePlayerTimer(player_id, timer_id)
-end
-
-function frame.remove_timer(timer_id, player_id)
-    Displayer.Timer.removePlayerTimer(player_id, timer_id)
-end
-
-function frame.update_timer(timer_id, player_id, duration)
-    Displayer.Timer.updatePlayerTimer(player_id, timer_id, duration)
-end
-
--- ===========================================================
--- COUNTDOWN FUNCTIONS
--- ===========================================================
-
-function frame.spawn_countdown(countdown_id, player_id, x, y, duration, loop)
-    loop = loop or false
-    Displayer.Timer.createPlayerCountdown(
-        player_id, 
-        countdown_id, 
-        duration, 
-        function(_, countdown_id, value)
-            if value <= 0 then
-                Net:emit("countdown_ended", {player_id = player_id, countdown_id = countdown_id})
-            end
-        end,
-        loop
-    )
-    Displayer.TimerDisplay.createPlayerCountdownDisplay(player_id, countdown_id, x * 2, y * 2, "default")
-end
-
-function frame.resume_countdown(countdown_id, player_id)
-    Displayer.Timer.resumePlayerCountdown(player_id, countdown_id)
-end
-
-function frame.pause_countdown(countdown_id, player_id)
-    Displayer.Timer.pausePlayerCountdown(player_id, countdown_id)
-end
-
-function frame.remove_countdown(countdown_id, player_id)
-    Displayer.Timer.removePlayerCountdown(player_id, countdown_id)
-end
-
-function frame.update_countdown(countdown_id, player_id, duration)
-    Displayer.Timer.updatePlayerCountdown(player_id, countdown_id, duration)
-end
-
--- ===========================================================
 -- UTILITY FUNCTIONS
 -- ===========================================================
 
@@ -2013,97 +2327,8 @@ local function splitter(inputstr, sep)
 end
 
 -- ===========================================================
--- EVENT HANDLERS
+-- EVENT HANDLERS (UPDATED)
 -- ===========================================================
-
--- Cursor movement logic using UI element system
-Net:on("cursor_move", function(event)
-    local player_id = event.player_id
-    local cursor_found = false
-    
-    -- Find the cursor for this player
-    for cursor_id, element in pairs(ui_cache[player_id] or {}) do
-        if element.is_cursor then
-            local cursor_options = element.cursor_options
-            
-            -- Check if cursor is locked
-            if cursor_options.locked then
-                return
-            end
-            
-            local last_selection = cursor_options.current_index or 1
-            local direction = event.button
-            local movement = cursor_options.movement or "vertical"
-            
-            -- Determine movement direction
-            local move_forward = false
-            local move_backward = false
-            
-            if movement == "vertical" then
-                if direction == "Move Up" or direction == "Shoulder L" then
-                    move_backward = true
-                elseif direction == "Move Down" or direction == "Shoulder R" then
-                    move_forward = true
-                end
-            elseif movement == "horizontal" then
-                if direction == "Move Left" or direction == "Shoulder L" then
-                    move_backward = true
-                elseif direction == "Move Right" or direction == "Shoulder R" then
-                    move_forward = true
-                end
-            elseif movement == "shoulder" then
-                if direction == "Shoulder L" then
-                    move_backward = true
-                elseif direction == "Shoulder R" then
-                    move_forward = true
-                end
-            end
-            
-            -- Calculate new selection index
-            local selections = cursor_options.selections
-            local new_index = last_selection
-            
-            if move_forward then
-                new_index = (last_selection == #selections) and 1 or (last_selection + 1)
-            elseif move_backward then
-                new_index = (last_selection == 1) and #selections or (last_selection - 1)
-            end
-            
-            cursor_options.current_index = new_index
-            local selection = selections[new_index]
-            
-            -- Animate cursor movement using AnimationEngine
-            frame.slide_ui_element(cursor_id, player_id, 
-                selection.x, 
-                selection.y, 
-                0.1,  -- fast movement for responsive feel
-                "ease_out_back",  -- slight bounce effect
-                function()
-                    -- Update animation state after movement
-                    frame.update_ui_element(cursor_id, player_id, {
-                        x = selection.x, y = selection.y,
-                        sx = element.sx,
-                        animation_state = selection.state
-                    })
-                    
-                    -- Emit hover event
-                    Net:emit("cursor_hover", {
-                        player_id = player_id,
-                        cursor = cursor_id,
-                        selection = selection.name
-                    })
-                end
-            )
-            
-            cursor_found = true
-            break
-        end
-    end
-    
-    if not cursor_found then
-        print("[games] No cursor found for player " .. player_id)
-    end
-end)
 
 -- Player join event
 Net:on("player_join", function(event)
@@ -2112,6 +2337,8 @@ Net:on("player_join", function(event)
     -- Reset all caches on join
     ui_cache[event.player_id] = {}
     avatar_cache[event.player_id] = {}
+    text_view_cache[event.player_id] = {}  -- NEW: Initialize text view cache
+    timer_display_cache[event.player_id] = {} -- NEW: Initialize timer display cache
     
     -- Hide player exclusive cosmetics
     for player_id, cosmetics in pairs(cosmetic_cache) do
@@ -2129,6 +2356,8 @@ Net:on("player_disconnect", function(event)
     avatar_cache[event.player_id] = nil
     ui_cache[event.player_id] = nil
     ui_update[event.player_id] = nil
+    text_view_cache[event.player_id] = nil  -- NEW: Clear text view cache
+    timer_display_cache[event.player_id] = nil -- NEW: Clear timer display cache
     
     -- Clean up any active animations for this player
     AnimationEngine.clear_all()
@@ -2288,6 +2517,95 @@ Net:on("virtual_input", function(event)
                 })
             end
         end
+    end
+end)
+
+-- Cursor movement logic using UI element system
+Net:on("cursor_move", function(event)
+    local player_id = event.player_id
+    local cursor_found = false
+    
+    -- Find the cursor for this player
+    for cursor_id, element in pairs(ui_cache[player_id] or {}) do
+        if element.is_cursor then
+            local cursor_options = element.cursor_options
+            
+            -- Check if cursor is locked
+            if cursor_options.locked then
+                return
+            end
+            
+            local last_selection = cursor_options.current_index or 1
+            local direction = event.button
+            local movement = cursor_options.movement or "vertical"
+            
+            -- Determine movement direction
+            local move_forward = false
+            local move_backward = false
+            
+            if movement == "vertical" then
+                if direction == "Move Up" or direction == "Shoulder L" then
+                    move_backward = true
+                elseif direction == "Move Down" or direction == "Shoulder R" then
+                    move_forward = true
+                end
+            elseif movement == "horizontal" then
+                if direction == "Move Left" or direction == "Shoulder L" then
+                    move_backward = true
+                elseif direction == "Move Right" or direction == "Shoulder R" then
+                    move_forward = true
+                end
+            elseif movement == "shoulder" then
+                if direction == "Shoulder L" then
+                    move_backward = true
+                elseif direction == "Shoulder R" then
+                    move_forward = true
+                end
+            end
+            
+            -- Calculate new selection index
+            local selections = cursor_options.selections
+            local new_index = last_selection
+            
+            if move_forward then
+                new_index = (last_selection == #selections) and 1 or (last_selection + 1)
+            elseif move_backward then
+                new_index = (last_selection == 1) and #selections or (last_selection - 1)
+            end
+            
+            cursor_options.current_index = new_index
+            local selection = selections[new_index]
+            
+            -- Animate cursor movement using AnimationEngine
+            frame.slide_ui_element(cursor_id, player_id, 
+                selection.x, 
+                selection.y, 
+                0.1,  -- fast movement for responsive feel
+                "ease_out_back",  -- slight bounce effect
+                function()
+                    -- Update animation state after movement
+                    frame.update_ui_element(cursor_id, player_id, {
+                        x = selection.x, y = selection.y,
+                        sx = element.sx,
+                        animation_state = selection.state
+                    })
+                    
+                    -- Emit hover event
+                    Net:emit("cursor_hover", {
+                        player_id = player_id,
+                        cursor = cursor_id,
+                        selection = selection.name
+                    })
+                end
+            )
+            
+            cursor_found = true
+            break
+        end
+    end
+    
+    if not cursor_found then
+        print("[games] No cursor found for player " .. player_id)
     end
 end)
 

@@ -236,22 +236,22 @@ function Displayer:_setupSubAPIs()
     end
 
     -- Timer Display API
-    self.TimerDisplay.createPlayerTimerDisplay = function(player_id, timer_id, x, y, config_name)
+    self.TimerDisplay.createPlayerTimerDisplay = function(player_id, timer_id, x, y, config_name, sprite_opts)
         local subsystem = mainInstance:_getSubsystem("TimerDisplaySystem", "createPlayerTimerDisplay")
         if not subsystem or not player_id or not timer_id then 
             print("Error: player_id and timer_id are required")
             return nil 
         end
-        return subsystem:createPlayerTimerDisplay(player_id, timer_id, x or 0, y or 0, config_name or "default")
+        return subsystem:createPlayerTimerDisplay(player_id, timer_id, x or 0, y or 0, config_name or "default", sprite_opts)
     end
 
-    self.TimerDisplay.createPlayerCountdownDisplay = function(player_id, countdown_id, x, y, config_name)
+    self.TimerDisplay.createPlayerCountdownDisplay = function(player_id, countdown_id, x, y, config_name, sprite_opts)
         local subsystem = mainInstance:_getSubsystem("TimerDisplaySystem", "createPlayerCountdownDisplay")
         if not subsystem or not player_id or not countdown_id then 
             print("Error: player_id and countdown_id are required")
             return nil 
         end
-        return subsystem:createPlayerCountdownDisplay(player_id, countdown_id, x or 0, y or 0, config_name or "default")
+        return subsystem:createPlayerCountdownDisplay(player_id, countdown_id, x or 0, y or 0, config_name or "default", sprite_opts)
     end
 
     self.TimerDisplay.updatePlayerTimerDisplay = function(player_id, timer_id, value)
@@ -290,22 +290,22 @@ function Displayer:_setupSubAPIs()
         return subsystem:setDisplayPosition(player_id, display_id, x or 0, y or 0)
     end
 
-    self.TimerDisplay.createGlobalTimerDisplay = function(timer_id, x, y, config_name)
+    self.TimerDisplay.createGlobalTimerDisplay = function(timer_id, x, y, config_name, sprite_opts)
         local subsystem = mainInstance:_getSubsystem("TimerDisplaySystem", "createGlobalTimerDisplay")
         if not subsystem or not timer_id then 
             print("Error: timer_id is required")
             return nil 
         end
-        return subsystem:createGlobalTimerDisplay(timer_id, x or 0, y or 0, config_name or "default")
+        return subsystem:createGlobalTimerDisplay(timer_id, x or 0, y or 0, config_name or "default", sprite_opts)
     end
 
-    self.TimerDisplay.createGlobalCountdownDisplay = function(countdown_id, x, y, config_name)
+    self.TimerDisplay.createGlobalCountdownDisplay = function(countdown_id, x, y, config_name, sprite_opts)
         local subsystem = mainInstance:_getSubsystem("TimerDisplaySystem", "createGlobalCountdownDisplay")
         if not subsystem or not countdown_id then 
             print("Error: countdown_id is required")
             return nil 
         end
-        return subsystem:createGlobalCountdownDisplay(countdown_id, x or 0, y or 0, config_name or "default")
+        return subsystem:createGlobalCountdownDisplay(countdown_id, x or 0, y or 0, config_name or "default", sprite_opts)
     end
 
     self.TimerDisplay.updateGlobalTimerDisplay = function(timer_id, value)
@@ -345,13 +345,13 @@ function Displayer:_setupSubAPIs()
     end
 
     -- Text Display API
-    self.Text.drawText = function(player_id, text_id, text, x, y, z_order, font_name, scale)
+    self.Text.drawText = function(player_id, text_id, text, x, y, z_order, font_name, scale, sprite_opts)
         local subsystem = mainInstance:_getSubsystem("TextDisplaySystem", "drawText")
         if not subsystem or not player_id or not text then 
             print("Error: player_id and text are required...")
             return nil 
         end
-        return subsystem:drawText(player_id, text_id, text, x or 0, y or 0, z_order or 100, font_name or "THICK", scale or 2.0)
+        return subsystem:drawText(player_id, text_id, text, x or 0, y or 0, z_order or 100, font_name or "THICK", scale or 2.0, sprite_opts)
     end
 
     self.Text.updateText = function(player_id, text_id, new_text)
@@ -381,7 +381,7 @@ function Displayer:_setupSubAPIs()
         return subsystem:setTextPosition(player_id, text_id, x or 0, y or 0)
     end
 
-    self.Text.drawMarqueeText = function(player_id, marquee_id, text, y, font_name, scale, z_order, speed, backdrop)
+    self.Text.drawMarqueeText = function(player_id, marquee_id, text, y, font_name, scale, z_order, speed, backdrop, sprite_opts)
         local subsystem = mainInstance:_getSubsystem("TextDisplaySystem", "drawMarqueeText")
         if not subsystem or not player_id or not marquee_id or not text then 
             print("Error: player_id, marquee_id and text are required")
@@ -396,8 +396,19 @@ function Displayer:_setupSubAPIs()
             scale or 2.0, 
             z_order or 100, 
             speed or "medium", 
-            backdrop
+            backdrop,
+            sprite_opts or {}
         )
+    end
+
+    -- Add function to update marquee sprite options
+    self.Text.updateMarqueeSpriteOptions = function(player_id, marquee_id, sprite_opts)
+        local subsystem = mainInstance:_getSubsystem("TextDisplaySystem", "updateMarqueeSpriteOptions")
+        if not subsystem or not player_id or not marquee_id or not sprite_opts then 
+            print("Error: player_id, marquee_id and sprite_opts are required")
+            return false 
+        end
+        return subsystem:updateMarqueeSpriteOptions(player_id, marquee_id, sprite_opts)
     end
 
     self.Text.setMarqueeSpeed = function(player_id, text_id, speed)
@@ -473,8 +484,6 @@ function Displayer:_setupSubAPIs()
       end
     end
 
-
-
     self.Text.getTextBoxData = function(player_id, box_id)
         local subsystem = mainInstance:_getSubsystem("TextDisplaySystem", "getTextBoxData")
         return subsystem:getTextBoxData(player_id, box_id)
@@ -519,7 +528,6 @@ function Displayer:_setupSubAPIs()
       end
     end
 
-
     self.Text.removeTextBox = function(player_id, box_id)
         local subsystem = mainInstance:_getSubsystem("TextDisplaySystem", "removeTextBox")
         if not subsystem or not player_id or not box_id then 
@@ -538,7 +546,6 @@ function Displayer:_setupSubAPIs()
       end
       return subsystem:closeTextBox(player_id, box_id, opts)
     end
-
 
     self.Text.isTextBoxCompleted = function(player_id, box_id)
         local subsystem = mainInstance:_getSubsystem("TextDisplaySystem", "isTextBoxCompleted")
@@ -586,23 +593,45 @@ function Displayer:_setupSubAPIs()
     end
 
     -- Font System API
-    self.Font.drawTextWithId = function(player_id, text, x, y, font_name, scale, z_order, display_id)
-        local subsystem = mainInstance:_getSubsystem("FontSystem", "drawTextWithId")
-        if not subsystem or not player_id or not text or not display_id then 
-            print("Error: player_id, text and display_id are required")
-            return nil 
-        end
-        return subsystem:drawTextWithId(player_id, text, x or 0, y or 0, font_name or "THICK", scale or 2.0, z_order or 100, display_id)
+self.Font.drawTextWithId = function(player_id, text, x, y, font_name, scale, z_order, display_id, sprite_opts)
+    local subsystem = mainInstance:_getSubsystem("FontSystem", "drawTextWithId")
+    if not subsystem or not player_id or text == nil or not display_id then 
+        print("Error: player_id, text and display_id are required")
+        return nil 
+    end
+    return subsystem:drawTextWithId(
+        player_id,
+        text,
+        x or 0,
+        y or 0,
+        font_name or "THICK",
+        scale or 2.0,
+        z_order or 100,
+        display_id,
+        sprite_opts
+    )
+end
+
+   
+self.Font.drawText = function(player_id, text_id, text, x, y, z_order, font_name, scale, sprite_opts)
+    local subsystem = mainInstance:_getSubsystem("FontSystem", "drawText")
+    if not subsystem or not player_id or text == nil then 
+        print("Error: player_id and text are required")
+        return nil 
     end
 
-    self.Font.drawText = function(player_id, text_id, text, x, y, z_order, font_name, scale)
-        local subsystem = mainInstance:_getSubsystem("FontSystem", "drawText")
-        if not subsystem or not player_id or not text then 
-            print("Error: player_id and text are required")
-            return nil 
-        end
-        return subsystem:drawText(player_id, text_id, text, x or 0, y or 0, z_order or 100, font_name or "THICK", scale or 2.0)
-    end
+    return subsystem:drawText(
+        player_id,
+        text_id,
+        text,
+        x or 0,
+        y or 0,
+        z_order or 100,
+        font_name or "THICK",
+        scale or 2.0,
+        sprite_opts
+    )
+end
 
     self.Font.eraseTextDisplay = function(player_id, display_id)
         local subsystem = mainInstance:_getSubsystem("FontSystem", "eraseTextDisplay")
@@ -610,8 +639,27 @@ function Displayer:_setupSubAPIs()
             print("Error: player_id and display_id are required")
             return nil 
         end
+
         return subsystem:eraseTextDisplay(player_id, display_id)
     end
+
+self.Font.bindTextDisplay = function(player_id, display_id, sprite_obj, options)
+    local subsystem = mainInstance:_getSubsystem("FontSystem", "bindTextDisplay")
+    if not subsystem or not player_id or not display_id or type(sprite_obj) ~= "table" then
+        print("Error: player_id, display_id, and sprite_obj(table) are required")
+        return false
+    end
+    return subsystem:bindTextDisplay(player_id, display_id, sprite_obj, options or {})
+end
+
+self.Font.unbindTextDisplay = function(player_id, display_id)
+    local subsystem = mainInstance:_getSubsystem("FontSystem", "unbindTextDisplay")
+    if not subsystem or not player_id or not display_id then
+        print("Error: player_id and display_id are required")
+        return false
+    end
+    return subsystem:unbindTextDisplay(player_id, display_id)
+end
 
     self.Font.getTextWidth = function(text, font_name, scale)
         local subsystem = mainInstance:_getSubsystem("FontSystem", "getTextWidth")

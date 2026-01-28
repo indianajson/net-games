@@ -137,7 +137,7 @@ function TimerDisplay:cleanupPlayerDisplays(player_id)
     end
 end
 
-function TimerDisplay:createPlayerTimerDisplay(player_id, timer_id, x, y, config_name)
+function TimerDisplay:createPlayerTimerDisplay(player_id, timer_id, x, y, config_name, sprite_opts)
     local config = self.display_configs[config_name] or self.display_configs.default
     local display_data = {
         type = "timer",
@@ -148,6 +148,7 @@ function TimerDisplay:createPlayerTimerDisplay(player_id, timer_id, x, y, config
         scale = config.scale,
         z_order = config.z_order,
         display_id = nil,
+        sprite_opts = sprite_opts,
         current_value = 0
     }
     
@@ -156,7 +157,7 @@ function TimerDisplay:createPlayerTimerDisplay(player_id, timer_id, x, y, config
     return timer_id
 end
 
-function TimerDisplay:createPlayerCountdownDisplay(player_id, countdown_id, x, y, config_name)
+function TimerDisplay:createPlayerCountdownDisplay(player_id, countdown_id, x, y, config_name, sprite_opts)
     local config = self.display_configs[config_name] or self.display_configs.default
     local display_data = {
         type = "countdown", 
@@ -167,6 +168,7 @@ function TimerDisplay:createPlayerCountdownDisplay(player_id, countdown_id, x, y
         scale = config.scale,
         z_order = config.z_order,
         display_id = nil,
+        sprite_opts = sprite_opts,
         current_value = 0
     }
     
@@ -175,7 +177,7 @@ function TimerDisplay:createPlayerCountdownDisplay(player_id, countdown_id, x, y
     return countdown_id
 end
 
-function TimerDisplay:createGlobalTimerDisplay(timer_id, x, y, config_name)
+function TimerDisplay:createGlobalTimerDisplay(timer_id, x, y, config_name, sprite_opts)
     local config = self.display_configs[config_name] or self.display_configs.default
     self.global_displays[timer_id] = {
         type = "timer",
@@ -193,7 +195,7 @@ function TimerDisplay:createGlobalTimerDisplay(timer_id, x, y, config_name)
     return timer_id
 end
 
-function TimerDisplay:createGlobalCountdownDisplay(countdown_id, x, y, config_name)
+function TimerDisplay:createGlobalCountdownDisplay(countdown_id, x, y, config_name, sprite_opts)
     local config = self.display_configs[config_name] or self.display_configs.default
     self.global_displays[countdown_id] = {
         type = "countdown",
@@ -278,36 +280,37 @@ function TimerDisplay:updateGlobalCountdownDisplay(countdown_id, value)
 end
 
 function TimerDisplay:updateDisplay(player_id, display, value)
-    -- Only update if value changed significantly
-    if math.floor(display.current_value) == math.floor(value) and display.display_id ~= nil then
+    -- Only update if value changed significantly (floor compare) AND we already have a display id
+    if display.display_id ~= nil and math.floor(display.current_value) == math.floor(value) then
         return
     end
-    
+
     display.current_value = value
     local display_string = self:formatTime(value, display.type == "countdown")
-    
-    -- Remove previous display if it exists
-    if display.display_id then
-        self.font_system:eraseTextDisplay(player_id, display.display_id)
-    end
-    
-    -- Use high ID for timer displays to avoid conflicts with other systems
+
+    -- Stable ID per timer to avoid flicker and to allow animation-engine style prop binding
     local display_suffix = display.timer_id or display.countdown_id or "timer"
-    local high_id_display_id = "timer_" .. self.timer_sprite_base_id .. "_" .. display_suffix
-    
-    -- Draw new display with high ID
-    local new_display_id = self.font_system:drawTextWithId(
+    local stable_display_id = display.display_id or ("timer_" .. self.timer_sprite_base_id .. "_" .. display_suffix)
+
+    display.display_id = self.font_system:drawTextWithId(
         player_id,
-        display_string, 
-        display.x, 
-        display.y, 
-        display.font, 
+        display_string,
+        display.x,
+        display.y,
+        display.font,
         display.scale,
         display.z_order,
-        high_id_display_id  -- Pass the high ID to ensure no conflicts
+        stable_display_id,
+        display.sprite_opts
     )
-    display.display_id = new_display_id
+
+    -- If a sprite props table was provided, optionally bind it for auto-sync every tick.
+    if type(display.sprite_opts) == "table" and not display._bound_to_font then
+        self.font_system:bindTextDisplay(player_id, display.display_id, display.sprite_opts, true)
+        display._bound_to_font = true
+    end
 end
+
 
 function TimerDisplay:formatTime(seconds, is_countdown)
     if is_countdown then

@@ -29,6 +29,10 @@ function SpritePropsBuilder:build_scale(sx, sy)
 end
 
 function SpritePropsBuilder:build_tint(a, r, g, b, color_mode)
+    -- Accept 0..1 alpha as a convenience; sprite-api expects 0..255.
+    if type(a) == "number" and a > 0 and a <= 1 then
+        a = math.floor((a * 255) + 0.5)
+    end
     if a ~= nil then self.props.a = a end
     if r ~= nil then self.props.r = r end
     if g ~= nil then self.props.g = g end

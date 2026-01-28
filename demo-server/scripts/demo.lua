@@ -71,7 +71,7 @@ end)
 ----------------------------------------------------------
 -- DEMO CODE FOR BASIC MARQUEE EXAMPLE [IN DEVELOPMENT] --
 ----------------------------------------------------------
-local holoshine = require("scripts/net-games/animation-engine/holoshine")
+-- local holoshine = require("scripts/net-games/animation-engine/holoshine")
 local marquee_active = {}
 
 Net.create_bot("marquee_demo", { 
@@ -85,7 +85,7 @@ Net.create_bot("marquee_demo", {
 
 local backdrop_config = {
     x = 0,          -- Just set backdrop position
-    y = 130,        -- Text will be automatically centered
+    y = 0,        -- Text will be automatically centered
     width = 240,    -- Width of the backdrop we currently are using
     height = 30,    -- Backdrop height (text will be centered within this)
     loops = 1,      -- (int : optional) Set loops to how many times you would like it to show before removing or using a custom `on_finish` function to be called when the loops for marquee text have completed.
@@ -100,7 +100,7 @@ local backdrop_config = {
 Net:on("actor_interaction", function(event)
     if event.actor_id == "marquee_demo" and event.button == 0 and (marquee_active[event.player_id] ~= true) then
         -- Create a marquee with backdrop
-        games.draw_marquee_text("demo_marquee", event.player_id, "Welcome to the Net Games Demo! This is a scrolling marquee text!", 15, "THICK", 2.0, 100, "medium", backdrop_config)
+        games.draw_marquee_text(event.player_id,"demo_marquee","Welcome to the Net Games Demo! This is a scrolling marquee text!", 10, "THICK", 2,1, 30 , backdrop_config, {r = 255, g = 128, b = 128, a = 255, opacity = 255, color_mode = 2})
         marquee_active[event.player_id] = true
         Net.message_player(event.player_id, "Marquee text activated! Watch it scroll across the screen.")
     elseif event.actor_id == "marquee_demo" and event.button == 0 and marquee_active[event.player_id] == true then
@@ -314,9 +314,10 @@ Net:on("actor_interaction", function (event)
         games.menu_cursor_ui_element("navi_changer", event.player_id, 20, 1.8, 1, 10, "horizontal")
         games.color_pulse_from_current("navi_changer", event.player_id, {r = 0, g = 0, b = 255, a = 128})
         -- games.slide_ui_element("navi_changer", event.player_id, 100, 100, 2)
-        games.draw_text("roll_label",event.player_id,"<Roll_EXE>",40,40,100,"BATTLE")
-        games.draw_text("megaman_label",event.player_id,"Megaman_EXE",40,60,100,"BATTLE")
-        games.draw_text("protoman_label",event.player_id,"<PROTOMAN_EXE>",40,80,100,"BATTLE")
+        games.draw_text(event.player_id,"roll_label","<Roll_EXE>",40, 40,100, "BATTLE", 2.0, {r = 0, g = 255, b = 0, opacity = 255, color_mode = 2})
+        games.draw_text(event.player_id,"megaman_label","Megaman_EXE",40, 60,100, "BATTLE", 2.0, {r = 0, g = 255, b = 0, opacity = 255, color_mode = 2})
+        games.draw_text(event.player_id,"protoman_label","<PROTOMAN_EXE>",40, 80,100, "BATTLE", 2.0, {r = 0, g = 255, b = 0, opacity = 255, color_mode = 2})
+
     end 
 
 end)
