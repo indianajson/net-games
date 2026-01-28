@@ -270,7 +270,7 @@ local function greet_simon(actor_id, player_id)
     )
 
     -- FIXED: Updated to match new framework API (removed +1 from duration)
-    games.spawn_countdown("simon_says", player_id, 22, 15, tonumber(simon.custom_properties["Time"]), false)
+    games.spawn_countdown("simon_says", player_id, 22, 15, tonumber(simon.custom_properties["Time"] + 1), false, {})
     await(Async.sleep(0.1))
     games.pause_countdown("simon_says", player_id)
 
