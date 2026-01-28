@@ -275,7 +275,7 @@ local function greet_simon(actor_id, player_id)
     games.pause_countdown("simon_says", player_id)
 
     -- FIXED: Added scale parameter (2.0) to match new framework API
-    games.draw_text("simon_says_answers", player_id, "00", 32, 39, 100, "THICK", 2.0)
+    games.draw_text(player_id,"simon_says_answers", "00", 32, 39, 100, "THICK", 2.0, {})
 
     Net.fade_player_camera(player_id, {r=0,g=0,b=0,a=0}, 0.5)
     await(Async.sleep(0.75))
@@ -351,9 +351,9 @@ Net:on("virtual_input", function(event)
           p.score = (p.score or 0) + 1
 
           if p.score < 10 then
-            games.update_text("simon_says_answers", pid, "0" .. tostring(p.score))
+            games.update_text("simon_says_answers", pid, ("0" .. tostring(p.score)))
           else
-            games.update_text("simon_says_answers", pid, tostring(p.score))
+            games.update_text("simon_says_answers", pid, (tostring(p.score)))
           end
 
           local simon = simon_cache[p.area] and simon_cache[p.area][p.actor]

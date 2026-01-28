@@ -149,7 +149,8 @@ function TimerDisplay:createPlayerTimerDisplay(player_id, timer_id, x, y, config
         z_order = config.z_order,
         display_id = nil,
         sprite_opts = sprite_opts,
-        current_value = 0
+        current_value = 0,
+        _bound_to_font = false
     }
     
     self.player_displays[player_id].active_displays[timer_id] = display_data
@@ -169,7 +170,8 @@ function TimerDisplay:createPlayerCountdownDisplay(player_id, countdown_id, x, y
         z_order = config.z_order,
         display_id = nil,
         sprite_opts = sprite_opts,
-        current_value = 0
+        current_value = 0,
+        _bound_to_font = false
     }
     
     self.player_displays[player_id].active_displays[countdown_id] = display_data
@@ -225,7 +227,8 @@ function TimerDisplay:setupGlobalDisplayForPlayer(player_id, display_id)
             scale = global_display.scale,
             z_order = global_display.z_order,
             display_id = nil,
-            current_value = 0
+            current_value = 0,
+            _bound_to_font = false
         }
         
         self.player_displays[player_id].active_displays[display_id] = display_data
@@ -292,16 +295,34 @@ function TimerDisplay:updateDisplay(player_id, display, value)
     local display_suffix = display.timer_id or display.countdown_id or "timer"
     local stable_display_id = display.display_id or ("timer_" .. self.timer_sprite_base_id .. "_" .. display_suffix)
 
+    -- Merge display config with sprite_opts
+    local merged_opts = {}
+    if display.sprite_opts and type(display.sprite_opts) == "table" then
+        for k, v in pairs(display.sprite_opts) do
+            merged_opts[k] = v
+        end
+    end
+    
+    -- Add position and scale from display config (allow override by sprite_opts)
+    merged_opts.x = merged_opts.x or display.x
+    merged_opts.y = merged_opts.y or display.y
+    merged_opts.z = merged_opts.z or display.z_order
+    
+    -- Handle scale properly
+    if not merged_opts.sx and not merged_opts.sy and not merged_opts.scale then
+        merged_opts.scale = display.scale
+    end
+
     display.display_id = self.font_system:drawTextWithId(
         player_id,
         display_string,
-        display.x,
+        display.x, -- These will be overridden by merged_opts if present
         display.y,
         display.font,
         display.scale,
         display.z_order,
         stable_display_id,
-        display.sprite_opts
+        merged_opts  -- Pass merged options
     )
 
     -- If a sprite props table was provided, optionally bind it for auto-sync every tick.
@@ -310,7 +331,6 @@ function TimerDisplay:updateDisplay(player_id, display, value)
         display._bound_to_font = true
     end
 end
-
 
 function TimerDisplay:formatTime(seconds, is_countdown)
     if is_countdown then

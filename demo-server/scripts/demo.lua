@@ -317,7 +317,6 @@ Net:on("actor_interaction", function (event)
         games.draw_text(event.player_id,"roll_label","<Roll_EXE>",40, 40,100, "BATTLE", 2.0, {r = 0, g = 255, b = 0, opacity = 255, color_mode = 2})
         games.draw_text(event.player_id,"megaman_label","Megaman_EXE",40, 60,100, "BATTLE", 2.0, {r = 0, g = 255, b = 0, opacity = 255, color_mode = 2})
         games.draw_text(event.player_id,"protoman_label","<PROTOMAN_EXE>",40, 80,100, "BATTLE", 2.0, {r = 0, g = 255, b = 0, opacity = 255, color_mode = 2})
-
     end 
 
 end)

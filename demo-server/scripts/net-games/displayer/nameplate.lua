@@ -1,523 +1,522 @@
--- generic_nameplate.lua
--- A reusable nameplate system with configurable visuals and animations
+-- scripts/net-games/displayer/nameplate.lua
+-- BN-style nameplate that unfolds from the center and sizes to the text.
+-- Draws as 3-slice: left + N*middle + right, using TINY_BLACK for the label.
 
-local GenericNameplate = {}
-GenericNameplate.__index = GenericNameplate
+local Nameplate = {}
+Nameplate.__index = Nameplate
 
--- =====================================================
--- MATH UTILITIES
--- =====================================================
 local function ceil_div(a, b)
-    return math.floor((a + b - 1) / b)
-end
-
-local function clamp(value, min, max)
-    return math.min(math.max(value, min), max)
+  return math.floor((a + b - 1) / b)
 end
 
 -- =====================================================
--- CONFIGURABLE DEFAULTS
+-- DEBUG (mirrors text-display.lua flags)
+-- Turn on with: _G.NG_TEXTBOX_DEBUG = true
+-- Optional trace: _G.NG_TEXTBOX_DEBUG_TRACE = true
 -- =====================================================
-local DEFAULT_CONFIG = {
-    -- Visual assets
-    textures = {
-        left = "/server/assets/net-games/displayer/textbox_bn6_nameplate_left.png",
-        middle = "/server/assets/net-games/displayer/textbox_bn6_nameplate_middle.png",
-        right = "/server/assets/net-games/displayer/textbox_bn6_nameplate_right.png",
-        left_frame = "/server/assets/net-games/displayer/textbox_bn6_nameplate_left_frame_gray.png",
-        middle_frame = "/server/assets/net-games/displayer/textbox_bn6_nameplate_middle_frame_gray.png",
-        right_frame = "/server/assets/net-games/displayer/textbox_bn6_nameplate_right_frame_gray.png",
-    },
-    
-    -- Sizing (at scale=1)
-    slice_widths = { left = 5, middle = 3, right = 5 },
-    height = 13,
-    
-    -- Animation defaults
-    unfold_duration = 0.14,
-    close_duration = 0.12,
-    bob_amplitude = 3,
-    bob_speed = 1.0,
-    
-    -- Layout defaults
-    padding = 4,
-    gap_x = 6,
-    gap_y = 4,
-    
-    -- Rendering
-    z_offset = 3,
-    default_scale = 2.0,
-    max_middle_slices = 60,
-    
-    -- Text
-    default_font = "TINY_BLACK",
-    
-    -- Debug
-    debug = false,
-}
+local function _ng_dbg_enabled()
+  return _G and _G.NG_TEXTBOX_DEBUG == true
+end
 
--- =====================================================
--- ANIMATION SYSTEM
--- =====================================================
-local AnimationSystem = {
-    UNFOLD = "unfold",
-    CLOSE = "close",
-    BOBBING = "bobbing",
-    STATIC = "static",
-}
+local function _ng_dbg_trace()
+  return _G and _G.NG_TEXTBOX_DEBUG_TRACE == true
+end
 
-local function update_animation(state, dt, animation_type, config)
-    dt = math.min(dt or 0, 1/30)
-    
-    if animation_type == AnimationSystem.UNFOLD then
-        state.progress = state.progress + dt / config.duration
-        state.progress = clamp(state.progress, 0, 1)
-        return state.progress >= 1
-        
-    elseif animation_type == AnimationSystem.CLOSE then
-        state.progress = state.progress + dt / config.duration
-        state.progress = clamp(state.progress, 0, 1)
-        return state.progress >= 1
-        
-    elseif animation_type == AnimationSystem.BOBBING then
-        state.time = (state.time or 0) + dt * config.speed
-        return math.sin(state.time) * config.amplitude
+local function _ng_now()
+  return os.clock()
+end
+
+local function _np_dbg(player_id, box_id, msg, extra)
+  if not _ng_dbg_enabled() then return end
+  local t = string.format("%.3f", _ng_now())
+  local prefix = "[NPDBG t=" .. t .. " p=" .. tostring(player_id) .. " box=" .. tostring(box_id) .. "] "
+  print(prefix .. tostring(msg))
+  if extra then
+    print(prefix .. tostring(extra))
+  end
+  if _ng_dbg_trace() then
+    print(prefix .. debug.traceback("", 2))
+  end
+end
+
+-- Compatibility stub: older code calls this name
+local function _np_dbg_enabled()
+  return _G and _G.NG_TEXTBOX_DEBUG == true
+end
+
+
+
+function Nameplate:new(font_system)
+  local o = setmetatable({}, self)
+  o.font_system = font_system
+
+  -- textures (base)
+  o.tex_left  = "/server/assets/net-games/displayer/textbox_bn6_nameplate_left.png"
+  o.tex_mid   = "/server/assets/net-games/displayer/textbox_bn6_nameplate_middle.png"
+  o.tex_right = "/server/assets/net-games/displayer/textbox_bn6_nameplate_right.png"
+
+  -- textures (frame-gray overlay for dye)
+  o.tex_left_frame  = "/server/assets/net-games/displayer/textbox_bn6_nameplate_left_frame_gray.png"
+  o.tex_mid_frame   = "/server/assets/net-games/displayer/textbox_bn6_nameplate_middle_frame_gray.png"
+  o.tex_right_frame = "/server/assets/net-games/displayer/textbox_bn6_nameplate_right_frame_gray.png"
+
+  -- slice sizes (px at scale=1)
+  o.w_left  = 5
+  o.w_mid   = 3
+  o.w_right = 5
+  o.h_plate = 13
+
+  -- allocated sprite ids (texture holders)
+  -- IMPORTANT: use STRING ids to avoid collisions with other systems
+  -- base
+  o.SID_LEFT  = "np_base_left"
+  o.SID_RIGHT = "np_base_right"
+  o.SID_MID0  = "np_base_mid_"   -- suffix with i
+
+  -- frame-gray overlay (tinted)
+  o.SID_LEFT_F  = "np_frame_left"
+  o.SID_RIGHT_F = "np_frame_right"
+  o.SID_MID0_F  = "np_frame_mid_" -- suffix with i
+
+  o.MAX_MIDS  = 60
+
+
+  return o
+end
+
+function Nameplate:_alloc_once(player_id, player_data)
+  player_data._nameplate_alloc = player_data._nameplate_alloc or false
+  if player_data._nameplate_alloc then
+    if _np_dbg_enabled() then
+      _np_dbg(player_id, "?", "ALLOC_SKIP", "already allocated for this player")
     end
-    
-    return nil
-end
+    return
+  end
+  player_data._nameplate_alloc = true
 
--- =====================================================
--- SPRITE MANAGEMENT
--- =====================================================
-local SpriteManager = {}
-
-function SpriteManager:new(prefix)
-    local o = setmetatable({}, self)
-    o.prefix = prefix or "namplate"
-    o.sprites = {}
-    return o
-end
-
-function SpriteManager:allocate_sprites(player_id, sprite_ids, texture_path)
-    for _, sprite_id in ipairs(sprite_ids) do
-        if not self.sprites[sprite_id] then
-            Net.player_alloc_sprite(player_id, sprite_id, { texture_path = texture_path })
-            self.sprites[sprite_id] = true
-        end
-    end
-end
-
-function SpriteManager:draw_sprites(player_id, sprite_data)
-    for _, data in ipairs(sprite_data) do
-        Net.player_draw_sprite(player_id, data.sprite_id, data.params)
-    end
-end
-
-function SpriteManager:erase_sprites(player_id, sprite_ids)
-    for _, sprite_id in ipairs(sprite_ids) do
-        Net.player_erase_sprite(player_id, sprite_id)
-        self.sprites[sprite_id] = nil
-    end
-end
-
--- =====================================================
--- GENERIC NAMEPLATE CLASS
--- =====================================================
-function GenericNameplate:new(font_system, custom_config)
-    local o = setmetatable({}, self)
-    
-    -- Merge custom config with defaults
-    o.config = {}
-    for k, v in pairs(DEFAULT_CONFIG) do
-        o.config[k] = custom_config and custom_config[k] or v
-    end
-    if custom_config then
-        for k, v in pairs(custom_config) do
-            o.config[k] = v
-        end
-    end
-    
-    o.font_system = font_system
-    o.sprite_manager = SpriteManager:new(o.config.sprite_prefix)
-    
-    return o
-end
-
-function GenericNameplate:calculate_dimensions(text, config_overrides)
-    local config = self.config
-    local scale = config_overrides.scale or config.default_scale
-    
-    -- Calculate text width
-    local font = config_overrides.font or config.default_font
-    local text_scale = config_overrides.text_scale or scale
-    local text_width = self.font_system:getTextWidth(text, font, text_scale)
-    
-    -- Calculate padding
-    local pad_px = (config_overrides.padding or config.padding) * scale
-    
-    -- Calculate required slices
-    local inner_needed = math.max(1, math.floor(text_width + pad_px * 2))
-    local mid_w = config.slice_widths.middle * scale
-    local mids_target = clamp(
-        ceil_div(inner_needed, mid_w),
-        1,
-        config.max_middle_slices
+  if _np_dbg_enabled() then
+    _np_dbg(player_id, "?", "ALLOC_DO", "allocating base + frame-gray overlay")
+    _np_dbg(player_id, "?", "ALLOC_TEX",
+      "L=" .. tostring(self.tex_left) ..
+      " M=" .. tostring(self.tex_mid) ..
+      " R=" .. tostring(self.tex_right) ..
+      " | LF=" .. tostring(self.tex_left_frame) ..
+      " MF=" .. tostring(self.tex_mid_frame) ..
+      " RF=" .. tostring(self.tex_right_frame)
     )
-    
-    -- Calculate total width
-    local total_width = 
-        (config.slice_widths.left + config.slice_widths.right) * scale + 
-        (mids_target * mid_w)
-    
-    return {
-        text_width = text_width,
-        total_width = total_width,
-        middle_slices = mids_target,
-        middle_width = mid_w,
-        height = config.height * scale,
-        scale = scale,
-        text_scale = text_scale,
-    }
+  end
+
+  -- base assets
+  Net.provide_asset_for_player(player_id, self.tex_left)
+  Net.provide_asset_for_player(player_id, self.tex_mid)
+  Net.provide_asset_for_player(player_id, self.tex_right)
+
+  -- overlay assets
+  Net.provide_asset_for_player(player_id, self.tex_left_frame)
+  Net.provide_asset_for_player(player_id, self.tex_mid_frame)
+  Net.provide_asset_for_player(player_id, self.tex_right_frame)
+
+  -- base sprites (texture holders)
+  Net.player_alloc_sprite(player_id, self.SID_LEFT,  { texture_path = self.tex_left })
+  Net.player_alloc_sprite(player_id, self.SID_RIGHT, { texture_path = self.tex_right })
+  for i = 0, self.MAX_MIDS - 1 do
+    Net.player_alloc_sprite(player_id, self.SID_MID0 .. i, { texture_path = self.tex_mid })
+  end
+
+  -- overlay sprites (frame-gray texture holders)
+  Net.player_alloc_sprite(player_id, self.SID_LEFT_F,  { texture_path = self.tex_left_frame })
+  Net.player_alloc_sprite(player_id, self.SID_RIGHT_F, { texture_path = self.tex_right_frame })
+  for i = 0, self.MAX_MIDS - 1 do
+    Net.player_alloc_sprite(player_id, self.SID_MID0_F .. i, { texture_path = self.tex_mid_frame })
+  end
+
 end
 
-function GenericNameplate:calculate_position(parent_x, parent_y, parent_width, dims, anchor_config)
-    local config = self.config
-    local scale = dims.scale
-    
-    local gap_x = (anchor_config.gap_x or config.gap_x) * scale
-    local gap_y = (anchor_config.gap_y or config.gap_y) * scale
-    local anchor = anchor_config.anchor or "above_left"
-    local align = anchor_config.align or "left"
-    
-    local x, y
-    
-    if anchor == "above" then
-        -- Above the parent element
-        if align == "center" then
-            x = parent_x + (parent_width - dims.total_width) / 2
-        elseif align == "right" then
-            x = parent_x + parent_width - dims.total_width - gap_x
-        else -- left
-            x = parent_x + gap_x
-        end
-        y = parent_y - dims.height - gap_y
+
+function Nameplate:erase(player_id, player_data, box_data)
+  local np = box_data.nameplate
+  if not np then return end
+
+  -- erase base pieces by DRAW ids (NOT sprite ids)
+  Net.player_erase_sprite(player_id, np.idp .. "_L")
+  Net.player_erase_sprite(player_id, np.idp .. "_R")
+  for i = 0, self.MAX_MIDS - 1 do
+    Net.player_erase_sprite(player_id, np.idp .. "_M" .. i)
+  end
+
+  -- erase overlay (frame) pieces by DRAW ids
+  Net.player_erase_sprite(player_id, np.idp .. "_FL")
+  Net.player_erase_sprite(player_id, np.idp .. "_FR")
+  for i = 0, self.MAX_MIDS - 1 do
+    Net.player_erase_sprite(player_id, np.idp .. "_FM" .. i)
+  end
+
+  -- erase the name text
+  if self.font_system and np.text_display_id then
+    self.font_system:eraseTextDisplay(player_id, np.text_display_id)
+  end
+
+  box_data.nameplate = nil
+end
+
+function Nameplate:attach(player_id, player_data, box_id, box_data, cfg)
+  if not cfg then return end
+
+  -- cfg can be "NAME" or { text="NAME", ... }
+  local text = cfg
+  if type(cfg) == "table" then text = cfg.text end
+  if type(text) ~= "string" or text == "" then return end
+
+  self:_alloc_once(player_id, player_data)
+
+  -- wipe any existing plate on this box before overwriting
+  if box_data.nameplate then
+    self:erase(player_id, player_data, box_data)
+  end
+
+  local scale = box_data.scale or 2.0
+  local z     = (box_data.z_order or 100) + 3
+
+  -- Anchor to the ACTUAL rendered textbox panel position (includes render offsets)
+  local bx = box_data.x or 0
+  local by = box_data.y or 0
+  if box_data.backdrop then
+    bx = bx + (tonumber(box_data.backdrop.render_offset_x) or 0)
+    by = by + (tonumber(box_data.backdrop.render_offset_y) or 0)
+  end
+
+  -- Text metrics
+  local font_name  = "TINY_BLACK"
+  local text_scale = (type(cfg) == "table" and cfg.text_scale) or scale
+  local pad_px     = (type(cfg) == "table" and cfg.pad_px) or (4 * scale)
+
+  local text_w = self.font_system:getTextWidth(text, font_name, text_scale)
+  local inner_needed = math.max(1, math.floor(text_w + pad_px * 2))
+
+  local mid_w = self.w_mid * scale
+  local mids_target = math.min(self.MAX_MIDS, math.max(1, ceil_div(inner_needed, mid_w)))
+
+  local total_w = (self.w_left + self.w_right) * scale + (mids_target * mid_w)
+
+  -- Placement
+  local gap_x = (type(cfg) == "table" and cfg.gap_x) or (6 * scale)
+  local gap_y = (type(cfg) == "table" and cfg.gap_y) or (4 * scale)
+
+  local anchor = (type(cfg) == "table" and cfg.anchor) or "above_left"
+  local align  = (type(cfg) == "table" and cfg.align)  or "left"
+
+  local bw = box_data.width or 0
+
+  local x, y
+  if anchor == "above" then
+    -- Above the textbox panel
+    if align == "center" then
+      x = bx + (bw - total_w) / 2
+    elseif align == "right" then
+      x = bx + bw - total_w - gap_x
     else
-        -- Legacy: above-left outside
-        x = parent_x - dims.total_width - gap_x
-        y = parent_y - dims.height - gap_y
+      -- left
+      x = bx + gap_x
     end
-    
-    -- Apply absolute offsets if provided
-    if anchor_config.offset_x then
-        x = x + anchor_config.offset_x
-    end
-    if anchor_config.offset_y then
-        y = y + anchor_config.offset_y
-    end
-    
-    -- Round to pixel grid
-    x = math.floor(x + 0.5)
-    y = math.floor(y + 0.5)
-    
-    local center_x = x + (dims.total_width / 2)
-    
-    return {
-        x = x,
-        y = y,
-        base_y = y,
-        center_x = center_x,
-        text_x = x + (config.slice_widths.left * scale) + 
-                 ((anchor_config.padding or config.padding) * scale),
-        text_y = y + (3 * scale) + 2,
-    }
-end
+    y = by - (self.h_plate * scale) - gap_y
+  else
+    -- legacy: above-left OUTSIDE the box
+    x = bx - total_w - gap_x
+    y = by - (self.h_plate * scale) - gap_y
+  end
 
-function GenericNameplate:create_plate(player_id, plate_id, text, parent_info, style_config)
-    -- Ensure assets are loaded
-    self:ensure_assets_loaded(player_id)
-    
-    -- Calculate dimensions
-    local dims = self:calculate_dimensions(text, style_config)
-    
-    -- Calculate position
-    local pos = self:calculate_position(
-        parent_info.x, parent_info.y, parent_info.width,
-        dims, style_config.anchor or {}
+  -- Optional absolute override
+  if type(cfg) == "table" then
+    if cfg.x ~= nil then x = cfg.x end
+    if cfg.y ~= nil then y = cfg.y end
+  end
+
+  local center_x = x + (total_w / 2)
+  local idp = tostring(box_id) .. "_np"
+
+  if type(cfg) == "table" and cfg.debug then
+    _np_dbg(player_id, box_id, "ATTACH",
+      "idp=" .. tostring(idp) ..
+      " text=" .. tostring(text) ..
+      " mids_target=" .. tostring(mids_target) ..
+      " scale=" .. tostring(scale) ..
+      " z=" .. tostring(z)
     )
-    
-    -- Create plate state
-    local plate = {
-        id = plate_id,
-        player_id = player_id,
-        text = text,
-        dimensions = dims,
-        position = pos,
-        style = {
-            font = style_config.font or self.config.default_font,
-            text_scale = style_config.text_scale or dims.text_scale,
-            frame_tint = style_config.frame_tint,
-            z_order = (parent_info.z_order or 100) + self.config.z_offset,
-        },
-        animation = {
-            state = "unfolding",
-            progress = 0,
-            bobbing = style_config.bobbing or true,
-            bob_time = 0,
-        },
-        visible = true,
-        sprites = {},
+  end
+
+
+  -- Optional frame tint (overlay). Mirrors textbox dye behavior: gray overlay tinted on top.
+  local frame_tint = nil
+  if type(cfg) == "table" and type(cfg.frame) == "table" then
+    local f = cfg.frame
+    frame_tint = {
+      r = tonumber(f.r) or 255,
+      g = tonumber(f.g) or 255,
+      b = tonumber(f.b) or 255,
+      a = tonumber(f.a) or 255,
+      color_mode = tonumber(f.color_mode) or 2,
     }
-    
-    -- Store reference
-    self.plates = self.plates or {}
-    self.plates[plate_id] = plate
-    
-    return plate
+  end
+
+  box_data.nameplate = {
+    debug = (type(cfg) == "table" and cfg.debug) or false,
+    idp = idp,
+
+    text = text,
+    font = font_name,
+    text_scale = text_scale,
+    pad_px = pad_px,
+
+    x = x,
+    y = y,
+    base_y = y,
+    z = z,
+
+    -- overlay tint
+    frame = frame_tint,
+
+    -- bob animation
+    bob_t = 0,
+    bob_amp = (type(cfg) == "table" and cfg.bob_amp) or (3 * scale),
+    bob_speed = (type(cfg) == "table" and cfg.bob_speed) or 1.0,
+
+    mids_target = mids_target,
+    mid_w = mid_w,
+    total_w_full = total_w,
+    center_x = center_x,
+
+    -- animation
+    t = 0,
+    dur = (type(cfg) == "table" and cfg.dur) or 0.14,
+    close_dur = (type(cfg) == "table" and cfg.close_dur) or nil,
+    mids_drawn = 0,
+    complete = false,
+
+    text_display_id = "nameplate:" .. tostring(box_id),
+  }
 end
 
-function GenericNameplate:ensure_assets_loaded(player_id)
-    if self.assets_loaded then return end
-    
-    local config = self.config
-    
-    -- Load base textures
-    Net.provide_asset_for_player(player_id, config.textures.left)
-    Net.provide_asset_for_player(player_id, config.textures.middle)
-    Net.provide_asset_for_player(player_id, config.textures.right)
-    
-    -- Load frame textures if available
-    if config.textures.left_frame then
-        Net.provide_asset_for_player(player_id, config.textures.left_frame)
-    end
-    if config.textures.middle_frame then
-        Net.provide_asset_for_player(player_id, config.textures.middle_frame)
-    end
-    if config.textures.right_frame then
-        Net.provide_asset_for_player(player_id, config.textures.right_frame)
-    end
-    
-    self.assets_loaded = true
+
+function Nameplate:begin_close(player_id, player_data, box_data, cfg)
+  local np = box_data.nameplate
+  if not np then return end
+  if np.closing then return end
+
+  np.closing = true
+  np.close_t = 0
+
+  -- allow per-box override, else per-nameplate config, else fall back
+  local cd =
+    (type(cfg) == "table" and cfg.close_dur)
+    or np.close_dur
+    or (type(cfg) == "table" and cfg.dur)
+    or np.dur
+    or 0.12
+
+  np.close_dur = cd
+
+  -- Hide text immediately so it doesn't ghost over transitions
+  if self.font_system and np.text_display_id then
+    self.font_system:eraseTextDisplay(player_id, np.text_display_id)
+  end
 end
 
-function GenericNameplate:update_plate(plate, dt)
-    if not plate.visible then return end
-    
-    local config = self.config
-    
-    -- Update animation
-    if plate.animation.state == "unfolding" then
-        plate.animation.progress = plate.animation.progress + dt / config.unfold_duration
-        if plate.animation.progress >= 1 then
-            plate.animation.state = "idle"
-            plate.animation.progress = 1
-        end
-    elseif plate.animation.state == "closing" then
-        plate.animation.progress = plate.animation.progress + dt / config.close_duration
-        if plate.animation.progress >= 1 then
-            plate.visible = false
-            return false -- Signal for cleanup
-        end
+function Nameplate:update(player_id, player_data, box_data, dt)
+  local np = box_data.nameplate
+  if not np then return end
+
+  dt = math.min(dt or 0, 1/30)
+
+  -- If closing: reverse-unfold then self-erase
+  if np.closing then
+    np.close_t = (np.close_t or 0) + dt
+    local p = np.close_t / (np.close_dur or 0.12)
+    if p >= 1 then
+      self:erase(player_id, player_data, box_data)
+      return
     end
-    
-    -- Update bobbing
-    if plate.animation.bobbing and plate.animation.state == "idle" then
-        plate.animation.bob_time = plate.animation.bob_time + dt * config.bob_speed
-        local bob_offset = math.sin(plate.animation.bob_time) * config.bob_amplitude * config.default_scale
-        plate.position.current_y = plate.position.base_y + math.floor(bob_offset + 0.5)
+
+    local remain = 1 - p
+    local mids = math.max(0, math.floor(np.mids_target * remain + 0.0001))
+    np.mids_drawn = mids
+  else
+    -- unfold
+    if not np.complete then
+      np.t = np.t + dt
+      local p = np.t / np.dur
+      if p >= 1 then p = 1; np.complete = true end
+      local mids = math.max(1, math.floor(np.mids_target * p + 0.0001))
+      np.mids_drawn = mids
+    end
+  end
+
+  local scale = box_data.scale or 2.0
+  local z = np.z
+
+  local mids = np.mids_drawn
+  local total_w = (self.w_left + self.w_right) * scale + (mids * np.mid_w)
+ 
+  -- keep the middle piece centered while unfolding
+  local left_x = math.floor((np.center_x - (total_w / 2)) + 0.5)
+
+  -- subtle bob (PIXEL-SNAPPED so plate + frame + text never desync)
+  np.bob_t = (np.bob_t or 0) + (dt or 0) * (np.bob_speed or 1.0)
+
+  -- snap bob to whole pixels (no subpixel jitter)
+  local bob = math.floor((math.sin(np.bob_t) * (np.bob_amp or 0)) + 0.5)
+
+  -- snap final y too
+  local y = math.floor(((np.base_y or np.y) + bob) + 0.5)
+
+  -- DEBUG: detect anchor drift (this is the #1 cause of "moves while typing")
+  if np.debug then
+    np._last_ax = np._last_ax or left_x
+    np._last_ay = np._last_ay or y
+
+    local dx = left_x - np._last_ax
+    local dy = y - np._last_ay
+
+    if math.abs(dx) > 0.01 or math.abs(dy) > 0.01 then
+      _np_dbg(player_id, box_data.id or "?", "ANCHOR_DRIFT",
+        "dx=" .. string.format("%.3f", dx) ..
+        " dy=" .. string.format("%.3f", dy) ..
+        " left_x=" .. string.format("%.3f", left_x) ..
+        " y=" .. string.format("%.3f", y)
+      )
+    end
+
+    np._last_ax = left_x
+    np._last_ay = y
+  end
+
+  -- =========================
+  -- BASE + OVERLAY (INTERLEAVED)
+  -- =========================
+
+  local mx = left_x + (self.w_left * scale)
+
+  -- overlay tint config (we'll draw it immediately after each base piece)
+  local f = np.frame
+  local draw_frame = (type(f) == "table") and ((tonumber(f.a) or 255) > 0)
+
+  local fz, fr, fg, fb, fa, fmode
+  if draw_frame then
+    fz = z + 1
+    fr = tonumber(f.r) or 255
+    fg = tonumber(f.g) or 255
+    fb = tonumber(f.b) or 255
+    fa = tonumber(f.a) or 255
+    fmode = tonumber(f.color_mode) or 2
+
+    if np.debug then
+      _np_dbg(player_id, box_data.id or "?", "FRAME_IDS",
+        "idp=" .. tostring(np.idp) ..
+        " LF=" .. tostring(np.idp .. "_FL") ..
+        " MF0=" .. tostring(np.idp .. "_FM0") ..
+        " RF=" .. tostring(np.idp .. "_FR")
+      )
+      _np_dbg(player_id, box_data.id or "?", "FRAME_TINT",
+        "r=" .. tostring(fr) .. " g=" .. tostring(fg) .. " b=" .. tostring(fb) ..
+        " a=" .. tostring(fa) .. " mode=" .. tostring(fmode)
+      )
+    end
+  end
+
+  -- LEFT (base, then frame)
+  Net.player_draw_sprite(player_id, self.SID_LEFT, {
+    id = np.idp .. "_L",
+    x = left_x, y = y, z = z,
+    sx = scale, sy = scale,
+    r = 255, g = 255, b = 255, a = 255,
+    color_mode = 0,
+  })
+
+  if draw_frame then
+    Net.player_draw_sprite(player_id, self.SID_LEFT_F, {
+      id = np.idp .. "_FL",
+      x = left_x, y = y, z = fz,
+      sx = scale, sy = scale,
+      r = fr, g = fg, b = fb, a = fa,
+      color_mode = fmode,
+    })
+  else
+    Net.player_erase_sprite(player_id, np.idp .. "_FL")
+  end
+
+  -- MIDS (base+frame per-slice)
+  for i = 0, mids - 1 do
+    local px = mx + (i * np.mid_w)
+
+    Net.player_draw_sprite(player_id, self.SID_MID0 .. i, {
+      id = np.idp .. "_M" .. i,
+      x = px, y = y, z = z,
+      sx = scale, sy = scale,
+      r = 255, g = 255, b = 255, a = 255,
+      color_mode = 0,
+    })
+
+    if draw_frame then
+      Net.player_draw_sprite(player_id, self.SID_MID0_F .. i, {
+        id = np.idp .. "_FM" .. i,
+        x = px, y = y, z = fz,
+        sx = scale, sy = scale,
+        r = fr, g = fg, b = fb, a = fa,
+        color_mode = fmode,
+      })
     else
-        plate.position.current_y = plate.position.base_y
+      Net.player_erase_sprite(player_id, np.idp .. "_FM" .. i)
     end
-    
-    -- Calculate current visible slices
-    local visible_slices = math.floor(
-        plate.dimensions.middle_slices * plate.animation.progress + 0.0001
-    )
-    
-    -- Render plate
-    self:render_plate(plate, visible_slices)
-    
-    -- Render text if fully unfolded and not closing
-    if plate.animation.state == "idle" and plate.animation.progress >= 1 then
-        self:render_text(plate)
-    end
-    
-    return true
-end
+  end
 
-function GenericNameplate:render_plate(plate, visible_slices)
-    local config = self.config
-    local scale = plate.dimensions.scale
-    local z = plate.style.z_order
-    
-    -- Calculate positions
-    local left_x = plate.position.x
-    local mid_x = left_x + (config.slice_widths.left * scale)
-    local right_x = mid_x + (visible_slices * plate.dimensions.middle_width)
-    
-    -- Draw left slice
-    self:draw_slice(plate, "left", left_x, plate.position.current_y, z, scale)
-    
-    -- Draw middle slices
-    for i = 0, visible_slices - 1 do
-        local x = mid_x + (i * plate.dimensions.middle_width)
-        self:draw_slice(plate, "middle_" .. i, x, plate.position.current_y, z, scale)
-    end
-    
-    -- Draw right slice
-    self:draw_slice(plate, "right", right_x, plate.position.current_y, z, scale)
-    
-    -- Clean up unused slices
-    for i = visible_slices, config.max_middle_slices - 1 do
-        self:erase_slice(plate, "middle_" .. i)
-    end
-end
+  -- erase unused mids (base + frame) together
+  for i = mids, self.MAX_MIDS - 1 do
+    Net.player_erase_sprite(player_id, np.idp .. "_M" .. i)
+    Net.player_erase_sprite(player_id, np.idp .. "_FM" .. i)
+  end
 
-function GenericNameplate:draw_slice(plate, slice_type, x, y, z, scale)
-    local config = self.config
-    local sprite_id = plate.id .. "_" .. slice_type
-    
-    -- Base slice
-    local texture = config.textures[slice_type:gsub("_%d+", "")]
-    if texture then
-        Net.player_draw_sprite(plate.player_id, texture, {
-            id = sprite_id,
-            x = x, y = y, z = z,
-            sx = scale, sy = scale,
-            color_mode = 0,
-        })
-    end
-    
-    -- Frame overlay with tint
-    if plate.style.frame_tint and config.textures[slice_type:gsub("_%d+", "") .. "_frame"] then
-        local frame_sprite_id = sprite_id .. "_frame"
-        local tint = plate.style.frame_tint
-        
-        Net.player_draw_sprite(plate.player_id, config.textures[slice_type .. "_frame"], {
-            id = frame_sprite_id,
-            x = x, y = y, z = z + 1,
-            sx = scale, sy = scale,
-            r = tint.r or 255,
-            g = tint.g or 255,
-            b = tint.b or 255,
-            a = tint.a or 255,
-            color_mode = tint.color_mode or 2,
-        })
-    end
-end
+  -- RIGHT (base, then frame)
+  local rx = mx + (mids * np.mid_w)
 
-function GenericNameplate:erase_slice(plate, slice_type)
-    local sprite_id = plate.id .. "_" .. slice_type
-    Net.player_erase_sprite(plate.player_id, sprite_id)
-    Net.player_erase_sprite(plate.player_id, sprite_id .. "_frame")
-end
+  Net.player_draw_sprite(player_id, self.SID_RIGHT, {
+    id = np.idp .. "_R",
+    x = rx, y = y, z = z,
+    sx = scale, sy = scale,
+    r = 255, g = 255, b = 255, a = 255,
+    color_mode = 0,
+  })
 
-function GenericNameplate:render_text(plate)
+  if draw_frame then
+    Net.player_draw_sprite(player_id, self.SID_RIGHT_F, {
+      id = np.idp .. "_FR",
+      x = rx, y = y, z = fz,
+      sx = scale, sy = scale,
+      r = fr, g = fg, b = fb, a = fa,
+      color_mode = fmode,
+    })
+  else
+    Net.player_erase_sprite(player_id, np.idp .. "_FR")
+  end
+ 
+
+  -- =========================
+  -- TEXT
+  -- =========================
+  if np.complete and not np.closing then
+    local text_x = math.floor((left_x + (self.w_left * scale) + np.pad_px) + 0.5)
+    local text_y = math.floor((y + (3 * scale) + 2) + 0.5)
+
     self.font_system:drawTextWithId(
-        plate.player_id,
-        plate.text,
-        plate.position.text_x,
-        plate.position.text_y,
-        plate.style.font,
-        plate.style.text_scale,
-        plate.style.z_order + 2,
-        plate.id .. "_text"
+      player_id,
+      np.text,
+      text_x,
+      text_y,
+      np.font,
+      np.text_scale,
+      z + 2,
+      np.text_display_id
     )
+  end
 end
 
-function GenericNameplate:remove_plate(plate_id)
-    local plate = self.plates and self.plates[plate_id]
-    if not plate then return end
-    
-    -- Start closing animation
-    plate.animation.state = "closing"
-    plate.animation.progress = 0
-    
-    -- Schedule removal
-    self.scheduled_removals = self.scheduled_removals or {}
-    self.scheduled_removals[plate_id] = true
-end
+return Nameplate
 
-function GenericNameplate:cleanup_completed()
-    if not self.scheduled_removals then return end
-    
-    for plate_id, _ in pairs(self.scheduled_removals) do
-        local plate = self.plates[plate_id]
-        if plate and not plate.visible then
-            -- Clean up text
-            Net.player_erase_sprite(plate.player_id, plate.id .. "_text")
-            
-            -- Remove plate
-            self.plates[plate_id] = nil
-            self.scheduled_removals[plate_id] = nil
-        end
-    end
-end
-
-function GenericNameplate:update_all(dt)
-    if not self.plates then return end
-    
-    for plate_id, plate in pairs(self.plates) do
-        self:update_plate(plate, dt)
-    end
-    
-    self:cleanup_completed()
-end
-
--- =====================================================
--- FACTORY FUNCTION FOR EASY CREATION
--- =====================================================
-function GenericNameplate.create(config_overrides)
-    -- This is a factory that can be used when you don't have a font system yet
-    return function(font_system)
-        return GenericNameplate:new(font_system, config_overrides)
-    end
-end
-
--- =====================================================
--- EXAMPLE USAGE
--- =====================================================
---[[
--- Example 1: Basic usage
-local NameplateFactory = require("generic_nameplate")
-local nameplate = NameplateFactory(fontSystem)
-
--- Create a nameplate
-local parent_info = {
-    x = 100, y = 200, width = 300, z_order = 50
-}
-
-local style = {
-    font = "TINY_BLACK",
-    text_scale = 2.0,
-    frame_tint = { r = 255, g = 200, b = 100, a = 255, color_mode = 2 },
-    anchor = { anchor = "above", align = "center", gap_x = 10, gap_y = 5 },
-    bobbing = true,
-}
-
-local plate = nameplate:create_plate(player_id, "player1_name", "Player One", parent_info, style)
-
--- In your game loop
-nameplate:update_all(dt)
-
--- When done
-nameplate:remove_plate("player1_name")
-
--- Example 2: Custom configuration
-local customConfig = {
-    textures = {
-        left = "/assets/ui/nameplates/fancy_left.png",
-        middle = "/assets/ui/nameplates/fancy_middle.png",
-        right = "/assets/ui/nameplates/fancy_right.png",
-    },
-    slice_widths = { left = 10, middle = 5, right = 10 },
-    height = 20,
-    unfold_duration = 0.2,
-    bob_amplitude = 5,
-}
-
-local FancyNameplateFactory = GenericNameplate.create(customConfig)
-local fancyNameplate = FancyNameplateFactory(fontSystem)
-]]
-
-return GenericNameplate

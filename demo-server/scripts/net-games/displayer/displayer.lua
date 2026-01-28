@@ -104,6 +104,45 @@ function Displayer:_setupSubAPIs()
         return subsystem:removePlayerCountdown(player_id, countdown_id)
     end
 
+    -- Get player timer value
+    self.Timer.getPlayerTimer = function(player_id, timer_id)
+        local subsystem = mainInstance:_getSubsystem("TimerSystem", "getPlayerTimer")
+        if not subsystem or not player_id or not timer_id then 
+            print("Error: player_id and timer_id are required")
+            return 0 
+        end
+        return subsystem:getPlayerTimer(player_id, timer_id) or 0
+    end
+
+    -- Get player countdown value
+    self.Timer.getPlayerCountdown = function(player_id, countdown_id)
+        local subsystem = mainInstance:_getSubsystem("TimerSystem", "getPlayerCountdown")
+        if not subsystem or not player_id or not countdown_id then 
+            print("Error: player_id and countdown_id are required")
+            return 0 
+        end
+        return subsystem:getPlayerCountdown(player_id, countdown_id) or 0
+    end
+
+    -- Clear all player timers
+    self.Timer.clearAllPlayerTimers = function(player_id)
+        local subsystem = mainInstance:_getSubsystem("TimerSystem", "clearAllPlayerTimers")
+        if not subsystem or not player_id then 
+            print("Error: player_id is required")
+            return nil 
+        end
+        return subsystem:clearAllPlayerTimers(player_id)
+    end
+
+    -- Clear all player countdowns
+    self.Timer.clearAllPlayerCountdowns = function(player_id)
+        local subsystem = mainInstance:_getSubsystem("TimerSystem", "clearAllPlayerCountdowns")
+        if not subsystem or not player_id then 
+            print("Error: player_id is required")
+            return nil 
+        end
+        return subsystem:clearAllPlayerCountdowns(player_id)
+    end
 
     -- Timer System API (original)
 
@@ -757,15 +796,16 @@ end
 
       -- Scrolling Sprite List System API
     self.ScrollingSprite = {}
-   -- Change it to this (swap player_id and list_id):
-function self.ScrollingSprite:createList(list_id, player_id, x, y, width, height, config)
-    local subsystem = mainInstance:_getSubsystem("ScrollingSpriteListSystem", "createScrollingList")
-    if not subsystem or not player_id or not list_id then 
-        print("Error: player_id and list_id are required")
-        return nil 
+   
+    -- Fixed parameter order (player_id first for consistency)
+    function self.ScrollingSprite:createList(player_id, list_id, x, y, width, height, config)
+        local subsystem = mainInstance:_getSubsystem("ScrollingSpriteListSystem", "createScrollingList")
+        if not subsystem or not player_id or not list_id then 
+            print("Error: player_id and list_id are required")
+            return nil 
+        end
+        return subsystem:createScrollingList(player_id, list_id, x or 0, y or 0, width or 200, height or 100, config or {})
     end
-    return subsystem:createScrollingList(player_id, list_id, x or 0, y or 0, width or 200, height or 100, config or {})
-end
 
     function self.ScrollingSprite:addSprite(player_id, list_id, sprite_def)
         local subsystem = mainInstance:_getSubsystem("ScrollingSpriteListSystem", "addSpriteToList")
@@ -875,6 +915,48 @@ end
 
 function Displayer:isValid()
     return self._subsystems ~= nil
+end
+
+-- Convenience function to create timer with display
+function Displayer:createTimerWithDisplay(player_id, timer_id, duration, x, y, options)
+    options = options or {}
+    local is_countdown = options.is_countdown or false
+    local config_name = options.config or "default"
+    local callback = options.callback
+    local loop = options.loop or false
+    local sprite_opts = options.sprite_opts
+    
+    -- Create the timer
+    if is_countdown then
+        self.Timer.createPlayerCountdown(player_id, timer_id, duration, callback, loop)
+        self.TimerDisplay.createPlayerCountdownDisplay(player_id, timer_id, x, y, config_name, sprite_opts)
+    else
+        self.Timer.createPlayerTimer(player_id, timer_id, duration, callback, loop)
+        self.TimerDisplay.createPlayerTimerDisplay(player_id, timer_id, x, y, config_name, sprite_opts)
+    end
+    
+    return timer_id
+end
+
+-- Same for global timers
+function Displayer:createGlobalTimerWithDisplay(timer_id, duration, x, y, options)
+    options = options or {}
+    local is_countdown = options.is_countdown or false
+    local config_name = options.config or "default"
+    local callback = options.callback
+    local loop = options.loop or false
+    local sprite_opts = options.sprite_opts
+    
+    -- Create the timer
+    if is_countdown then
+        self.Timer.createGlobalCountdown(timer_id, duration, callback, loop)
+        self.TimerDisplay.createGlobalCountdownDisplay(timer_id, x, y, config_name, sprite_opts)
+    else
+        self.Timer.createGlobalTimer(timer_id, duration, callback, loop)
+        self.TimerDisplay.createGlobalTimerDisplay(timer_id, x, y, config_name, sprite_opts)
+    end
+    
+    return timer_id
 end
 
 -- Quick setup function

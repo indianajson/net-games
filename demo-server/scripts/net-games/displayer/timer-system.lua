@@ -243,6 +243,48 @@ function Timer:removePlayerCountdown(player_id, countdown_id)
     self.countdowns[player_id][countdown_id] = nil
 end
 
+-- Get player timer value
+function Timer:getPlayerTimer(player_id, timer_id)
+    if self.timers[player_id] and self.timers[player_id][timer_id] then
+        return self.timers[player_id][timer_id].current or 0
+    end
+    return 0
+end
+
+-- Get player countdown value
+function Timer:getPlayerCountdown(player_id, countdown_id)
+    if self.countdowns[player_id] and self.countdowns[player_id][countdown_id] then
+        return self.countdowns[player_id][countdown_id].current or 0
+    end
+    return 0
+end
+
+-- Clear all timers for a specific player
+function Timer:clearAllPlayerTimers(player_id)
+    if self.timers[player_id] then
+        for timer_id, _ in pairs(self.timers[player_id]) do
+            Net:emit("timer_remove", {
+                player_id = player_id,
+                timer_id = timer_id
+            })
+        end
+        self.timers[player_id] = {}
+    end
+end
+
+-- Clear all countdowns for a specific player
+function Timer:clearAllPlayerCountdowns(player_id)
+    if self.countdowns[player_id] then
+        for countdown_id, _ in pairs(self.countdowns[player_id]) do
+            Net:emit("countdown_remove", {
+                player_id = player_id,
+                countdown_id = countdown_id
+            })
+        end
+        self.countdowns[player_id] = {}
+    end
+end
+
 -- Global Timer Methods
 function Timer:createGlobalTimer(timer_id, duration, callback, loop)
     loop = loop or false
@@ -449,19 +491,6 @@ function Timer:clearAllGlobalCountdowns()
     end
 end
 
-function Timer:getPlayerTimer(player_id, timer_id)
-    if self.timers[player_id] and self.timers[player_id][timer_id] then
-        return self.timers[player_id][timer_id].current or 0
-    end
-    return 0
-end
-
-function Timer:getPlayerCountdown(player_id, countdown_id)
-    if self.countdowns[player_id] and self.countdowns[player_id][countdown_id] then
-        return self.countdowns[player_id][countdown_id].current or 0
-    end
-    return 0
-end
 
 -- Initialize the timer system
 local timerSystem = setmetatable({}, Timer)
