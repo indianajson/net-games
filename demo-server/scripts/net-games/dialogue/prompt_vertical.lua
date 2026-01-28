@@ -207,7 +207,7 @@ local function draw_menu_frame_overlay(inst, draw_id, x, y, z, s, anim_state, fr
 
   local a = tonumber(frame_cfg.a) or 255
   if a <= 0 then
-    Net.player_erase_sprite(player_id, draw_id)
+    Net.player_erase_sprite(inst.player_id, draw_id)
     return
   end
 
@@ -551,35 +551,33 @@ function PromptMenuInstance:render_textbox()
     ops.nameplate = nil
   end
 
-
-    -- If the textbox already exists (ex: coming from a YES/NO prompt),
-    -- reset it so we get fresh text in the SAME box without closing/reopening UI.
-    if self.reuse_existing_box then
-      if Displayer.Text.reset_text_box then
-        -- snake_case wrapper
-        Displayer.Text.reset_text_box(
-          self.player_id, self.box_id, self.question,
-          ui.x, ui.y, ui.w, ui.h,
-          ui.font, ui.scale, ui.z,
-          ui.backdrop,
-          ui.typing_speed,
-          ops
-        )
-        return
-      elseif Displayer.Text.resetTextBox then
-        -- camelCase (method form)
-        Displayer.Text:resetTextBox(
-          self.player_id, self.box_id, self.question,
-          ui.x, ui.y, ui.w, ui.h,
-          ui.font, ui.scale, ui.z,
-          ui.backdrop,
-          ui.typing_speed,
-          ops
-        )
-        return
-      end
+  -- If the textbox already exists (ex: coming from a YES/NO prompt),
+  -- reset it so we get fresh text in the SAME box without closing/reopening UI.
+  if self.reuse_existing_box then
+    if Displayer.Text.reset_text_box then
+      -- snake_case wrapper
+      Displayer.Text.reset_text_box(
+        self.player_id, self.box_id, self.question,
+        ui.x, ui.y, ui.w, ui.h,
+        ui.font, ui.scale, ui.z,
+        ui.backdrop,
+        ui.typing_speed,
+        ops
+      )
+      return
+    elseif Displayer.Text.resetTextBox then
+      -- camelCase (method form)
+      Displayer.Text:resetTextBox(
+        self.player_id, self.box_id, self.question,
+        ui.x, ui.y, ui.w, ui.h,
+        ui.font, ui.scale, ui.z,
+        ui.backdrop,
+        ui.typing_speed,
+        ops
+      )
+      return
     end
-
+  end
 
   -- Fallback: create normally
   if Displayer.Text.create_text_box then
@@ -1205,7 +1203,7 @@ end
   -- Scroll indicator (only if needed)
   if total > rows then
     local track_x = x0 + (L.scrollbar_x or 0)
-    local track_y = y0 + (L.scrollbar_y or 0)
+    local track_y = x0 + (L.scrollbar_y or 0)
 
     -- IMPORTANT: scrollbar_h is already in screen pixels. Do NOT multiply by scale.
     local track_h = (L.scrollbar_h or 0)
@@ -1281,7 +1279,7 @@ function PromptMenuInstance:become_ready()
     -- IMPORTANT:
     -- Do NOT restart the intro here.
     -- In your Pink flow, the menu opens while textbox types, so the intro already ran
-    -- when OPEN finished. become_ready() is just “unlock control / show overlays”.
+    -- when OPEN finished. become_ready() is just ï¿½unlock control / show overlaysï¿½.
     self:update_scroll_for_selection(true)
 
     -- Only redraw overlays; avoid forcing a full text redraw
@@ -1479,7 +1477,6 @@ function PromptMenuInstance:update(_dt)
 
 
 
-
   -- =====================================================
   -- Text intro animation timing (fade/slide/cascade)
   -- =====================================================
@@ -1660,7 +1657,7 @@ function PromptVertical.menu(player_id, opts)
 
   set_input_locked(player_id, true)
 
-  -- swallow interaction press so we don’t insta-confirm/select
+  -- swallow interaction press so we donï¿½t insta-confirm/select
   Input.consume(player_id)
 
   local inst = PromptMenuInstance:new(player_id, opts or {})
@@ -1682,15 +1679,20 @@ function PromptVertical._finalize_close(player_id, _reason, opts)
   erase_sprite(player_id, inst.draw.cursor)
   erase_sprite(player_id, inst.draw.scroll)
   erase_sprite(player_id, inst.draw.shop_item)
+  erase_sprite(player_id, inst.draw.shop_exit)
 
   -- Erase menu text
   inst:clear_menu_text()
   FontSystem:eraseTextDisplay(player_id, inst.draw.monies)
   FontSystem:eraseTextDisplay(player_id, inst.draw.monies_amount)
 
-
   if not keep then
-    Displayer.Text.closeTextBox(player_id, inst.box_id)
+    -- Use proper API call for closing textbox
+    if Displayer.Text.close_text_box then
+      Displayer.Text.close_text_box(player_id, inst.box_id)
+    else
+      Displayer.Text.closeTextBox(player_id, inst.box_id)
+    end
   else
     -- Goal_1_5: indicator should NOT appear when the menu closes but textbox stays
     set_textbox_indicator_enabled(player_id, inst.box_id, false)
@@ -1698,7 +1700,6 @@ function PromptVertical._finalize_close(player_id, _reason, opts)
     Input.clear_require_release(player_id, { "confirm", "cancel" })
     Input.swallow(player_id, 0.10)
   end
-
 
   set_input_locked(player_id, false)
 

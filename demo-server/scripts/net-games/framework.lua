@@ -2623,7 +2623,7 @@ Net:on("player_move", function(event)
                 {
                     properties = {
                         {property = "Animation", value = cosmetic_data["state"]},
-                        {property = "x", ease = "Linear", value = bot_position.x},
+                        {property = "X", ease = "Linear", value = bot_position.x},
                         {property = "Y", ease = "Linear", value = bot_position.y},
                         {property = "Z", ease = "Linear", value = bot_position.z}
                     },
@@ -2632,7 +2632,7 @@ Net:on("player_move", function(event)
                 {
                     properties = {
                         {property = "Animation", value = cosmetic_data["state"]},
-                        {property = "x", ease = "Linear", value = event.x + cosmetic_data["x"]},
+                        {property = "X", ease = "Linear", value = event.x + cosmetic_data["x"]},
                         {property = "Y", ease = "Linear", value = event.y + cosmetic_data["y"]},
                         {property = "Z", ease = "Linear", value = event.z + 3}
                     },

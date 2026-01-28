@@ -44,8 +44,6 @@ local function _np_dbg_enabled()
   return _G and _G.NG_TEXTBOX_DEBUG == true
 end
 
-
-
 function Nameplate:new(font_system)
   local o = setmetatable({}, self)
   o.font_system = font_system
@@ -80,16 +78,20 @@ function Nameplate:new(font_system)
 
   o.MAX_MIDS  = 60
 
+  -- Store for per-player data
+  o.players = {}
 
   return o
 end
 
-function Nameplate:_alloc_once(player_id, player_data)
+function Nameplate:_alloc_once(player_id)
+  local player_data = self.players[player_id] or {}
   player_data._nameplate_alloc = player_data._nameplate_alloc or false
   if player_data._nameplate_alloc then
     if _np_dbg_enabled() then
       _np_dbg(player_id, "?", "ALLOC_SKIP", "already allocated for this player")
     end
+    self.players[player_id] = player_data
     return
   end
   player_data._nameplate_alloc = true
@@ -130,10 +132,13 @@ function Nameplate:_alloc_once(player_id, player_data)
     Net.player_alloc_sprite(player_id, self.SID_MID0_F .. i, { texture_path = self.tex_mid_frame })
   end
 
+  self.players[player_id] = player_data
 end
 
-
-function Nameplate:erase(player_id, player_data, box_data)
+function Nameplate:erase(player_id, box_data)
+  local player_data = self.players[player_id]
+  if not player_data then return end
+  
   local np = box_data.nameplate
   if not np then return end
 
@@ -157,9 +162,25 @@ function Nameplate:erase(player_id, player_data, box_data)
   end
 
   box_data.nameplate = nil
+  
+  -- Clean up player data if no more nameplates
+  local has_other_plates = false
+  for _, data in pairs(self.players) do
+    if data.boxes and data.boxes[box_data.id] then
+      data.boxes[box_data.id] = nil
+      for _ in pairs(data.boxes) do
+        has_other_plates = true
+        break
+      end
+    end
+  end
+  
+  if not has_other_plates and player_data then
+    self.players[player_id] = nil
+  end
 end
 
-function Nameplate:attach(player_id, player_data, box_id, box_data, cfg)
+function Nameplate:attach(player_id, box_data, cfg)
   if not cfg then return end
 
   -- cfg can be "NAME" or { text="NAME", ... }
@@ -167,11 +188,11 @@ function Nameplate:attach(player_id, player_data, box_id, box_data, cfg)
   if type(cfg) == "table" then text = cfg.text end
   if type(text) ~= "string" or text == "" then return end
 
-  self:_alloc_once(player_id, player_data)
+  self:_alloc_once(player_id)
 
   -- wipe any existing plate on this box before overwriting
   if box_data.nameplate then
-    self:erase(player_id, player_data, box_data)
+    self:erase(player_id, box_data)
   end
 
   local scale = box_data.scale or 2.0
@@ -185,11 +206,12 @@ function Nameplate:attach(player_id, player_data, box_id, box_data, cfg)
     by = by + (tonumber(box_data.backdrop.render_offset_y) or 0)
   end
 
-  -- Text metrics
+  -- Text metrics - use the font system's getTextWidth method
   local font_name  = "TINY_BLACK"
   local text_scale = (type(cfg) == "table" and cfg.text_scale) or scale
   local pad_px     = (type(cfg) == "table" and cfg.pad_px) or (4 * scale)
 
+  -- Use font system's getTextWidth method which properly handles scaling and spacing
   local text_w = self.font_system:getTextWidth(text, font_name, text_scale)
   local inner_needed = math.max(1, math.floor(text_w + pad_px * 2))
 
@@ -232,18 +254,18 @@ function Nameplate:attach(player_id, player_data, box_id, box_data, cfg)
   end
 
   local center_x = x + (total_w / 2)
-  local idp = tostring(box_id) .. "_np"
+  local idp = tostring(box_data.id) .. "_np"
 
   if type(cfg) == "table" and cfg.debug then
-    _np_dbg(player_id, box_id, "ATTACH",
+    _np_dbg(player_id, box_data.id, "ATTACH",
       "idp=" .. tostring(idp) ..
       " text=" .. tostring(text) ..
       " mids_target=" .. tostring(mids_target) ..
       " scale=" .. tostring(scale) ..
-      " z=" .. tostring(z)
+      " z=" .. tostring(z) ..
+      " text_w=" .. tostring(text_w)
     )
   end
-
 
   -- Optional frame tint (overlay). Mirrors textbox dye behavior: gray overlay tinted on top.
   local frame_tint = nil
@@ -258,6 +280,23 @@ function Nameplate:attach(player_id, player_data, box_id, box_data, cfg)
     }
   end
 
+  -- Text color configuration
+  local text_color = nil
+  if type(cfg) == "table" and type(cfg.text_color) == "table" then
+    local tc = cfg.text_color
+    text_color = {
+      r = tonumber(tc.r) or 0,
+      g = tonumber(tc.g) or 0,
+      b = tonumber(tc.b) or 0,
+      a = tonumber(tc.a) or 255,
+      opacity = tonumber(tc.a) or 255,
+      color_mode = 0
+    }
+  else
+    -- Default to black text
+    text_color = { r = 0, g = 0, b = 0, a = 255, opacity = 255, color_mode = 0 }
+  end
+
   box_data.nameplate = {
     debug = (type(cfg) == "table" and cfg.debug) or false,
     idp = idp,
@@ -266,6 +305,7 @@ function Nameplate:attach(player_id, player_data, box_id, box_data, cfg)
     font = font_name,
     text_scale = text_scale,
     pad_px = pad_px,
+    text_color = text_color,
 
     x = x,
     y = y,
@@ -292,12 +332,18 @@ function Nameplate:attach(player_id, player_data, box_id, box_data, cfg)
     mids_drawn = 0,
     complete = false,
 
-    text_display_id = "nameplate:" .. tostring(box_id),
+    text_display_id = "nameplate:" .. tostring(box_data.id),
   }
+
+  -- Track this nameplate in player data
+  local player_data = self.players[player_id]
+  if player_data then
+    player_data.boxes = player_data.boxes or {}
+    player_data.boxes[box_data.id] = box_data
+  end
 end
 
-
-function Nameplate:begin_close(player_id, player_data, box_data, cfg)
+function Nameplate:begin_close(player_id, box_data, cfg)
   local np = box_data.nameplate
   if not np then return end
   if np.closing then return end
@@ -321,7 +367,7 @@ function Nameplate:begin_close(player_id, player_data, box_data, cfg)
   end
 end
 
-function Nameplate:update(player_id, player_data, box_data, dt)
+function Nameplate:update(player_id, box_data, dt)
   local np = box_data.nameplate
   if not np then return end
 
@@ -332,7 +378,7 @@ function Nameplate:update(player_id, player_data, box_data, dt)
     np.close_t = (np.close_t or 0) + dt
     local p = np.close_t / (np.close_dur or 0.12)
     if p >= 1 then
-      self:erase(player_id, player_data, box_data)
+      self:erase(player_id, box_data)
       return
     end
 
@@ -496,15 +542,15 @@ function Nameplate:update(player_id, player_data, box_data, dt)
   else
     Net.player_erase_sprite(player_id, np.idp .. "_FR")
   end
- 
 
   -- =========================
-  -- TEXT
+  -- TEXT (using the new font system properly)
   -- =========================
   if np.complete and not np.closing then
     local text_x = math.floor((left_x + (self.w_left * scale) + np.pad_px) + 0.5)
     local text_y = math.floor((y + (3 * scale) + 2) + 0.5)
 
+    -- Use drawTextWithId with proper parameters including sprite_opts for color
     self.font_system:drawTextWithId(
       player_id,
       np.text,
@@ -513,10 +559,10 @@ function Nameplate:update(player_id, player_data, box_data, dt)
       np.font,
       np.text_scale,
       z + 2,
-      np.text_display_id
+      np.text_display_id,
+      np.text_color  -- Pass the text color configuration
     )
   end
 end
 
 return Nameplate
-

@@ -1,4 +1,3 @@
--- scripts/net-games/dialogue/dialogue.lua
 require("scripts/net-games/framework")
 
 local Displayer = require("scripts/net-games/displayer/displayer")
@@ -6,7 +5,6 @@ local Input     = require("scripts/net-games/input/input")
 local C         = require("scripts/net-games/dialogue/constants")
 local Prompt    = require("scripts/net-games/dialogue/prompt")
 local PromptVertical = require("scripts/net-games/dialogue/prompt_vertical")
-
 
 local Dialogue = {}
 Dialogue.instances = {}

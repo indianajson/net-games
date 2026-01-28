@@ -607,7 +607,7 @@ end
         font = font_name,
         scale = scale,
         z_order = z_order,
-        sprite_opts = sprite_opts,
+        sprite_opts = opts,
         speed = speed,
         char_delay = char_delay,
         pages = pages,
@@ -664,9 +664,11 @@ end
       self:drawTextBoxMugshot(player_id, box_id, text_box_data)
     end
 
+    text_box_data.sprite_opts = opts
+
     -- Optional BN nameplate
     if self.nameplate and opts and opts.nameplate then
-      self.nameplate:attach(player_id, player_data, box_id, text_box_data, opts.nameplate)
+      self.nameplate:attach(player_id,text_box_data, opts.nameplate)
     end
 
     player_data.active_text_boxes[box_id] = text_box_data

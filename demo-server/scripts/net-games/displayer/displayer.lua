@@ -27,6 +27,7 @@ function Displayer:init()
             if subsystem and subsystem.init then
                 local subsystem_success, subsystem_err = pcall(function()
                     subsystem:init()
+                    print("SUCCESS: " .. name .. "submodule was successfully initialized")
                 end)
                 if not subsystem_success then
                     print("WARNING: Failed to initialize " .. name .. ": " .. tostring(subsystem_err))
