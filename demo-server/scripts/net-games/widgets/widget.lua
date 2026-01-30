@@ -1,7 +1,7 @@
 -- widgets.lua
 -- Flutter-inspired widget system for net-games framework
--- Version 1.7 with Fixed Sprite Allocation
--- Updated: Fixed sprite ID uniqueness and allocation
+-- Version 2.0 with Fixed Child Widget Positioning
+-- Updated: Fixed sprite positioning in nested widgets
 
 -- Load simplified logging module
 local LOGGING = require('scripts/net-games/widgets/widget-logging')
@@ -231,7 +231,7 @@ function WidgetCache.stats()
 end
 
 -- ===========================================================
--- SPRITE OBJECT MANAGEMENT (FIXED)
+-- SPRITE OBJECT MANAGEMENT (UPDATED WITH CUSTOM DIMENSIONS)
 -- ===========================================================
 local SpriteObject = {}
 SpriteObject.__index = SpriteObject
@@ -249,6 +249,10 @@ function SpriteObject.new(sprite_id, widget_id, player_id, texture_path, anim_pa
     
     -- Generate a unique template ID for allocation (based on texture/anim paths)
     self.template_id = self.id .. "_template"
+    
+    -- Custom dimensions for layout (override intrinsic dimensions)
+    self.layout_width = nil
+    self.layout_height = nil
     
     self.properties = {
         x = 0,
@@ -276,6 +280,49 @@ function SpriteObject.new(sprite_id, widget_id, player_id, texture_path, anim_pa
                self.id, widget_id, self.template_id)
     
     return self
+end
+
+-- Set custom dimensions for layout (pre-scaling)
+function SpriteObject:set_layout_dimensions(width, height)
+    self.layout_width = width
+    self.layout_height = height
+    debug_print("DETAILED", "SpriteObject.set_layout_dimensions: %s = %dx%d", 
+               self.id, width or 0, height or 0)
+    return self
+end
+
+-- Get dimensions for layout (either custom or from animation file)
+function SpriteObject:get_layout_dimensions()
+    if self.layout_width and self.layout_height then
+        -- Use custom dimensions if set
+        debug_print("VERBOSE", "SpriteObject.get_layout_dimensions: %s using custom %dx%d", 
+                   self.id, self.layout_width, self.layout_height)
+        return self.layout_width, self.layout_height
+    end
+    
+    -- Otherwise, get dimensions from animation file (without scaling)
+    local width, height = SpriteDimensionCache.get_dimensions(
+        self.texture_path, self.anim_path, self.anim_state)
+    
+    debug_print("VERBOSE", "SpriteObject.get_layout_dimensions: %s using intrinsic %dx%d", 
+               self.id, width, height)
+    return width, height
+end
+
+-- Get visual dimensions (including scale)
+function SpriteObject:get_visual_dimensions()
+    local width, height = self:get_layout_dimensions()
+    
+    -- Apply current scale
+    local visual_width = width * (self.properties.sx or 1.0)
+    local visual_height = height * (self.properties.sy or 1.0)
+    
+    debug_print("VERBOSE", "SpriteObject.get_visual_dimensions: %s = %dx%d * scale(%f,%f) = %dx%d", 
+               self.id, width, height, 
+               self.properties.sx or 1.0, self.properties.sy or 1.0,
+               visual_width, visual_height)
+    
+    return visual_width, visual_height
 end
 
 function SpriteObject:allocate()
@@ -383,10 +430,32 @@ function SpriteObject:draw()
     -- Get origin offset if available
     local ox, oy = self:get_origin_offset()
     
+    -- Calculate absolute screen position
+    -- The sprite's x/y properties are relative to its widget
+    -- We need to find the widget and get its absolute position
+    local absolute_x = self.properties.x * 2  -- Convert widget-relative to screen
+    local absolute_y = self.properties.y * 2
+    
+    -- Try to find the widget and add its position
+    local widget = WidgetCache.get(self.widget_id, self.player_id)
+    if widget then
+        -- Widget's x/y are already in screen coordinates
+        absolute_x = absolute_x + widget.x
+        absolute_y = absolute_y + widget.y
+        
+        -- Also add any parent widget positions
+        local parent = widget.parent
+        while parent do
+            absolute_x = absolute_x + parent.x
+            absolute_y = absolute_y + parent.y
+            parent = parent.parent
+        end
+    end
+    
     local sprite_data = {
         id = self.id,  -- Use sprite object ID as the instance ID
-        x = self.properties.x * 2,  -- Convert to screen coordinates
-        y = self.properties.y * 2,
+        x = absolute_x,  -- Use absolute screen coordinates
+        y = absolute_y,
         z = self.properties.z,
         sx = self.properties.sx,
         sy = self.properties.sy,
@@ -402,12 +471,9 @@ function SpriteObject:draw()
         opacity = self.properties.opacity
     }
     
-    debug_print("VERBOSE", "SpriteObject.draw: %s at (%d,%d) scale=%f,%f origin=(%d,%d) visible=%s template=%s",
-               self.id, self.properties.x, self.properties.y,
-               self.properties.sx, self.properties.sy,
-               ox, oy,
-               tostring(self.properties.visible),
-               self.template_id)
+    debug_print("VERBOSE", "SpriteObject.draw: %s at widget-relative (%d,%d) absolute (%d,%d) scale=%f,%f",
+               self.id, self.properties.x, self.properties.y, absolute_x, absolute_y,
+               self.properties.sx, self.properties.sy)
     
     -- Draw sprite instance using the template
     local success, result = pcall(Net.player_draw_sprite, self.player_id, self.template_id, sprite_data)
@@ -514,8 +580,26 @@ function SpriteObject:get_properties()
 end
 
 function SpriteObject:get_absolute_position()
-    -- Returns absolute screen coordinates
-    return self.properties.x * 2, self.properties.y * 2
+    -- Calculate absolute screen position
+    local absolute_x = self.properties.x * 2
+    local absolute_y = self.properties.y * 2
+    
+    -- Try to find the widget and add its position
+    local widget = WidgetCache.get(self.widget_id, self.player_id)
+    if widget then
+        absolute_x = absolute_x + widget.x
+        absolute_y = absolute_y + widget.y
+        
+        -- Also add any parent widget positions
+        local parent = widget.parent
+        while parent do
+            absolute_x = absolute_x + parent.x
+            absolute_y = absolute_y + parent.y
+            parent = parent.parent
+        end
+    end
+    
+    return absolute_x, absolute_y
 end
 
 -- Animation methods
@@ -579,7 +663,7 @@ function SpriteObject:is_animating()
 end
 
 -- ===========================================================
--- DIMENSION CACHE (UPDATED WITH CORRECT ANIMATION PARSING)
+-- DIMENSION CACHE
 -- ===========================================================
 local SpriteDimensionCache = {}
 local _dimension_cache = {} -- texture_path|anim_path|anim_state -> {width, height}
@@ -630,66 +714,32 @@ function SpriteDimensionCache.get_dimensions(texture_path, anim_path, anim_state
     if elements and #elements > 0 then
         local width, height = 0, 0
         
-        -- First, if anim_state is specified, look for that specific state
-        if anim_state and anim_state ~= "" then
-            debug_print("DETAILED", "Looking for specific animation state: %s", anim_state)
-            
-            local in_correct_state = false
-            for _, element in ipairs(elements) do
-                -- Check if this element starts an animation state
-                if element.text == "animation" then
-                    local state_attr = get_element_attribute(element, "state", "")
-                    debug_print("VERBOSE", "Found animation element with state: %s", state_attr)
-                    
-                    in_correct_state = (state_attr == anim_state)
-                elseif in_correct_state and element.text == "frame" then
-                    -- Found a frame in the correct animation state
-                    width = get_element_attribute_int(element, "w", 0)
-                    height = get_element_attribute_int(element, "h", 0)
-                    
-                    debug_print("DETAILED", "Frame in state %s: w=%d, h=%d", 
-                               anim_state, width, height)
-                    
-                    if width > 0 and height > 0 then
-                        break
-                    end
+        -- Look for any frame
+        for _, element in ipairs(elements) do
+            if element.text == "frame" then
+                -- Try different attribute names for width and height
+                width = get_element_attribute_int(element, "w", 0)
+                height = get_element_attribute_int(element, "h", 0)
+                
+                -- If w/h not found, try alternative names
+                if width == 0 then
+                    width = get_element_attribute_int(element, "frame_width", 0)
                 end
-            end
-        end
-        
-        -- If no specific state found or no state specified, look for any frame
-        if width == 0 or height == 0 then
-            debug_print("DETAILED", "No specific state found, looking for any frame...")
-            
-            for _, element in ipairs(elements) do
-                if element.text == "frame" then
-                    -- Try different attribute names for width and height
-                    width = get_element_attribute_int(element, "w", 0)
-                    height = get_element_attribute_int(element, "h", 0)
-                    
-                    debug_print("VERBOSE", "Parsed element: text=%s, w=%d, h=%d", 
-                               element.text, width, height)
-                    
-                    -- If w/h not found, try alternative names
-                    if width == 0 then
-                        width = get_element_attribute_int(element, "frame_width", 0)
-                    end
-                    if height == 0 then
-                        height = get_element_attribute_int(element, "frame_height", 0)
-                    end
-                    
-                    -- If still not found, try width/height without frame_ prefix
-                    if width == 0 then
-                        width = get_element_attribute_int(element, "width", 0)
-                    end
-                    if height == 0 then
-                        height = get_element_attribute_int(element, "height", 0)
-                    end
-                    
-                    if width > 0 and height > 0 then
-                        debug_print("DETAILED", "Found frame dimensions: %dx%d (using attributes w/h)", width, height)
-                        break
-                    end
+                if height == 0 then
+                    height = get_element_attribute_int(element, "frame_height", 0)
+                end
+                
+                -- If still not found, try width/height without frame_ prefix
+                if width == 0 then
+                    width = get_element_attribute_int(element, "width", 0)
+                end
+                if height == 0 then
+                    height = get_element_attribute_int(element, "height", 0)
+                end
+                
+                if width > 0 and height > 0 then
+                    debug_print("DETAILED", "Found frame dimensions: %dx%d (using attributes w/h)", width, height)
+                    break
                 end
             end
         end
@@ -724,7 +774,7 @@ function SpriteDimensionCache.stats()
 end
 
 -- ===========================================================
--- BASE WIDGET CLASS
+-- BASE WIDGET CLASS (FIXED CHILD POSITIONING)
 -- ===========================================================
 local Widget = {}
 Widget.__index = Widget
@@ -767,8 +817,8 @@ function Widget.new(id, player_id)
     return self
 end
 
--- Create and manage sprite objects
-function Widget:create_sprite(sprite_id, texture_path, anim_path, anim_state)
+-- Create and manage sprite objects with optional layout dimensions
+function Widget:create_sprite(sprite_id, texture_path, anim_path, anim_state, layout_width, layout_height)
     -- Generate unique sprite ID if not provided
     local unique_sprite_id = sprite_id or generate_unique_id("sprite")
     
@@ -780,6 +830,12 @@ function Widget:create_sprite(sprite_id, texture_path, anim_path, anim_state)
     
     local sprite = SpriteObject.new(unique_sprite_id, self.id, self.player_id, 
                                    texture_path, anim_path, anim_state)
+    
+    -- Set custom layout dimensions if provided
+    if layout_width and layout_height then
+        sprite:set_layout_dimensions(layout_width, layout_height)
+    end
+    
     self.sprite_objects[unique_sprite_id] = sprite
     
     -- Add to children for layout
@@ -790,13 +846,16 @@ function Widget:create_sprite(sprite_id, texture_path, anim_path, anim_state)
         texture_path = texture_path,
         anim_path = anim_path,
         anim_state = anim_state,
+        layout_width = layout_width,  -- Store custom dimensions
+        layout_height = layout_height,
         id = unique_sprite_id
     })
     
     self.state.dirty = true
     self.state.needs_layout = true
     
-    debug_print("INFO", "Widget.create_sprite: %s added to widget %s", unique_sprite_id, self.id)
+    debug_print("INFO", "Widget.create_sprite: %s added to widget %s with layout dimensions %dx%d", 
+               unique_sprite_id, self.id, layout_width or 0, layout_height or 0)
     return sprite
 end
 
@@ -833,6 +892,33 @@ function Widget:set_sprite_properties(sprite_id, properties)
     else
         debug_print("WARN", "Widget.set_sprite_properties: Sprite %s not found in widget %s", 
                    sprite_id, self.id)
+        return false
+    end
+end
+
+-- Set layout dimensions for sprite (pre-scaling)
+function Widget:set_sprite_layout_dimensions(sprite_id, width, height)
+    local sprite = self.sprite_objects[sprite_id]
+    if sprite then
+        sprite:set_layout_dimensions(width, height)
+        
+        -- Update the child entry with layout dimensions
+        for _, child in ipairs(self.children) do
+            if child.type == "sprite" and child.sprite_id == sprite_id then
+                child.layout_width = width
+                child.layout_height = height
+                break
+            end
+        end
+        
+        self.state.dirty = true
+        self.state.needs_layout = true
+        
+        debug_print("INFO", "Widget.set_sprite_layout_dimensions: %s = %dx%d", 
+                   sprite_id, width, height)
+        return true
+    else
+        debug_print("WARN", "Widget.set_sprite_layout_dimensions: Sprite %s not found", sprite_id)
         return false
     end
 end
@@ -945,6 +1031,11 @@ function Widget:setPosition(x, y)
         self.x = x
         self.y = y
         self.state.dirty = true
+        
+        -- Mark all sprites as needing redraw since position changed
+        for sprite_id, sprite in pairs(self.sprite_objects) do
+            sprite.drawn = false
+        end
     end
     return self
 end
@@ -1032,19 +1123,21 @@ function Widget:setOpacity(opacity, recursive)
     return self
 end
 
--- Use SpriteObject instead of direct frame calls
+-- Add child with optional layout dimensions
 function Widget:addChild(child)
     if child and child.id then
         child.parent = self
         
         if child.type == "sprite" and child.texture_path then
-            -- Create sprite object
+            -- Create sprite object with optional layout dimensions
             local unique_sprite_id = child.sprite_id or generate_unique_id("sprite")
             local sprite = self:create_sprite(
                 unique_sprite_id,
                 child.texture_path,
                 child.anim_path,
-                child.anim_state
+                child.anim_state,
+                child.layout_width,  -- Pass custom dimensions
+                child.layout_height
             )
             
             -- Set initial properties if provided
@@ -1058,8 +1151,8 @@ function Widget:addChild(child)
                 sprite:set_visible(child.visible)
             end
             
-            debug_print("DETAILED", "Widget.addChild: Added sprite %s to widget %s", 
-                       sprite.id, self.id)
+            debug_print("DETAILED", "Widget.addChild: Added sprite %s to widget %s with layout %dx%d", 
+                       sprite.id, self.id, child.layout_width or 0, child.layout_height or 0)
         else
             table.insert(self.children, child)
             debug_print("DETAILED", "Widget.addChild: Added child with id=%s to widget %s",
@@ -1205,34 +1298,42 @@ function Widget:updateLayout(force)
         
         -- Position children (sprites and widgets)
         for i, child in ipairs(positioned_children) do
-            local child_x = self.x + child.x + self.padding.left + self.margin.left
-            local child_y = self.y + child.y + self.padding.top + self.margin.top
+            -- Calculate widget-relative position (relative to this widget's top-left)
+            local child_widget_x = child.x + self.padding.left + self.margin.left
+            local child_widget_y = child.y + self.padding.top + self.margin.top
             
-            debug_print("VERBOSE", "  Child %d: type=%s, x=%d, y=%d, absolute=(%d,%d)",
+            debug_print("VERBOSE", "  Child %d: type=%s, widget-relative=(%d,%d), layout=(%d,%d)",
                        i, child.sprite_id and "sprite" or "widget", 
-                       child.x, child.y, child_x, child_y)
+                       child_widget_x, child_widget_y, child.x, child.y)
             
             if child.sprite_id then
-                -- Update sprite position
+                -- Update sprite position (using widget-relative coordinates)
                 local sprite = self.sprite_objects[child.sprite_id]
                 if sprite then
-                    sprite:set_position(child_x, child_y)
+                    -- IMPORTANT: Set sprite position relative to this widget
+                    sprite:set_position(child_widget_x, child_widget_y)
                     if child.visible ~= nil then
                         sprite:set_visible(self.state.visible and child.visible)
                     else
                         sprite:set_visible(self.state.visible)
                     end
+                    
+                    debug_print("DETAILED", "    Sprite %s positioned at widget-relative (%d,%d)", 
+                               child.sprite_id, child_widget_x, child_widget_y)
                 else
                     debug_print("WARN", "    Sprite not found: %s", child.sprite_id)
                 end
             elseif child.widget then
-                -- Update child widget
+                -- Update child widget position (relative to this widget's screen position)
                 debug_print("VERBOSE", "    Updating child widget: %s", child.widget.id)
-                child.widget:setPosition(child_x, child_y):updateLayout(force)
+                
+                -- Set child widget position relative to parent widget's position
+                child.widget:setPosition(self.x + child_widget_x, self.y + child_widget_y)
+                child.widget:updateLayout(force)
             end
         end
         
-        -- Update child widgets
+        -- Update child widgets that might not have been in positioned_children
         local widget_count = 0
         for _, widget in pairs(self._child_widgets) do
             widget_count = widget_count + 1
@@ -1260,7 +1361,7 @@ function Widget:draw(force)
     
     local success = true
     
-    -- Draw all sprites
+    -- Draw all sprites in this widget
     for sprite_id, sprite in pairs(self.sprite_objects) do
         if force or not sprite.drawn or (sprite.drawn_properties and sprite.drawn_properties.visible ~= sprite.properties.visible) then
             if not sprite:draw() then
@@ -1507,9 +1608,14 @@ function Widget:printDebugInfo(level)
     if table_count(self.sprite_objects) > 0 then
         print(indent .. "  Sprite details:")
         for sprite_id, sprite in pairs(self.sprite_objects) do
+            local layout_width, layout_height = sprite:get_layout_dimensions()
+            local visual_width, visual_height = sprite:get_visual_dimensions()
             print(indent .. "    " .. sprite_id .. ": " .. 
                   (sprite.texture_path or "unknown") .. 
                   " (template: " .. sprite.template_id .. 
+                  ", layout: " .. layout_width .. "x" .. layout_height ..
+                  ", visual: " .. visual_width .. "x" .. visual_height ..
+                  ", position: (" .. sprite.properties.x .. "," .. sprite.properties.y .. ")" ..
                   ", animating: " .. tostring(sprite:is_animating()) .. ")")
         end
     end
@@ -1575,35 +1681,42 @@ function Row:calculateLayout(available_width, available_height)
     debug_print("VERBOSE", "  Cross axis alignment: %s", self.cross_axis_alignment)
     debug_print("VERBOSE", "  Spacing: %d", self.spacing)
     
-    -- First pass: calculate dimensions
+    -- First pass: calculate dimensions and collect positioned children
     for i, child in ipairs(self.children) do
         local child_width, child_height = 0, 0
+        local child_id = nil
+        local child_sprite_id = nil
+        local child_widget = nil
         
         if child.type == "sprite" then
+            child_id = child.id
+            child_sprite_id = child.sprite_id
             local sprite = self.sprite_objects[child.sprite_id]
             if sprite then
-                child_width, child_height = SpriteDimensionCache.get_dimensions(
-                    child.texture_path, child.anim_path, child.anim_state)
-                
-                debug_print("VERBOSE", "  Child %d sprite dimensions: %dx%d", 
-                           i, child_width, child_height)
-                
-                -- Apply scale if specified
-                local props = sprite:get_properties()
-                if props.sx then
-                    child_width = child_width * props.sx
-                    child_height = child_height * props.sy or props.sx
-                    debug_print("VERBOSE", "    After scale %f,%f: %dx%d", 
-                               props.sx, props.sy or props.sx, child_width, child_height)
+                -- Use layout dimensions if specified, otherwise use visual dimensions
+                if child.layout_width and child.layout_height then
+                    -- Use custom layout dimensions (pre-scaling)
+                    child_width = child.layout_width
+                    child_height = child.layout_height
+                    debug_print("DETAILED", "  Child %d using custom layout: %dx%d", 
+                               i, child_width, child_height)
+                else
+                    -- Use visual dimensions (including scale)
+                    child_width, child_height = sprite:get_visual_dimensions()
+                    debug_print("DETAILED", "  Child %d using visual dimensions: %dx%d", 
+                               i, child_width, child_height)
                 end
             end
         elseif child.widget then
+            child_id = child.widget.id
+            child_widget = child.widget
             child_width, child_height = child.widget:getCalculatedSize()
-            debug_print("VERBOSE", "  Child %d widget dimensions: %dx%d", i, child_width, child_height)
+            debug_print("DETAILED", "  Child %d widget dimensions: %dx%d", i, child_width, child_height)
         elseif child.width and child.height then
+            child_id = child.id
             child_width = child.width
             child_height = child.height
-            debug_print("VERBOSE", "  Child %d explicit dimensions: %dx%d", i, child_width, child_height)
+            debug_print("DETAILED", "  Child %d explicit dimensions: %dx%d", i, child_width, child_height)
         else
             debug_print("WARN", "  Child %d has no dimensions!", i)
         end
@@ -1611,20 +1724,30 @@ function Row:calculateLayout(available_width, available_height)
         -- Adjust for cross axis alignment
         if self.cross_axis_alignment == "stretch" then
             child_height = math.max(child_height, available_height - self.padding.top - self.padding.bottom)
-            debug_print("VERBOSE", "    Stretched height to: %d", child_height)
+            debug_print("DETAILED", "    Stretched height to: %d", child_height)
         end
         
-        table.insert(positioned_children, {
-            sprite_id = child.sprite_id,
-            widget = child.widget,
-            width = child_width,
-            height = child_height,
+        -- Create positioned child object
+        local positioned_child = {
             x = total_width,
             y = 0,
-            visible = child.visible ~= false
-        })
+            width = child_width,
+            height = child_height,
+            visible = child.visible ~= false,
+            id = child_id
+        }
         
-        debug_print("VERBOSE", "  Child %d positioned at x=%d", i, total_width)
+        -- Set type-specific properties
+        if child_sprite_id then
+            positioned_child.sprite_id = child_sprite_id
+        elseif child_widget then
+            positioned_child.widget = child_widget
+        end
+        
+        table.insert(positioned_children, positioned_child)
+        
+        debug_print("DETAILED", "  Child %d positioned at x=%d, y=%d, size=%dx%d", 
+                   i, positioned_child.x, positioned_child.y, child_width, child_height)
         
         total_width = total_width + child_width
         max_height = math.max(max_height, child_height)
@@ -1632,7 +1755,7 @@ function Row:calculateLayout(available_width, available_height)
         -- Add spacing except after last child
         if i < #self.children then
             total_width = total_width + self.spacing
-            debug_print("VERBOSE", "  Added spacing: total_width now %d", total_width)
+            debug_print("DETAILED", "  Added spacing: total_width now %d", total_width)
         end
     end
     
@@ -1640,34 +1763,34 @@ function Row:calculateLayout(available_width, available_height)
     
     -- Adjust for main axis alignment
     local extra_width = available_width - total_width - self.padding.left - self.padding.right
-    debug_print("VERBOSE", "  Extra width available: %d", extra_width)
+    debug_print("DETAILED", "  Extra width available: %d", extra_width)
     
     if extra_width > 0 then
         local start_x = 0
         
         if self.main_axis_alignment == "center" then
             start_x = extra_width / 2
-            debug_print("VERBOSE", "  Center alignment: start_x=%d", start_x)
+            debug_print("DETAILED", "  Center alignment: start_x=%d", start_x)
         elseif self.main_axis_alignment == "end" then
             start_x = extra_width
-            debug_print("VERBOSE", "  End alignment: start_x=%d", start_x)
+            debug_print("DETAILED", "  End alignment: start_x=%d", start_x)
         elseif self.main_axis_alignment == "space_between" then
             if #positioned_children > 1 then
                 local spacing = extra_width / (#positioned_children - 1)
-                debug_print("VERBOSE", "  Space between: spacing=%d", spacing)
+                debug_print("DETAILED", "  Space between: spacing=%d", spacing)
                 for i = 2, #positioned_children do
                     positioned_children[i].x = positioned_children[i].x + (spacing * (i - 1))
                 end
             end
         elseif self.main_axis_alignment == "space_around" then
             local spacing = extra_width / #positioned_children
-            debug_print("VERBOSE", "  Space around: spacing=%d", spacing)
+            debug_print("DETAILED", "  Space around: spacing=%d", spacing)
             for i = 1, #positioned_children do
                 positioned_children[i].x = positioned_children[i].x + (spacing * (i - 0.5))
             end
         elseif self.main_axis_alignment == "space_evenly" then
             local spacing = extra_width / (#positioned_children + 1)
-            debug_print("VERBOSE", "  Space evenly: spacing=%d", spacing)
+            debug_print("DETAILED", "  Space evenly: spacing=%d", spacing)
             for i = 1, #positioned_children do
                 positioned_children[i].x = positioned_children[i].x + (spacing * i)
             end
@@ -1675,7 +1798,7 @@ function Row:calculateLayout(available_width, available_height)
         
         -- Apply start offset
         if start_x > 0 then
-            debug_print("VERBOSE", "  Applying start offset: %d", start_x)
+            debug_print("DETAILED", "  Applying start offset: %d", start_x)
             for _, child in ipairs(positioned_children) do
                 child.x = child.x + start_x
             end
@@ -1688,26 +1811,26 @@ function Row:calculateLayout(available_width, available_height)
         
         if self.cross_axis_alignment == "center" then
             child.y = extra_height / 2
-            debug_print("VERBOSE", "  Child %d centered vertically: y=%d", i, child.y)
+            debug_print("DETAILED", "  Child %d centered vertically: y=%d", i, child.y)
         elseif self.cross_axis_alignment == "end" then
             child.y = extra_height
-            debug_print("VERBOSE", "  Child %d aligned to end: y=%d", i, child.y)
+            debug_print("DETAILED", "  Child %d aligned to end: y=%d", i, child.y)
         else
-            debug_print("VERBOSE", "  Child %d aligned to start: y=0", i)
+            debug_print("DETAILED", "  Child %d aligned to start: y=0", i)
         end
     end
     
     local layout_width = math.max(total_width, self.width)
     local layout_height = math.max(max_height, self.height)
     
-    debug_print("INFO", "Row layout calculated: %s = %dx%d", 
-               self.id, layout_width, layout_height)
+    debug_print("INFO", "Row layout calculated: %s = %dx%d, positioned %d children", 
+               self.id, layout_width, layout_height, #positioned_children)
     
     return layout_width, layout_height, positioned_children
 end
 
 -- ===========================================================
--- COLUMN WIDGET
+-- COLUMN WIDGET (FIXED - POSITIONS CHILD WIDGETS PROPERLY)
 -- ===========================================================
 local Column = setmetatable({}, {__index = Widget})
 
@@ -1759,35 +1882,42 @@ function Column:calculateLayout(available_width, available_height)
     debug_print("VERBOSE", "  Cross axis alignment: %s", self.cross_axis_alignment)
     debug_print("VERBOSE", "  Spacing: %d", self.spacing)
     
-    -- First pass: calculate dimensions
+    -- First pass: calculate dimensions and collect positioned children
     for i, child in ipairs(self.children) do
         local child_width, child_height = 0, 0
+        local child_id = nil
+        local child_sprite_id = nil
+        local child_widget = nil
         
         if child.type == "sprite" then
+            child_id = child.id
+            child_sprite_id = child.sprite_id
             local sprite = self.sprite_objects[child.sprite_id]
             if sprite then
-                child_width, child_height = SpriteDimensionCache.get_dimensions(
-                    child.texture_path, child.anim_path, child.anim_state)
-                
-                debug_print("VERBOSE", "  Child %d sprite dimensions: %dx%d", 
-                           i, child_width, child_height)
-                
-                -- Apply scale if specified
-                local props = sprite:get_properties()
-                if props.sx then
-                    child_width = child_width * props.sx
-                    child_height = child_height * props.sy or props.sx
-                    debug_print("VERBOSE", "    After scale %f,%f: %dx%d", 
-                               props.sx, props.sy or props.sx, child_width, child_height)
+                -- Use layout dimensions if specified, otherwise use visual dimensions
+                if child.layout_width and child.layout_height then
+                    -- Use custom layout dimensions (pre-scaling)
+                    child_width = child.layout_width
+                    child_height = child.layout_height
+                    debug_print("DETAILED", "  Child %d using custom layout: %dx%d", 
+                               i, child_width, child_height)
+                else
+                    -- Use visual dimensions (including scale)
+                    child_width, child_height = sprite:get_visual_dimensions()
+                    debug_print("DETAILED", "  Child %d using visual dimensions: %dx%d", 
+                               i, child_width, child_height)
                 end
             end
         elseif child.widget then
+            child_id = child.widget.id
+            child_widget = child.widget
             child_width, child_height = child.widget:getCalculatedSize()
-            debug_print("VERBOSE", "  Child %d widget dimensions: %dx%d", i, child_width, child_height)
+            debug_print("DETAILED", "  Child %d widget dimensions: %dx%d", i, child_width, child_height)
         elseif child.width and child.height then
+            child_id = child.id
             child_width = child.width
             child_height = child.height
-            debug_print("VERBOSE", "  Child %d explicit dimensions: %dx%d", i, child_width, child_height)
+            debug_print("DETAILED", "  Child %d explicit dimensions: %dx%d", i, child_width, child_height)
         else
             debug_print("WARN", "  Child %d has no dimensions!", i)
         end
@@ -1795,20 +1925,30 @@ function Column:calculateLayout(available_width, available_height)
         -- Adjust for cross axis alignment
         if self.cross_axis_alignment == "stretch" then
             child_width = math.max(child_width, available_width - self.padding.left - self.padding.right)
-            debug_print("VERBOSE", "    Stretched width to: %d", child_width)
+            debug_print("DETAILED", "    Stretched width to: %d", child_width)
         end
         
-        table.insert(positioned_children, {
-            sprite_id = child.sprite_id,
-            widget = child.widget,
-            width = child_width,
-            height = child_height,
+        -- Create positioned child object
+        local positioned_child = {
             x = 0,
             y = total_height,
-            visible = child.visible ~= false
-        })
+            width = child_width,
+            height = child_height,
+            visible = child.visible ~= false,
+            id = child_id
+        }
         
-        debug_print("VERBOSE", "  Child %d positioned at y=%d", i, total_height)
+        -- Set type-specific properties
+        if child_sprite_id then
+            positioned_child.sprite_id = child_sprite_id
+        elseif child_widget then
+            positioned_child.widget = child_widget
+        end
+        
+        table.insert(positioned_children, positioned_child)
+        
+        debug_print("DETAILED", "  Child %d positioned at x=%d, y=%d, size=%dx%d", 
+                   i, positioned_child.x, positioned_child.y, child_width, child_height)
         
         total_height = total_height + child_height
         max_width = math.max(max_width, child_width)
@@ -1816,7 +1956,7 @@ function Column:calculateLayout(available_width, available_height)
         -- Add spacing except after last child
         if i < #self.children then
             total_height = total_height + self.spacing
-            debug_print("VERBOSE", "  Added spacing: total_height now %d", total_height)
+            debug_print("DETAILED", "  Added spacing: total_height now %d", total_height)
         end
     end
     
@@ -1824,34 +1964,34 @@ function Column:calculateLayout(available_width, available_height)
     
     -- Adjust for main axis alignment
     local extra_height = available_height - total_height - self.padding.top - self.padding.bottom
-    debug_print("VERBOSE", "  Extra height available: %d", extra_height)
+    debug_print("DETAILED", "  Extra height available: %d", extra_height)
     
     if extra_height > 0 then
         local start_y = 0
         
         if self.main_axis_alignment == "center" then
             start_y = extra_height / 2
-            debug_print("VERBOSE", "  Center alignment: start_y=%d", start_y)
+            debug_print("DETAILED", "  Center alignment: start_y=%d", start_y)
         elseif self.main_axis_alignment == "end" then
             start_y = extra_height
-            debug_print("VERBOSE", "  End alignment: start_y=%d", start_y)
+            debug_print("DETAILED", "  End alignment: start_y=%d", start_y)
         elseif self.main_axis_alignment == "space_between" then
             if #positioned_children > 1 then
                 local spacing = extra_height / (#positioned_children - 1)
-                debug_print("VERBOSE", "  Space between: spacing=%d", spacing)
+                debug_print("DETAILED", "  Space between: spacing=%d", spacing)
                 for i = 2, #positioned_children do
                     positioned_children[i].y = positioned_children[i].y + (spacing * (i - 1))
                 end
             end
         elseif self.main_axis_alignment == "space_around" then
             local spacing = extra_height / #positioned_children
-            debug_print("VERBOSE", "  Space around: spacing=%d", spacing)
+            debug_print("DETAILED", "  Space around: spacing=%d", spacing)
             for i = 1, #positioned_children do
                 positioned_children[i].y = positioned_children[i].y + (spacing * (i - 0.5))
             end
         elseif self.main_axis_alignment == "space_evenly" then
             local spacing = extra_height / (#positioned_children + 1)
-            debug_print("VERBOSE", "  Space evenly: spacing=%d", spacing)
+            debug_print("DETAILED", "  Space evenly: spacing=%d", spacing)
             for i = 1, #positioned_children do
                 positioned_children[i].y = positioned_children[i].y + (spacing * i)
             end
@@ -1859,7 +1999,7 @@ function Column:calculateLayout(available_width, available_height)
         
         -- Apply start offset
         if start_y > 0 then
-            debug_print("VERBOSE", "  Applying start offset: %d", start_y)
+            debug_print("DETAILED", "  Applying start offset: %d", start_y)
             for _, child in ipairs(positioned_children) do
                 child.y = child.y + start_y
             end
@@ -1872,20 +2012,20 @@ function Column:calculateLayout(available_width, available_height)
         
         if self.cross_axis_alignment == "center" then
             child.x = extra_width / 2
-            debug_print("VERBOSE", "  Child %d centered horizontally: x=%d", i, child.x)
+            debug_print("DETAILED", "  Child %d centered horizontally: x=%d", i, child.x)
         elseif self.cross_axis_alignment == "end" then
             child.x = extra_width
-            debug_print("VERBOSE", "  Child %d aligned to end: x=%d", i, child.x)
+            debug_print("DETAILED", "  Child %d aligned to end: x=%d", i, child.x)
         else
-            debug_print("VERBOSE", "  Child %d aligned to start: x=0", i)
+            debug_print("DETAILED", "  Child %d aligned to start: x=0", i)
         end
     end
     
     local layout_width = math.max(max_width, self.width)
     local layout_height = math.max(total_height, self.height)
     
-    debug_print("INFO", "Column layout calculated: %s = %dx%d", 
-               self.id, layout_width, layout_height)
+    debug_print("INFO", "Column layout calculated: %s = %dx%d, positioned %d children", 
+               self.id, layout_width, layout_height, #positioned_children)
     
     return layout_width, layout_height, positioned_children
 end
@@ -1948,7 +2088,7 @@ function Grid:setCellSize(width, height)
     return self
 end
 
-function Grid:addItem(item_id, texture_path, anim_path, anim_state, data)
+function Grid:addItem(item_id, texture_path, anim_path, anim_state, data, layout_width, layout_height)
     debug_print("INFO", "Grid.addItem: %s adding item %s", self.id, item_id)
     
     local item = {
@@ -1957,22 +2097,27 @@ function Grid:addItem(item_id, texture_path, anim_path, anim_state, data)
         anim_path = anim_path,
         anim_state = anim_state or "",
         data = data or {},
-        sprite_id = generate_unique_id(self.id .. "_item")
+        sprite_id = generate_unique_id(self.id .. "_item"),
+        layout_width = layout_width,
+        layout_height = layout_height
     }
     
     table.insert(self.items, item)
     
-    -- Add as child sprite
+    -- Add as child sprite with optional layout dimensions
     self:addChild({
         type = "sprite",
         sprite_id = item.sprite_id,
         texture_path = texture_path,
         anim_path = anim_path,
         anim_state = anim_state,
+        layout_width = layout_width,
+        layout_height = layout_height,
         id = item_id
     })
     
-    debug_print("DETAILED", "  Item sprite_id: %s", item.sprite_id)
+    debug_print("DETAILED", "  Item sprite_id: %s, layout: %dx%d", 
+               item.sprite_id, layout_width or 0, layout_height or 0)
     debug_print("DETAILED", "  Total items: %d", #self.items)
     
     self.state.dirty = true
@@ -2056,17 +2201,31 @@ function Grid:calculateLayout(available_width, available_height)
     local cell_width = self.cell_width
     local cell_height = self.cell_height
     
-    debug_print("VERBOSE", "  Initial cell size: %dx%d", cell_width, cell_height)
+    debug_print("DETAILED", "  Initial cell size: %dx%d", cell_width, cell_height)
     
     if cell_width == 0 or cell_height == 0 then
         -- Auto-size: find largest item
         local max_item_width, max_item_height = 0, 0
         
         for i, item in ipairs(self.items) do
-            local item_width, item_height = SpriteDimensionCache.get_dimensions(
-                item.texture_path, item.anim_path, item.anim_state)
+            local item_width, item_height
+            local sprite = self.sprite_objects[item.sprite_id]
             
-            debug_print("VERBOSE", "  Item %d (%s) dimensions: %dx%d", 
+            if sprite then
+                -- Use layout dimensions if specified, otherwise use visual dimensions
+                if item.layout_width and item.layout_height then
+                    item_width = item.layout_width
+                    item_height = item.layout_height
+                else
+                    item_width, item_height = sprite:get_visual_dimensions()
+                end
+            else
+                -- Fallback to dimension cache
+                item_width, item_height = SpriteDimensionCache.get_dimensions(
+                    item.texture_path, item.anim_path, item.anim_state)
+            end
+            
+            debug_print("DETAILED", "  Item %d (%s) dimensions: %dx%d", 
                        i, item.id, item_width, item_height)
             
             max_item_width = math.max(max_item_width, item_width)
@@ -2096,17 +2255,33 @@ function Grid:calculateLayout(available_width, available_height)
         local x = col * (cell_width + self.horizontal_spacing)
         local y = row * (cell_height + self.vertical_spacing)
         
-        debug_print("VERBOSE", "  Item %d: row=%d, col=%d, base position=(%d,%d)", 
+        debug_print("DETAILED", "  Item %d: row=%d, col=%d, base position=(%d,%d)", 
                    i, row, col, x, y)
         
-        -- Center sprite in cell
-        local sprite_width, sprite_height = SpriteDimensionCache.get_dimensions(
-            item.texture_path, item.anim_path, item.anim_state)
+        -- Get item dimensions
+        local sprite_width, sprite_height
+        local sprite = self.sprite_objects[item.sprite_id]
         
+        if sprite then
+            if item.layout_width and item.layout_height then
+                -- Use custom layout dimensions
+                sprite_width = item.layout_width
+                sprite_height = item.layout_height
+            else
+                -- Use visual dimensions
+                sprite_width, sprite_height = sprite:get_visual_dimensions()
+            end
+        else
+            -- Fallback
+            sprite_width, sprite_height = SpriteDimensionCache.get_dimensions(
+                item.texture_path, item.anim_path, item.anim_state)
+        end
+        
+        -- Center sprite in cell
         local offset_x = (cell_width - sprite_width) / 2
         local offset_y = (cell_height - sprite_height) / 2
         
-        debug_print("VERBOSE", "    Sprite: %dx%d, offset=(%d,%d)", 
+        debug_print("DETAILED", "    Sprite: %dx%d, offset=(%d,%d)", 
                    sprite_width, sprite_height, offset_x, offset_y)
         
         table.insert(positioned_children, {
@@ -2174,7 +2349,7 @@ function Container:calculateLayout(available_width, available_height)
     local child_width = available_width - self.padding.left - self.padding.right
     local child_height = available_height - self.padding.top - self.padding.bottom
     
-    debug_print("VERBOSE", "  Available for child: %dx%d (after padding)", 
+    debug_print("DETAILED", "  Available for child: %dx%d (after padding)", 
                child_width, child_height)
     
     -- Update child layout
@@ -2183,7 +2358,7 @@ function Container:calculateLayout(available_width, available_height)
     
     local child_layout_width, child_layout_height = self.child:getCalculatedSize()
     
-    debug_print("VERBOSE", "  Child calculated size: %dx%d", 
+    debug_print("DETAILED", "  Child calculated size: %dx%d", 
                child_layout_width, child_layout_height)
     
     -- Position child
@@ -2441,6 +2616,8 @@ function WidgetBuilder.createMenu(id, player_id, options)
             texture_path = option.texture_path,
             anim_path = option.anim_path,
             anim_state = option.anim_state or "normal",
+            layout_width = option.width,  -- Support custom width
+            layout_height = option.height, -- Support custom height
             id = option.id or ("option_" .. i)
         })
     end
@@ -2476,6 +2653,8 @@ function WidgetBuilder.createHUD(id, player_id, elements)
             texture_path = element.texture_path,
             anim_path = element.anim_path,
             anim_state = element.anim_state,
+            layout_width = element.width,  -- Support custom width
+            layout_height = element.height, -- Support custom height
             id = element.id
         })
     end
@@ -2484,7 +2663,7 @@ function WidgetBuilder.createHUD(id, player_id, elements)
 end
 
 -- ===========================================================
--- ANIMATION HELPERS (UPDATED - NO FRAMEWORK DEPENDENCY)
+-- ANIMATION HELPERS
 -- ===========================================================
 local WidgetAnimations = {}
 
@@ -2911,6 +3090,7 @@ function WidgetDebug.printWidgetTree(widget, level)
                 print(indent .. "│        texture: " .. (child.texture_path or "none"))
                 print(indent .. "│        anim: " .. (child.anim_path or "none"))
                 print(indent .. "│        state: " .. (child.anim_state or "none"))
+                print(indent .. "│        layout: " .. (child.layout_width or "auto") .. "x" .. (child.layout_height or "auto"))
                 local sprite = widget:get_sprite(child.sprite_id)
                 if sprite then
                     print(indent .. "│        template: " .. sprite.template_id)
