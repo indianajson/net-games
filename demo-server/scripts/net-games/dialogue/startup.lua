@@ -9,9 +9,6 @@ local Displayer = require("scripts/net-games/displayer/displayer")
 local Input     = require("scripts/net-games/input/input")
 local FontSystem = require("scripts/net-games/displayer/font-system")
 
--- Initialize FontSystem
-FontSystem:init()
-
 assert(Displayer:init() and Displayer:isValid(), "[net-games dialogue/startup] Displayer failed to init")
 Input.attach_virtual_input_listener()
 

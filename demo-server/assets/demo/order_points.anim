@@ -1,0 +1,52 @@
+imagePath="order_points.png"
+
+animation state="0POINT"
+frame duration="0.1" x="0" y="0" w="78" h="16" originx="0" originy="0"
+
+animation state="1POINT"
+frame duration="0.1" x="0" y="16" w="78" h="16" originx="0" originy="0"
+
+animation state="2POINT"
+frame duration="0.1" x="0" y="32" w="78" h="16" originx="0" originy="0"
+
+animation state="3POINT"
+frame duration="0.1" x="0" y="48" w="78" h="16" originx="0" originy="0"
+
+animation state="4POINT"
+frame duration="0.1" x="0" y="64" w="78" h="16" originx="0" originy="0"
+
+animation state="5POINT"
+frame duration="0.1" x="0" y="80" w="78" h="16" originx="0" originy="0"
+
+animation state="6POINT"
+frame duration="0.1" x="0" y="96" w="78" h="16" originx="0" originy="0"
+
+animation state="7POINT"
+frame duration="0.1" x="0" y="112" w="78" h="16" originx="0" originy="0"
+
+animation state="8POINT"
+frame duration="0.1" x="0" y="128" w="78" h="16" originx="0" originy="0"
+
+animation state="IDLE_DR"
+
+animation state="IDLE_DL"
+
+animation state="IDLE_UR"
+
+animation state="IDLE_UL"
+
+animation state="WALK_DR"
+
+animation state="WALK_DL"
+
+animation state="WALK_UR"
+
+animation state="WALK_UL"
+
+animation state="RUN_DR"
+
+animation state="RUN_DL"
+
+animation state="RUN_UR"
+
+animation state="RUN_UL"

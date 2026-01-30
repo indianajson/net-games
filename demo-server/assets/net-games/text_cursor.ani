@@ -1,0 +1,32 @@
+!frame_rate 60
+!image_path "C:/Users/aaron/Documents/Code/net-games/demo-server/assets/net-games/text_cursor.png"
+
+anim CURSOR_RIGHT
+frame dur=6f x=0 y=0 w=8 h=13 originx=8 originy=6
+point TOP_L x=0 y=0
+point TOP_R x=8 y=0
+point TOP_C x=4 y=0
+point CENTER_L x=0 y=6
+point CENTER x=4 y=6
+point CENTER_R x=8 y=6
+point BOTTOM_L x=0 y=12
+point BOTTOM_C x=4 y=12
+point BOTTOM_R x=8 y=12
+
+anim CURSOR_LEFT
+frame dur=6f x=9 y=0 w=8 h=13 originx=8 originy=6
+point TOP_L x=0 y=0
+point TOP_R x=8 y=0
+point TOP_C x=4 y=0
+point CENTER_L x=0 y=6
+point CENTER x=4 y=6
+point CENTER_R x=8 y=6
+point BOTTOM_L x=0 y=12
+point BOTTOM_C x=4 y=12
+point BOTTOM_R x=8 y=12
+
+anim CURSOR_DOWN
+frame dur=6f x=18 y=5 w=13 h=8 originx=24 originy=13
+
+anim CURSOR_UP
+frame dur=6f x=32 y=13 w=13 h=8 originx=38 originy=5
