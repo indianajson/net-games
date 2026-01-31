@@ -644,7 +644,7 @@ function Widget:calculateLayout(available_width, available_height)
     return width, height, positioned_children
 end
 
-function Widget:slide_widget(target_x, target_y, duration, easing, on_complete)
+function Widget:slide_widget(target_x, target_y, duration, easing, user_on_complete)
     if not self then
         debug_print("ERROR", "Widget.slide_widget: Invalid widget")
         return nil
@@ -699,8 +699,8 @@ function Widget:slide_widget(target_x, target_y, duration, easing, on_complete)
             sprite:set_widget_animated(false)
         end
         
-        if on_complete then
-            on_complete({x = target_x, y = target_y}, false)
+        if user_on_complete then
+            user_on_complete({x = target_x, y = target_y}, false)
         end
         return nil
     end
@@ -708,9 +708,9 @@ function Widget:slide_widget(target_x, target_y, duration, easing, on_complete)
     -- Set animation flag
     self._layout_animation_active = true
     self._layout_animation_type = "position"
-    
+    local anim_id
     -- Create a single animation that updates both widget and sprites
-    local anim_id = AnimationEngine.animate(
+    anim_id = AnimationEngine.animate(
         {t = 0},  -- t goes from 0 to 1
         {t = 1},
         duration,
@@ -786,8 +786,8 @@ function Widget:slide_widget(target_x, target_y, duration, easing, on_complete)
                 self:updateLayout(true)
                 
                 self.active_animations[anim_id] = nil
-                if on_complete then
-                    on_complete({x = target_x, y = target_y}, interrupted)
+                if user_on_complete then
+                    user_on_complete({x = target_x, y = target_y}, interrupted)
                 end
                 
                 debug_print("INFO", "Widget.slide_widget completed: %s at (%g,%g)", 
@@ -823,7 +823,7 @@ function Widget:move_widget(offset_x, offset_y, duration, easing, on_complete)
     return self:slide_widget(target_x, target_y, duration, easing, on_complete)
 end
 
-function Widget:scale_widget(target_scale, duration, easing, on_complete)
+function Widget:scale_widget(target_scale, duration, easing, user_on_complete)
     if not self then
         debug_print("ERROR", "Widget.scale_widget: Invalid widget")
         return nil
@@ -838,14 +838,25 @@ function Widget:scale_widget(target_scale, duration, easing, on_complete)
     debug_print("INFO", "Widget.scale_widget: %s from scale %f to %f", 
                self.id, current_scale, target_scale)
     
+    -- Mark sprites as widget-animated
+    for sprite_id, sprite in pairs(self.sprite_objects) do
+        sprite:set_widget_animated(true, {type = "scale"})
+    end
+    
     -- Try to load animation modules
     local AnimationEngine, AnimationSequences, AnimationEnums = utils.load_animation_modules()
     
     if not AnimationEngine then
         debug_print("WARN", "Widget.scale_widget: AnimationEngine not available, setting scale directly")
         self:setScale(target_scale, target_scale)
-        if on_complete then
-            on_complete({sx = target_scale, sy = target_scale}, false)
+        
+        -- Unmark sprites
+        for sprite_id, sprite in pairs(self.sprite_objects) do
+            sprite:set_widget_animated(false)
+        end
+        
+        if user_on_complete then
+            user_on_complete({sx = target_scale, sy = target_scale}, false)
         end
         return nil
     end
@@ -853,26 +864,6 @@ function Widget:scale_widget(target_scale, duration, easing, on_complete)
     -- Animation engine is available
     self._layout_animation_active = true
     self._layout_animation_type = "scale"
-    
-    -- Animate ALL sprite objects within this widget
-    local sprite_animations = {}
-    for sprite_id, sprite in pairs(self.sprite_objects) do
-        sprite:set_widget_animated(true, {type = "scale", target_scale = target_scale})
-        
-        local anim_id = sprite:scale_sprite(target_scale, duration, easing)
-        if anim_id then
-            table.insert(sprite_animations, {id = anim_id, sprite = sprite})
-        end
-    end
-    
-    -- Also animate child widgets
-    local child_animations = {}
-    for _, child_widget in pairs(self._child_widgets) do
-        local anim_id = child_widget:scale_widget(target_scale, duration, easing)
-        if anim_id then
-            table.insert(child_animations, {id = anim_id, widget = child_widget})
-        end
-    end
     
     local anim_id = AnimationEngine.animate(
         {sx = current_scale, sy = current_scale},
@@ -882,28 +873,26 @@ function Widget:scale_widget(target_scale, duration, easing, on_complete)
             easing = easing,
             on_update = function(values)
                 -- Update widget scale
-                self:setScale(values.sx, values.sy)
+                self.sx = values.sx
+                self.sy = values.sy
+                
+                -- Update all sprites with new scale
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite:set_scale(values.sx, values.sy)
+                end
             end,
             on_complete = function(values, interrupted)
                 -- Clear animation flags
                 self._layout_animation_active = false
                 self._layout_animation_type = nil
                 
-                -- Clear sprite animation flags
+                -- Unmark all sprites
                 for sprite_id, sprite in pairs(self.sprite_objects) do
                     sprite:set_widget_animated(false)
                 end
                 
-                -- Clear child widget animation flags
-                for _, child_data in ipairs(child_animations) do
-                    if child_data.widget then
-                        child_data.widget._layout_animation_active = false
-                        child_data.widget._layout_animation_type = nil
-                    end
-                end
-                
-                if on_complete then
-                    on_complete(values, interrupted)
+                if user_on_complete then
+                    user_on_complete(values, interrupted)
                 end
             end
         }
@@ -916,7 +905,7 @@ function Widget:scale_widget(target_scale, duration, easing, on_complete)
     return anim_id
 end
 
-function Widget:rotate_widget(target_rotation, duration, easing, on_complete)
+function Widget:rotate_widget(target_rotation, duration, easing, user_on_complete)
     if not self then
         debug_print("ERROR", "Widget.rotate_widget: Invalid widget")
         return nil
@@ -931,14 +920,25 @@ function Widget:rotate_widget(target_rotation, duration, easing, on_complete)
     debug_print("INFO", "Widget.rotate_widget: %s from rotation %f to %f", 
                self.id, current_rotation, target_rotation)
     
+    -- Mark sprites as widget-animated
+    for sprite_id, sprite in pairs(self.sprite_objects) do
+        sprite:set_widget_animated(true, {type = "rotation"})
+    end
+    
     -- Try to load animation modules
     local AnimationEngine, AnimationSequences, AnimationEnums = utils.load_animation_modules()
     
     if not AnimationEngine then
         debug_print("WARN", "Widget.rotate_widget: AnimationEngine not available, setting rotation directly")
         self:setRotation(target_rotation)
-        if on_complete then
-            on_complete({ro = target_rotation}, false)
+        
+        -- Unmark sprites
+        for sprite_id, sprite in pairs(self.sprite_objects) do
+            sprite:set_widget_animated(false)
+        end
+        
+        if user_on_complete then
+            user_on_complete({ro = target_rotation}, false)
         end
         return nil
     end
@@ -946,26 +946,6 @@ function Widget:rotate_widget(target_rotation, duration, easing, on_complete)
     -- Animation engine is available
     self._layout_animation_active = true
     self._layout_animation_type = "rotation"
-    
-    -- Animate ALL sprite objects within this widget
-    local sprite_animations = {}
-    for sprite_id, sprite in pairs(self.sprite_objects) do
-        sprite:set_widget_animated(true, {type = "rotation", target_rotation = target_rotation})
-        
-        local anim_id = sprite:rotate_sprite(target_rotation, duration, easing)
-        if anim_id then
-            table.insert(sprite_animations, {id = anim_id, sprite = sprite})
-        end
-    end
-    
-    -- Also animate child widgets
-    local child_animations = {}
-    for _, child_widget in pairs(self._child_widgets) do
-        local anim_id = child_widget:rotate_widget(target_rotation, duration, easing)
-        if anim_id then
-            table.insert(child_animations, {id = anim_id, widget = child_widget})
-        end
-    end
     
     local anim_id = AnimationEngine.animate(
         {ro = current_rotation},
@@ -975,28 +955,25 @@ function Widget:rotate_widget(target_rotation, duration, easing, on_complete)
             easing = easing,
             on_update = function(values)
                 -- Update widget rotation
-                self:setRotation(values.ro)
+                self.ro = values.ro
+                
+                -- Update all sprites with new rotation
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite:set_rotation(values.ro)
+                end
             end,
             on_complete = function(values, interrupted)
                 -- Clear animation flags
                 self._layout_animation_active = false
                 self._layout_animation_type = nil
                 
-                -- Clear sprite animation flags
+                -- Unmark all sprites
                 for sprite_id, sprite in pairs(self.sprite_objects) do
                     sprite:set_widget_animated(false)
                 end
                 
-                -- Clear child widget animation flags
-                for _, child_data in ipairs(child_animations) do
-                    if child_data.widget then
-                        child_data.widget._layout_animation_active = false
-                        child_data.widget._layout_animation_type = nil
-                    end
-                end
-                
-                if on_complete then
-                    on_complete(values, interrupted)
+                if user_on_complete then
+                    user_on_complete(values, interrupted)
                 end
             end
         }
@@ -1009,21 +986,18 @@ function Widget:rotate_widget(target_rotation, duration, easing, on_complete)
     return anim_id
 end
 
-function Widget:set_opacity_widget(target_opacity, duration, easing, on_complete)
+function Widget:set_opacity_widget(target_opacity, duration, easing, user_on_complete)
     if not self then
         debug_print("ERROR", "Widget.set_opacity_widget: Invalid widget")
         return nil
     end
-    
-    duration = duration or 0.3
-    easing = easing or "ease_in_out"
     
     debug_print("INFO", "Widget.set_opacity_widget: %s to opacity %d", 
                self.id, target_opacity)
     
     return self:animate_opacity(target_opacity, duration, {
         easing = easing,
-        on_complete = on_complete
+        on_complete = user_on_complete
     })
 end
 
@@ -1239,34 +1213,63 @@ function Widget:getCalculatedSize()
     return self._calculated_size.width, self._calculated_size.height
 end
 
--- Animation methods
 function Widget:animate_position(target_x, target_y, duration, options)
     options = options or {}  -- Ensure options is always a table
+    
+    -- Mark sprites as widget-animated
+    for sprite_id, sprite in pairs(self.sprite_objects) do
+        sprite:set_widget_animated(true, {type = "position"})
+    end
     
     local AnimationEngine, AnimationSequences, AnimationEnums = utils.load_animation_modules()
     
     if not AnimationEngine then
         debug_print("WARN", "Widget.animate_position: AnimationEngine not available")
         self:setPosition(target_x, target_y)
+        
+        -- Unmark sprites
+        for sprite_id, sprite in pairs(self.sprite_objects) do
+            sprite:set_widget_animated(false)
+        end
+        
         if options.on_complete then
             options.on_complete({x = target_x, y = target_y}, false)
         end
         return nil
     end
     
-    local anim_id = AnimationEngine.animate(
+    self._layout_animation_active = true
+    self._layout_animation_type = "position"
+    
+    local anim_id = nil
+    anim_id = AnimationEngine.animate(
         {x = self.x, y = self.y},
         {x = target_x, y = target_y},
         duration,
         {
             easing = options.easing or "ease_in_out",
             on_update = function(values)
-                self:setPosition(values.x, values.y)
+                self.x = values.x
+                self.y = values.y
+                
+                -- Update all sprites
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite:set_position(values.x, values.y)
+                end
+                
                 if options.on_update then
                     options.on_update(values)
                 end
             end,
             on_complete = function(values, interrupted)
+                self._layout_animation_active = false
+                self._layout_animation_type = nil
+                
+                -- Unmark all sprites
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite:set_widget_animated(false)
+                end
+                
                 self.active_animations[anim_id] = nil
                 if options.on_complete then
                     options.on_complete(values, interrupted)
@@ -1284,6 +1287,11 @@ end
 
 function Widget:animate_properties(properties, duration, options)
     options = options or {}  -- Ensure options is always a table
+    
+    -- Mark sprites as widget-animated
+    for sprite_id, sprite in pairs(self.sprite_objects) do
+        sprite:set_widget_animated(true, {type = "properties"})
+    end
     
     local AnimationEngine, AnimationSequences, AnimationEnums = utils.load_animation_modules()
     
@@ -1305,6 +1313,12 @@ function Widget:animate_properties(properties, duration, options)
         if properties.r or properties.g or properties.b or properties.a then
             self:setColor(properties.r or self.r, properties.g or self.g, properties.b or self.b, properties.a or self.a)
         end
+        
+        -- Unmark sprites
+        for sprite_id, sprite in pairs(self.sprite_objects) do
+            sprite:set_widget_animated(false)
+        end
+        
         if options.on_complete then
             options.on_complete(properties, false)
         end
@@ -1331,29 +1345,71 @@ function Widget:animate_properties(properties, duration, options)
         end
     end
     
-    local anim_id = AnimationEngine.animate(start_properties, target_properties, duration, {
+    self._layout_animation_active = true
+    self._layout_animation_type = "properties"
+    
+    local anim_id = nil
+    anim_id = AnimationEngine.animate(start_properties, target_properties, duration, {
         easing = options.easing or "ease_in_out",
         on_update = function(values)
             if values.x or values.y then
-                self:setPosition(values.x or self.x, values.y or self.y)
+                self.x = values.x or self.x
+                self.y = values.y or self.y
+                
+                -- Update sprite positions
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite:set_position(values.x or self.x, values.y or self.y)
+                end
             end
             if values.sx or values.sy then
-                self:setScale(values.sx or self.sx, values.sy or self.sy)
+                self.sx = values.sx or self.sx
+                self.sy = values.sy or self.sy
+                
+                -- Update sprite scales
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite:set_scale(values.sx or self.sx, values.sy or self.sy)
+                end
             end
             if values.ro then
-                self:setRotation(values.ro)
+                self.ro = values.ro
+                
+                -- Update sprite rotations
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite:set_rotation(values.ro)
+                end
             end
             if values.opacity then
-                self:setOpacity(values.opacity)
+                self.opacity = values.opacity
+                
+                -- Update sprite opacity
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite:set_opacity(values.opacity)
+                end
             end
             if values.r or values.g or values.b or values.a then
-                self:setColor(values.r or self.r, values.g or self.g, values.b or self.b, values.a or self.a)
+                self.r = values.r or self.r
+                self.g = values.g or self.g
+                self.b = values.b or self.b
+                self.a = values.a or self.a
+                
+                -- Update sprite colors
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite:set_color(values.r or self.r, values.g or self.g, values.b or self.b, values.a or self.a)
+                end
             end
             if options.on_update then
                 options.on_update(values)
             end
         end,
         on_complete = function(values, interrupted)
+            self._layout_animation_active = false
+            self._layout_animation_type = nil
+            
+            -- Unmark all sprites
+            for sprite_id, sprite in pairs(self.sprite_objects) do
+                sprite:set_widget_animated(false)
+            end
+            
             self.active_animations[anim_id] = nil
             if options.on_complete then
                 options.on_complete(values, interrupted)
@@ -1371,30 +1427,58 @@ end
 function Widget:animate_opacity(target_opacity, duration, options)
     options = options or {}  -- Ensure options is always a table
     
+    -- Mark sprites as widget-animated
+    for sprite_id, sprite in pairs(self.sprite_objects) do
+        sprite:set_widget_animated(true, {type = "opacity"})
+    end
+    
     local AnimationEngine, AnimationSequences, AnimationEnums = utils.load_animation_modules()
     
     if not AnimationEngine then
         debug_print("WARN", "Widget.animate_opacity: AnimationEngine not available")
         self:setOpacity(target_opacity, options.recursive or false)
+        
+        -- Unmark sprites
+        for sprite_id, sprite in pairs(self.sprite_objects) do
+            sprite:set_widget_animated(false)
+        end
+        
         if options.on_complete then
             options.on_complete({opacity = target_opacity}, false)
         end
         return nil
     end
     
-    local anim_id = AnimationEngine.animate(
+    self._layout_animation_active = true
+    self._layout_animation_type = "opacity"
+    local anim_id = nil
+    anim_id = AnimationEngine.animate(
         {opacity = self.opacity},
         {opacity = target_opacity},
         duration,
         {
             easing = options.easing or "ease_in_out",
             on_update = function(values)
-                self:setOpacity(values.opacity, options.recursive or false)
+                self.opacity = values.opacity
+                
+                -- Update all sprites' opacity
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite:set_opacity(values.opacity)
+                end
+                
                 if options.on_update then
                     options.on_update(values)
                 end
             end,
             on_complete = function(values, interrupted)
+                self._layout_animation_active = false
+                self._layout_animation_type = nil
+                
+                -- Unmark all sprites
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite:set_widget_animated(false)
+                end
+                
                 self.active_animations[anim_id] = nil
                 if options.on_complete then
                     options.on_complete(values, interrupted)

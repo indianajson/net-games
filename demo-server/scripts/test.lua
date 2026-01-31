@@ -145,6 +145,7 @@ Net:on("player_join", function(event)
     }
 
     row1:slide_widget(0,100,2,"ease_in", function() end)
+    row2:shake_widget()
 
 end)
 
