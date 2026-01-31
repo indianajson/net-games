@@ -8,7 +8,7 @@ local utils = require('scripts/net-games/widgets/utils')
 local SpriteObject = {}
 SpriteObject.__index = SpriteObject
 
-function SpriteObject.new(sprite_id, widget_id, player_id, texture_path, anim_path, anim_state)
+function SpriteObject.new(sprite_id, widget_id, player_id, texture_path, anim_path, anim_state, layout_width, layout_height)
     local self = setmetatable({}, SpriteObject)
     
     -- Generate a unique ID for this sprite object
@@ -22,20 +22,26 @@ function SpriteObject.new(sprite_id, widget_id, player_id, texture_path, anim_pa
     -- Generate a unique template ID for allocation (based on texture/anim paths)
     self.template_id = self.id .. "_template"
     
-    -- Custom dimensions for layout (override intrinsic dimensions)
-    self.layout_width = nil
-    self.layout_height = nil
+    -- Custom dimensions for layout (in screen space, 240x160)
+    -- Default to 32x32 in screen space, which becomes 64x64 when scaled
+    self.layout_width = layout_width or 32
+    self.layout_height = layout_height or 32
+    
+    -- Origin offset properties (in screen space)
+    self.origin_x = 0
+    self.origin_y = 0
     
     -- Track if this sprite is currently being animated by its parent widget
     self.widget_animated = false
     self.widget_animation_properties = {}
     
+    -- Properties are in screen space (240x160)
     self.properties = {
-        x = 0,
-        y = 0,
+        x = 0,  -- Screen space X
+        y = 0,  -- Screen space Y
         z = 0,
-        sx = 2.0,
-        sy = 2.0,
+        sx = 1.0,  -- Sprite's own scale (multiplies layout dimensions)
+        sy = 1.0,
         ro = 0,
         opacity = 255,
         r = 255,
@@ -52,8 +58,8 @@ function SpriteObject.new(sprite_id, widget_id, player_id, texture_path, anim_pa
     -- Animation tracking
     self.active_animations = {}
     
-    debug_print("DETAILED", "SpriteObject created: %s for widget %s (template: %s)", 
-               self.id, widget_id, self.template_id)
+    debug_print("DETAILED", "SpriteObject created: %s for widget %s (template: %s), layout=%gx%g screen space", 
+               self.id, widget_id, self.template_id, self.layout_width, self.layout_height)
     
     return self
 end
@@ -73,48 +79,61 @@ function SpriteObject:is_widget_animated()
     return self.widget_animated
 end
 
--- Set custom dimensions for layout (pre-scaling)
+-- Set custom dimensions for layout (pre-scaling) in screen space
 function SpriteObject:set_layout_dimensions(width, height)
-    self.layout_width = width
-    self.layout_height = height
-    debug_print("DETAILED", "SpriteObject.set_layout_dimensions: %s = %dx%d", 
+    self.layout_width = width or self.layout_width
+    self.layout_height = height or self.layout_height
+    debug_print("DETAILED", "SpriteObject.set_layout_dimensions: %s = %gx%g screen space", 
                self.id, width or 0, height or 0)
     return self
 end
 
--- Get dimensions for layout (either custom or from animation file)
+-- Get dimensions for layout (screen space dimensions)
 function SpriteObject:get_layout_dimensions()
-    if self.layout_width and self.layout_height then
-        -- Use custom dimensions if set
-        debug_print("VERBOSE", "SpriteObject.get_layout_dimensions: %s using custom %dx%d", 
-                   self.id, self.layout_width, self.layout_height)
-        return self.layout_width, self.layout_height
-    end
-    
-    -- Otherwise, get dimensions from animation file (without scaling)
-    local SpriteDimensionCache = require('scripts/net-games/widgets/sprite-dimension-cache')
-    local width, height = SpriteDimensionCache.get_dimensions(
-        self.texture_path, self.anim_path, self.anim_state)
-    
-    debug_print("VERBOSE", "SpriteObject.get_layout_dimensions: %s using intrinsic %dx%d", 
-               self.id, width, height)
-    return width, height
+    debug_print("VERBOSE", "SpriteObject.get_layout_dimensions: %s using screen space %gx%g", 
+               self.id, self.layout_width, self.layout_height)
+    return self.layout_width, self.layout_height
 end
 
--- Get visual dimensions (including scale)
+-- Get visual dimensions (screen space dimensions * sprite scale * widget scale)
 function SpriteObject:get_visual_dimensions()
     local width, height = self:get_layout_dimensions()
     
-    -- Apply current scale
-    local visual_width = width * (self.properties.sx or 1.0)
-    local visual_height = height * (self.properties.sy or 1.0)
+    -- Apply sprite's own scale
+    local sprite_width = width * (self.properties.sx or 1.0)
+    local sprite_height = height * (self.properties.sy or 1.0)
     
-    debug_print("VERBOSE", "SpriteObject.get_visual_dimensions: %s = %dx%d * scale(%f,%f) = %dx%d", 
+    -- Get widget scale
+    local WidgetCache = require('scripts/net-games/widgets/cache')
+    local widget = WidgetCache.get(self.widget_id, self.player_id)
+    local widget_scale = widget and widget.sx or utils.SCREEN_SCALE
+    
+    -- Apply widget scale
+    local visual_width = sprite_width * widget_scale
+    local visual_height = sprite_height * widget_scale
+    
+    debug_print("VERBOSE", "SpriteObject.get_visual_dimensions: %s = layout(%gx%g) * sprite_scale(%f,%f) * widget_scale(%f) = %gx%g", 
                self.id, width, height, 
                self.properties.sx or 1.0, self.properties.sy or 1.0,
-               visual_width, visual_height)
+               widget_scale, visual_width, visual_height)
     
     return visual_width, visual_height
+end
+
+-- Set origin offset manually (in screen space)
+function SpriteObject:set_origin_offset(ox, oy)
+    self.origin_x = ox or 0
+    self.origin_y = oy or 0
+    debug_print("DETAILED", "SpriteObject.set_origin_offset: %s = (%g,%g) screen space", 
+               self.id, self.origin_x, self.origin_y)
+    return self
+end
+
+-- Get origin offset (always returns manually set values in screen space)
+function SpriteObject:get_origin_offset()
+    debug_print("VERBOSE", "SpriteObject.get_origin_offset: %s = (%g,%g) screen space", 
+               self.id, self.origin_x, self.origin_y)
+    return self.origin_x, self.origin_y
 end
 
 function SpriteObject:allocate()
@@ -151,59 +170,33 @@ function SpriteObject:allocate()
     end
 end
 
-function SpriteObject:get_origin_offset()
-    -- Try to parse the animation file to get origin information
-    if not self.anim_path or self.anim_path == "" then
-        return 0, 0
-    end
+-- Get scaled position for drawing (screen space -> scaled coordinates)
+function SpriteObject:get_scaled_position()
+    local screen_x = self.properties.x
+    local screen_y = self.properties.y
     
-    local elements, errors = utils.parse_animation_file(self.anim_path)
-    
-    if not elements or #elements == 0 then
-        debug_print("WARN", "SpriteObject.get_origin_offset: No elements found in %s", self.anim_path)
-        return 0, 0
-    end
-    
-    local ox, oy = 0, 0
-    local in_correct_state = false
-    
-    debug_print("DETAILED", "Looking for origin in animation state: %s", self.anim_state or "default")
-    
-    for _, element in ipairs(elements) do
-        -- Check if this element starts an animation state
-        if element.text == "animation" then
-            local state_attr = utils.get_element_attribute(element, "state", "")
-            debug_print("VERBOSE", "Found animation element with state: %s", state_attr)
-            
-            in_correct_state = (state_attr == self.anim_state) or 
-                              (self.anim_state == "" and state_attr == "") or
-                              (self.anim_state == "" and state_attr == nil)
-            
-            if in_correct_state then
-                debug_print("DETAILED", "Entering correct animation state")
-            end
-        elseif in_correct_state and element.text == "frame" then
-            -- Get origin from frame attributes
-            ox = utils.get_element_attribute_int(element, "originx", 0)
-            oy = utils.get_element_attribute_int(element, "originy", 0)
-            
-            -- Try alternative attribute names
-            if ox == 0 then
-                ox = utils.get_element_attribute_int(element, "ox", 0)
-            end
-            if oy == 0 then
-                oy = utils.get_element_attribute_int(element, "oy", 0)
-            end
-            
-            if ox ~= 0 or oy ~= 0 then
-                debug_print("DETAILED", "Found origin for sprite %s: ox=%d, oy=%d", 
-                           self.id, ox, oy)
-            end
-            break
+    -- Get the widget hierarchy and add all parent positions (screen space)
+    local WidgetCache = require('scripts/net-games/widgets/cache')
+    local widget = WidgetCache.get(self.widget_id, self.player_id)
+    if widget then
+        -- Start with immediate widget position
+        screen_x = screen_x + widget.x
+        screen_y = screen_y + widget.y
+        
+        -- Add all parent widget positions
+        local parent = widget.parent
+        while parent do
+            screen_x = screen_x + parent.x
+            screen_y = screen_y + parent.y
+            parent = parent.parent
         end
     end
     
-    return ox, oy
+    -- Scale to final coordinates
+    local scaled_x = utils.normalize_x(screen_x)
+    local scaled_y = utils.normalize_y(screen_y)
+    
+    return scaled_x, scaled_y, screen_x, screen_y
 end
 
 function SpriteObject:draw()
@@ -219,42 +212,33 @@ function SpriteObject:draw()
         return true
     end
     
-    -- Get origin offset if available
+    -- Get scaled position
+    local scaled_x, scaled_y, screen_x, screen_y = self:get_scaled_position()
+    
+    -- Get origin offset (in screen space, will be scaled)
     local ox, oy = self:get_origin_offset()
+    local scaled_ox = utils.normalize_x(ox)
+    local scaled_oy = utils.normalize_y(oy)
     
-    -- Calculate absolute screen position
-    -- The sprite's x/y properties are relative to its immediate parent widget
-    -- We need to traverse up the widget hierarchy to get the true absolute position
-    local absolute_x = self.properties.x  -- REMOVED: * 2
-    local absolute_y = self.properties.y  -- REMOVED: * 2
-    
-    -- Get the widget hierarchy and add all parent positions
+    -- Get widget scale
     local WidgetCache = require('scripts/net-games/widgets/cache')
     local widget = WidgetCache.get(self.widget_id, self.player_id)
-    if widget then
-        -- Start with immediate widget position
-        absolute_x = absolute_x + widget.x
-        absolute_y = absolute_y + widget.y
-        
-        -- Add all parent widget positions
-        local parent = widget.parent
-        while parent do
-            absolute_x = absolute_x + parent.x
-            absolute_y = absolute_y + parent.y
-            parent = parent.parent
-        end
-    end
+    local widget_scale = widget and widget.sx or utils.SCREEN_SCALE
+    
+    -- Calculate final scale (sprite scale * widget scale)
+    local final_scale_x = (self.properties.sx or 1.0) * widget_scale
+    local final_scale_y = (self.properties.sy or 1.0) * widget_scale
     
     local sprite_data = {
         id = self.id,  -- Use sprite object ID as the instance ID
-        x = absolute_x,  -- Use absolute screen coordinates
-        y = absolute_y,
+        x = scaled_x,  -- Scaled screen coordinates
+        y = scaled_y,
         z = self.properties.z,
-        sx = self.properties.sx,
-        sy = self.properties.sy,
+        sx = final_scale_x,
+        sy = final_scale_y,
         ro = self.properties.ro,
-        ox = ox,  -- Use origin from animation file
-        oy = oy,  -- Use origin from animation file
+        ox = scaled_ox,  -- Scaled origin
+        oy = scaled_oy,
         a = self.properties.a,
         r = self.properties.r,
         g = self.properties.g,
@@ -264,9 +248,9 @@ function SpriteObject:draw()
         opacity = self.properties.opacity
     }
     
-    debug_print("VERBOSE", "SpriteObject.draw: %s at widget-relative (%d,%d) absolute (%d,%d) scale=%f,%f",
-               self.id, self.properties.x, self.properties.y, absolute_x, absolute_y,
-               self.properties.sx, self.properties.sy)
+    debug_print("VERBOSE", "SpriteObject.draw: %s at screen(%g,%g)->scaled(%g,%g) scale=%f,%f widget_scale=%f",
+               self.id, screen_x, screen_y, scaled_x, scaled_y,
+               self.properties.sx, self.properties.sy, widget_scale)
     
     -- Draw sprite instance using the template
     local success, result = pcall(Net.player_draw_sprite, self.player_id, self.template_id, sprite_data)
@@ -373,42 +357,52 @@ function SpriteObject:get_properties()
 end
 
 function SpriteObject:get_absolute_position()
-    -- Calculate absolute screen position
-    local absolute_x = self.properties.x  -- REMOVED: * 2
-    local absolute_y = self.properties.y  -- REMOVED: * 2
+    -- Calculate absolute screen position (in scaled coordinates)
+    local scaled_x, scaled_y = self:get_scaled_position()
     
-    -- Get the widget hierarchy and add all parent positions
-    local WidgetCache = require('scripts/net-games/widgets/cache')
-    local widget = WidgetCache.get(self.widget_id, self.player_id)
-    if widget then
-        -- Start with immediate widget position
-        absolute_x = absolute_x + widget.x
-        absolute_y = absolute_y + widget.y
-        
-        -- Add all parent widget positions
-        local parent = widget.parent
-        while parent do
-            absolute_x = absolute_x + parent.x
-            absolute_y = absolute_y + parent.y
-            parent = parent.parent
-        end
-    end
+    debug_print("VERBOSE", "SpriteObject.get_absolute_position: %s = scaled(%g,%g)", 
+               self.id, scaled_x, scaled_y)
     
-    return absolute_x, absolute_y
+    return scaled_x, scaled_y
 end
 
 -- ===========================================================
 -- SPRITE OBJECT ANIMATION FUNCTIONS
 -- ===========================================================
 
--- Animation methods
+-- Animation methods with fallback for missing AnimationEngine
 function SpriteObject:animate(properties, duration, options)
     options = options or {}  -- Ensure options is always a table
     
     local AnimationEngine, AnimationSequences, AnimationEnums = utils.load_animation_modules()
     
     if not AnimationEngine then
-        debug_print("WARN", "SpriteObject.animate: AnimationEngine not loaded")
+        debug_print("WARN", "SpriteObject.animate: AnimationEngine not loaded, setting properties directly")
+        
+        -- Apply properties directly
+        for key, value in pairs(properties) do
+            if key == "x" or key == "y" then
+                self:set_position(properties.x or self.properties.x, properties.y or self.properties.y)
+            elseif key == "sx" or key == "sy" then
+                self:set_scale(properties.sx or self.properties.sx, properties.sy or self.properties.sy)
+            elseif key == "ro" then
+                self:set_rotation(properties.ro or self.properties.ro)
+            elseif key == "opacity" then
+                self:set_opacity(properties.opacity or self.properties.opacity)
+            elseif key == "a" then
+                self:set_opacity(properties.a or self.properties.a)
+            elseif key == "r" or key == "g" or key == "b" then
+                self:set_color(properties.r or self.properties.r, 
+                              properties.g or self.properties.g, 
+                              properties.b or self.properties.b,
+                              properties.a or self.properties.a)
+            end
+        end
+        
+        if options.on_complete then
+            options.on_complete(properties, false)
+        end
+        
         return nil
     end
     
@@ -421,8 +415,8 @@ function SpriteObject:animate(properties, duration, options)
             target_properties[key] = value
         end
     end
-    
-    local anim_id = AnimationEngine.animate(start_properties, target_properties, duration, {
+    local anim_id = nil
+    anim_id = AnimationEngine.animate(start_properties, target_properties, duration, {
         easing = options.easing or "ease_in_out",
         on_update = function(values)
             self:update(values)
@@ -465,12 +459,13 @@ function SpriteObject:is_animating()
     return next(self.active_animations) ~= nil
 end
 
--- Sprite-specific animation methods
+-- Sprite-specific animation methods with fallback
 function SpriteObject:slide_sprite(target_x, target_y, duration, easing, on_complete)
     if not self then return nil end
     
     duration = duration or 0.3
     easing = easing or "linear"
+    on_complete = on_complete or nil
     
     return self:animate({x = target_x, y = target_y}, duration, {
         easing = easing,

@@ -1,5 +1,5 @@
 -- widgets/widget-events.lua
--- Event handling for widgets
+-- Event handling for widgets with cursor integration
 
 local LOGGING = require('scripts/net-games/widgets/logging')
 local debug_print = LOGGING.debug_print
@@ -63,7 +63,45 @@ function WidgetEvents.initialize()
         print("[widgets] Item selected: " .. (event.item.id or "unknown"))
     end)
     
-    debug_print("INFO", "WidgetEvents initialized successfully")
+    -- Cursor events integration
+    Net:on("cursor_move", function(event)
+        debug_print("INFO", "WidgetEvents: cursor_move: %s direction %s", 
+                   event.cursor, event.direction or "unknown")
+        
+        -- Optionally sync selection manager with cursor movement
+        if WidgetEvents.selection_manager and WidgetEvents.selection_manager.cursor_id == event.cursor then
+            if event.direction == "up" then
+                WidgetEvents.selection_manager:moveSelection("up")
+            elseif event.direction == "down" then
+                WidgetEvents.selection_manager:moveSelection("down")
+            elseif event.direction == "left" then
+                WidgetEvents.selection_manager:moveSelection("left")
+            elseif event.direction == "right" then
+                WidgetEvents.selection_manager:moveSelection("right")
+            end
+        end
+    end)
+    
+    Net:on("cursor_selection", function(event)
+        debug_print("INFO", "WidgetEvents: cursor_selection: %s selected %s", 
+                   event.cursor, event.selection)
+        
+        -- Forward cursor selection as widget item selection
+        Net:emit("widget_item_selected", {
+            player_id = event.player_id,
+            cursor = event.cursor,
+            selection = event.selection
+        })
+    end)
+    
+    Net:on("cursor_hover", function(event)
+        debug_print("VERBOSE", "WidgetEvents: cursor_hover: %s hovering over %s", 
+                   event.cursor, event.selection)
+        
+        -- Can be used for highlighting or other hover effects
+    end)
+    
+    debug_print("INFO", "WidgetEvents initialized successfully with cursor integration")
 end
 
 return WidgetEvents

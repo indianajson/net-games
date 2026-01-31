@@ -4,7 +4,6 @@
 local LOGGING = require('scripts/net-games/widgets/logging')
 local debug_print = LOGGING.debug_print
 local utils = require('scripts/net-games/widgets/utils')
-local SpriteDimensionCache = require('scripts/net-games/widgets/sprite-dimension-cache')
 
 local WidgetDebug = {}
 
@@ -82,7 +81,6 @@ end
 
 function WidgetDebug.getStats()
     local stats = {
-        dimension_cache_entries = SpriteDimensionCache.stats(),
         widget_cache_entries = 0,
         widget_types = {
             row = "Row",
@@ -106,7 +104,6 @@ function WidgetDebug.getStats()
     stats.widget_cache_entries = WidgetCache.stats()
     
     print("[Widgets Debug Stats]")
-    print("  Dimension cache entries:", stats.dimension_cache_entries)
     print("  Widget cache entries:", stats.widget_cache_entries)
     print("  AnimationEngine loaded:", stats.animation_engine_loaded)
     print("  AnimationSequences loaded:", stats.animation_sequences_loaded)

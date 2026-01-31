@@ -91,9 +91,7 @@ function SpriteObject:get_layout_dimensions()
         return self.layout_width, self.layout_height
     end
     
-    -- Otherwise, get dimensions from animation file (without scaling)
-    local SpriteDimensionCache = require('scripts/net-games/widgets/sprite-dimension-cache')
-    local width, height = SpriteDimensionCache.get_dimensions(
+ local width, height = SpriteDimensionCache.get_dimensions(
         self.texture_path, self.anim_path, self.anim_state)
     
     debug_print("VERBOSE", "SpriteObject.get_layout_dimensions: %s using intrinsic %dx%d", 

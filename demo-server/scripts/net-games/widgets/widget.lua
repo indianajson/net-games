@@ -18,7 +18,6 @@ local Container = require('scripts/net-games/widgets/container')
 local Expanded = require('scripts/net-games/widgets/expanded')
 
 local SpriteObject = require('scripts/net-games/widgets/sprite-object')
-local SpriteDimensionCache = require('scripts/net-games/widgets/sprite-dimension-cache')
 local WidgetCache = require('scripts/net-games/widgets/cache')
 local utils = require('scripts/net-games/widgets/utils')
 
@@ -92,13 +91,41 @@ local function initialize_widget_system()
     -- Initialize widget events
     WidgetEvents.initialize()
     
-    debug_print("INFO", "Widget system initialized successfully")
+    debug_print("INFO", "Widget system initialized successfully with screen: %dx%d (scale: %f)",
+               utils.SCREEN_WIDTH, utils.SCREEN_HEIGHT, utils.SCREEN_SCALE)
     return true
 end
 
 -- Check if animation modules are loaded
 local function are_animation_modules_loaded()
     return _animation_modules_loaded and _AnimationEngine ~= nil
+end
+
+-- Screen helper functions
+local function createCenteredWidget(widget_type, id, player_id, width, height)
+    local widget
+    if widget_type == "Row" then
+        widget = Row.new(id, player_id)
+    elseif widget_type == "Column" then
+        widget = Column.new(id, player_id)
+    elseif widget_type == "Grid" then
+        widget = Grid.new(id, player_id)
+    elseif widget_type == "Container" then
+        widget = Container.new(id, player_id)
+    elseif widget_type == "Expanded" then
+        widget = Expanded.new(id, player_id)
+    else
+        widget = Widget.new(id, player_id)
+    end
+    
+    if width and height then
+        widget:setSize(width, height)
+    end
+    
+    widget:centerOnScreen()
+    widget:setScreenConstraints(true)
+    
+    return widget
 end
 
 -- Module exports
@@ -123,9 +150,6 @@ return {
     -- Events
     Events = WidgetEvents,
     
-    -- Dimension cache
-    SpriteDimensionCache = SpriteDimensionCache,
-    
     -- Widget cache
     WidgetCache = WidgetCache,
     
@@ -144,12 +168,44 @@ return {
         is_enabled = LOGGING.is_debug_enabled
     },
     
+    -- Screen configuration
+    Screen = {
+        WIDTH = utils.SCREEN_WIDTH,
+        HEIGHT = utils.SCREEN_HEIGHT,
+        SCALE = utils.SCREEN_SCALE,
+        SCALED_WIDTH = utils.SCREEN_SCALED_WIDTH,
+        SCALED_HEIGHT = utils.SCREEN_SCALED_HEIGHT,
+        
+        normalizeX = utils.normalize_x,
+        normalizeY = utils.normalize_y,
+        scaleX = utils.scale_x,
+        scaleY = utils.scale_y,
+        getCenter = utils.get_screen_center,
+        getScaledCenter = utils.get_scaled_screen_center,
+        isWithinScreen = utils.is_within_screen,
+        constrainToScreen = utils.constrain_to_screen
+    },
+    
     -- Utility functions
     createRow = function(id, player_id) return Row.new(id, player_id) end,
     createColumn = function(id, player_id) return Column.new(id, player_id) end,
     createGrid = function(id, player_id) return Grid.new(id, player_id) end,
     createContainer = function(id, player_id) return Container.new(id, player_id) end,
     createExpanded = function(id, player_id) return Expanded.new(id, player_id) end,
+    
+    -- Screen-centered widget creation
+    createCenteredRow = function(id, player_id, width, height) 
+        return createCenteredWidget("Row", id, player_id, width, height) 
+    end,
+    createCenteredColumn = function(id, player_id, width, height) 
+        return createCenteredWidget("Column", id, player_id, width, height) 
+    end,
+    createCenteredGrid = function(id, player_id, width, height) 
+        return createCenteredWidget("Grid", id, player_id, width, height) 
+    end,
+    createCenteredContainer = function(id, player_id, width, height) 
+        return createCenteredWidget("Container", id, player_id, width, height) 
+    end,
     
     -- Cache functions
     getWidget = function(widget_id, player_id)

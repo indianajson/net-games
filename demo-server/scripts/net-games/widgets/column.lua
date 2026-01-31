@@ -39,13 +39,13 @@ function Column:setSpacing(spacing)
     self.state.dirty = true
     self.state.needs_layout = true
     
-    debug_print("DETAILED", "Column.setSpacing: %s = %d", self.id, self.spacing)
+    debug_print("DETAILED", "Column.setSpacing: %s = %g", self.id, self.spacing)
     
     return self
 end
 
 function Column:calculateLayout(available_width, available_height)
-    debug_print("DETAILED", "Column.calculateLayout: %s with %d children, available=%dx%d", 
+    debug_print("DETAILED", "Column.calculateLayout: %s with %d children, available=%gx%g", 
                self.id, #self.children, available_width, available_height)
     
     local total_height = 0
@@ -54,7 +54,7 @@ function Column:calculateLayout(available_width, available_height)
     
     debug_print("VERBOSE", "  Main axis alignment: %s", self.main_axis_alignment)
     debug_print("VERBOSE", "  Cross axis alignment: %s", self.cross_axis_alignment)
-    debug_print("VERBOSE", "  Spacing: %d", self.spacing)
+    debug_print("VERBOSE", "  Spacing: %g", self.spacing)
     
     -- First pass: calculate dimensions and collect positioned children
     for i, child in ipairs(self.children) do
@@ -73,12 +73,12 @@ function Column:calculateLayout(available_width, available_height)
                     -- Use custom layout dimensions (pre-scaling)
                     child_width = child.layout_width
                     child_height = child.layout_height
-                    debug_print("DETAILED", "  Child %d sprite using custom layout: %dx%d", 
+                    debug_print("DETAILED", "  Child %d sprite using custom layout: %gx%g", 
                                i, child_width, child_height)
                 else
                     -- Use visual dimensions (including scale)
                     child_width, child_height = sprite:get_visual_dimensions()
-                    debug_print("DETAILED", "  Child %d sprite using visual dimensions: %dx%d", 
+                    debug_print("DETAILED", "  Child %d sprite using visual dimensions: %gx%g", 
                                i, child_width, child_height)
                 end
             end
@@ -97,12 +97,12 @@ function Column:calculateLayout(available_width, available_height)
             
             -- Get the widget's calculated size
             child_width, child_height = child_widget:getCalculatedSize()
-            debug_print("DETAILED", "  Child %d widget dimensions: %dx%d", i, child_width, child_height)
+            debug_print("DETAILED", "  Child %d widget dimensions: %gx%g", i, child_width, child_height)
         elseif child.width and child.height then
             child_id = child.id
             child_width = child.width
             child_height = child.height
-            debug_print("DETAILED", "  Child %d explicit dimensions: %dx%d", i, child_width, child_height)
+            debug_print("DETAILED", "  Child %d explicit dimensions: %gx%g", i, child_width, child_height)
         else
             debug_print("WARN", "  Child %d has no dimensions!", i)
         end
@@ -113,7 +113,7 @@ function Column:calculateLayout(available_width, available_height)
             child_widget:setSize(available_width, child_height)
             child_widget:updateLayout()
             child_width, child_height = child_widget:getCalculatedSize()
-            debug_print("DETAILED", "    Stretched widget width to: %d", child_width)
+            debug_print("DETAILED", "    Stretched widget width to: %g", child_width)
         end
         
         -- Create positioned child object
@@ -137,7 +137,7 @@ function Column:calculateLayout(available_width, available_height)
         
         table.insert(positioned_children, positioned_child)
         
-        debug_print("DETAILED", "  Child %d positioned at x=%d, y=%d, size=%dx%d, type=%s", 
+        debug_print("DETAILED", "  Child %d positioned at x=%g, y=%g, size=%gx%g, type=%s", 
                    i, positioned_child.x, positioned_child.y, child_width, child_height,
                    child_sprite_id and "sprite" or "widget")
         
@@ -147,42 +147,42 @@ function Column:calculateLayout(available_width, available_height)
         -- Add spacing except after last child
         if i < #self.children then
             total_height = total_height + self.spacing
-            debug_print("DETAILED", "  Added spacing: total_height now %d", total_height)
+            debug_print("DETAILED", "  Added spacing: total_height now %g", total_height)
         end
     end
     
-    debug_print("DETAILED", "  First pass total: max_width=%d, total_height=%d", max_width, total_height)
+    debug_print("DETAILED", "  First pass total: max_width=%g, total_height=%g", max_width, total_height)
     
     -- Adjust for main axis alignment
     local extra_height = available_height - total_height - self.padding.top - self.padding.bottom
-    debug_print("DETAILED", "  Extra height available: %d", extra_height)
+    debug_print("DETAILED", "  Extra height available: %g", extra_height)
     
     if extra_height > 0 then
         local start_y = 0
         
         if self.main_axis_alignment == "center" then
             start_y = extra_height / 2
-            debug_print("DETAILED", "  Center alignment: start_y=%d", start_y)
+            debug_print("DETAILED", "  Center alignment: start_y=%g", start_y)
         elseif self.main_axis_alignment == "end" then
             start_y = extra_height
-            debug_print("DETAILED", "  End alignment: start_y=%d", start_y)
+            debug_print("DETAILED", "  End alignment: start_y=%g", start_y)
         elseif self.main_axis_alignment == "space_between" then
             if #positioned_children > 1 then
                 local spacing = extra_height / (#positioned_children - 1)
-                debug_print("DETAILED", "  Space between: spacing=%d", spacing)
+                debug_print("DETAILED", "  Space between: spacing=%g", spacing)
                 for i = 2, #positioned_children do
                     positioned_children[i].y = positioned_children[i].y + (spacing * (i - 1))
                 end
             end
         elseif self.main_axis_alignment == "space_around" then
             local spacing = extra_height / #positioned_children
-            debug_print("DETAILED", "  Space around: spacing=%d", spacing)
+            debug_print("DETAILED", "  Space around: spacing=%g", spacing)
             for i = 1, #positioned_children do
                 positioned_children[i].y = positioned_children[i].y + (spacing * (i - 0.5))
             end
         elseif self.main_axis_alignment == "space_evenly" then
             local spacing = extra_height / (#positioned_children + 1)
-            debug_print("DETAILED", "  Space evenly: spacing=%d", spacing)
+            debug_print("DETAILED", "  Space evenly: spacing=%g", spacing)
             for i = 1, #positioned_children do
                 positioned_children[i].y = positioned_children[i].y + (spacing * i)
             end
@@ -190,7 +190,7 @@ function Column:calculateLayout(available_width, available_height)
         
         -- Apply start offset
         if start_y > 0 then
-            debug_print("DETAILED", "  Applying start offset: %d", start_y)
+            debug_print("DETAILED", "  Applying start offset: %g", start_y)
             for _, child in ipairs(positioned_children) do
                 child.y = child.y + start_y
             end
@@ -203,10 +203,10 @@ function Column:calculateLayout(available_width, available_height)
         
         if self.cross_axis_alignment == "center" then
             child.x = extra_width / 2
-            debug_print("DETAILED", "  Child %d centered horizontally: x=%d", i, child.x)
+            debug_print("DETAILED", "  Child %d centered horizontally: x=%g", i, child.x)
         elseif self.cross_axis_alignment == "end" then
             child.x = extra_width
-            debug_print("DETAILED", "  Child %d aligned to end: x=%d", i, child.x)
+            debug_print("DETAILED", "  Child %d aligned to end: x=%g", i, child.x)
         elseif self.cross_axis_alignment == "stretch" then
             if child.is_widget then
                 -- Widget is already stretched, position at 0
@@ -224,7 +224,7 @@ function Column:calculateLayout(available_width, available_height)
     local layout_width = math.max(max_width, self.width)
     local layout_height = math.max(total_height, self.height)
     
-    debug_print("INFO", "Column layout calculated: %s = %dx%d, positioned %d children", 
+    debug_print("INFO", "Column layout calculated: %s = %gx%g, positioned %d children", 
                self.id, layout_width, layout_height, #positioned_children)
     
     return layout_width, layout_height, positioned_children

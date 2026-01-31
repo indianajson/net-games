@@ -5,7 +5,6 @@ local Widget = require('scripts/net-games/widgets/base-widget')
 local LOGGING = require('scripts/net-games/widgets/logging')
 local debug_print = LOGGING.debug_print
 local utils = require('scripts/net-games/widgets/utils')
-local SpriteDimensionCache = require('scripts/net-games/widgets/sprite-dimension-cache')
 
 local Grid = {}
 setmetatable(Grid, {__index = Widget})

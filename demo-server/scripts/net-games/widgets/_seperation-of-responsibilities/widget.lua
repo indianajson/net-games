@@ -18,7 +18,6 @@ local Container = require('scripts/net-games/widgets/container')
 local Expanded = require('scripts/net-games/widgets/expanded')
 
 local SpriteObject = require('scripts/net-games/widgets/sprite-object')
-local SpriteDimensionCache = require('scripts/net-games/widgets/sprite-dimension-cache')
 local WidgetCache = require('scripts/net-games/widgets/cache')
 local utils = require('scripts/net-games/widgets/utils')
 

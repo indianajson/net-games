@@ -16,143 +16,121 @@ Net:on("player_join", function(event)
     
     -- Create the widget structure using the actual classes
     local column = Widgets.Column.new("main_menu", player_id)
-    column:setSize(240, 0)
-    column:setPosition(0, 0)  -- Give it a visible position
+    column:setSize(240, 0)  -- Fixed height to ensure space
+    column:setPosition(0, 0)  -- Move to visible position
 
     -- Set column properties
-    column:setSpacing(10)
-    column:setAlignment("start", "center")
+    column:setSpacing(5)
+    column:setAlignment("start", "stretch")
 
-    -- Create rows
+    -- Create rows with proper layout
     local row1 = Widgets.Row.new("menu_item_1", player_id)
-    row1:setSize(240, 34) 
-    
-    -- Set row properties
+    row1:setSize(240, 17) 
     row1:setSpacing(10)
-    row1:setAlignment("space_evenly", "center")
+    row1:setAlignment("space_around", "center")
     
-    -- Add sprites to row1 with custom layout dimensions
-    row1:addChild({
-        type = "sprite",
-        id = "option_1",
-        sprite_id = "option_1",
-        texture_path = "/server/assets/demo/order_points.png",
-        anim_path = "/server/assets/demo/order_points.anim",
-        anim_state = "8POINT",
-        layout_width = 156,
-        layout_height = 34,
-        scale = 2.0
-    })
+    -- Create sprites directly with custom layout dimensions
+    -- create_sprite already adds them to the widget
+    row1:create_sprite(
+        "option_1",
+        "/server/assets/demo/order_points.png",
+        "/server/assets/demo/order_points.anim",
+        "8POINT",
+        78,  -- layout_width
+        17    -- layout_height
+    )
+    
+    row1:create_sprite(
+        "option_2", 
+        "/server/assets/demo/order_points.png",
+        "/server/assets/demo/order_points.anim",
+        "8POINT",
+        78,
+        17
+    )
     
     local row2 = Widgets.Row.new("menu_item_2", player_id)
-    row2:setSize(240, 34)
-    
-    -- Set row properties
+    row2:setSize(240, 17)
     row2:setSpacing(10)
-    row2:setAlignment("center", "center")
+    row2:setAlignment("space_around", "center")
     
-    -- Add sprites to row2 with custom layout dimensions
-    row2:addChild({
-        type = "sprite",
-        id = "option_2",
-        sprite_id = "option_2",
-        texture_path = "/server/assets/demo/order_points.png",
-        anim_path = "/server/assets/demo/order_points.anim",
-        anim_state = "7POINT",
-        layout_width = 156,
-        layout_height = 34,
-        scale = 2.0
-    })
+    -- Create sprites for row2
+    row2:create_sprite(
+        "option_3",
+        "/server/assets/demo/order_points.png",
+        "/server/assets/demo/order_points.anim",
+        "7POINT",
+        78,
+        17
+    )
     
-    row2:addChild({
-        type = "sprite",
-        id = "option_3", 
-        sprite_id = "option_3",
-        texture_path = "/server/assets/demo/order_points.png",
-        anim_path = "/server/assets/demo/order_points.anim",
-        anim_state = "6POINT",
-        layout_width = 156,
-        layout_height = 34,
-        scale = 2.0
-    })
-    
-    local row3 = Widgets.Row.new("menu_item_3", player_id)
-    row3:setSize(240, 34)
-    
-    -- Set row properties
-    row3:setSpacing(10)
-    row3:setAlignment("center", "center")
-    
-    row3:addChild({
-        type = "sprite",
-        id = "option_4", 
-        sprite_id = "option_4",
-        texture_path = "/server/assets/demo/order_points.png",
-        anim_path = "/server/assets/demo/order_points.anim",
-        anim_state = "5POINT",
-        layout_width = 156,
-        layout_height = 34,
-        scale = 2.0
-    })
-    
-    row3:addChild({
-        type = "sprite",
-        id = "option_5", 
-        sprite_id = "option_5",
-        texture_path = "/server/assets/demo/order_points.png",
-        anim_path = "/server/assets/demo/order_points.anim",
-        anim_state = "4POINT",
-        layout_width = 156,
-        layout_height = 34,
-        scale = 2.0
-    })
-    
-    row3:addChild({
-        type = "sprite",
-        id = "option_6", 
-        sprite_id = "option_6",
-        texture_path = "/server/assets/demo/order_points.png",
-        anim_path = "/server/assets/demo/order_points.anim",
-        anim_state = "3POINT",
-        layout_width = 156,
-        layout_height = 34,
-        scale = 2.0
-    })
+    row2:create_sprite(
+        "option_4",
+        "/server/assets/demo/order_points.png",
+        "/server/assets/demo/order_points.anim",
+        "6POINT",
+        78,
+        17
+    )
 
-    -- Add rows to column with proper id fields
+    local row3 = Widgets.Row.new("menu_item_3", player_id)
+    row3:setSize(240,17)
+    row3:setSpacing(10)
+    row3:setAlignment("space_around", "center")
+    
+    -- Create sprites for row3 with UNIQUE IDs
+    row3:create_sprite(
+        "option_5",
+        "/server/assets/demo/order_points.png",
+        "/server/assets/demo/order_points.anim",
+        "5POINT",
+        78,
+        17
+    )
+    
+    row3:create_sprite(
+        "option_6",
+        "/server/assets/demo/order_points.png",
+        "/server/assets/demo/order_points.anim",
+        "4POINT",
+        78,
+        17
+    )
+    
+    row3:create_sprite(
+        "option_7",  -- Changed from option_6 to option_7
+        "/server/assets/demo/order_points.png",
+        "/server/assets/demo/order_points.anim",
+        "3POINT",
+        78,
+        17
+    )
+    
+    -- Add rows to column
     column:addChild({widget = row1, id = row1.id})
     column:addChild({widget = row2, id = row2.id})
     column:addChild({widget = row3, id = row3.id})
-    
+    row1:updateLayout(true)
+    row2:updateLayout(true)
+    row3:updateLayout(true)
     -- Update layout
     column:updateLayout(true)
     
     -- Draw everything
     column:draw(true)
-    
-    -- Register widgets for selection management
-    Widgets.Events.selection_manager:registerWidget(row1)
-    Widgets.Events.selection_manager:registerWidget(row2)
-    Widgets.Events.selection_manager:registerWidget(row3)
-    
-    -- Select the first widget
-    Widgets.Events.selection_manager:selectWidget("menu_item_1", 1)
-    
-    -- Print debug info
-    print("\n=== Final Widget Tree ===")
-    Widgets.printWidgetTree(column)
-    
-    -- Print calculated sizes
-    local col_width, col_height = column:getCalculatedSize()
-    local row1_width, row1_height = row1:getCalculatedSize()
-    local row2_width, row2_height = row2:getCalculatedSize()
-    local row3_width, row3_height = row3:getCalculatedSize()
 
-    print("\n=== Calculated Sizes ===")
-    print("Column: " .. col_width .. "x" .. col_height .. " at (" .. column.x .. "," .. column.y .. ")")
-    print("Row1: " .. row1_width .. "x" .. row1_height .. " at (" .. row1.x .. "," .. row1.y .. ")")
-    print("Row2: " .. row2_width .. "x" .. row2_height .. " at (" .. row2.x .. "," .. row2.y .. ")")
-    print("Row3: " .. row3_width .. "x" .. row3_height .. " at (" .. row3.x .. "," .. row3.y .. ")")
+    -- Test animation (will fall back to direct positioning if AnimationEngine not available)
+    -- row1:slide_widget(0, 100, 2, "ease_in", function()
+    --     print("Slide animation complete!")
+    -- end)
+    
+    local row1_x, row1_y = row1:getAbsolutePosition()
+    local row2_x, row2_y = row2:getAbsolutePosition()
+    local row3_x, row3_y = row3:getAbsolutePosition()
+
+    print("ROW1 POS "..row1_x..","..row1_y)
+    print("ROW2 POS "..row2_x..","..row2_y)
+    print("ROW3 POS "..row3_x..","..row3_y)
     
     -- Print cache stats
     print("\n=== Cache Statistics ===")
@@ -165,13 +143,20 @@ Net:on("player_join", function(event)
         column = column,
         rows = {row1, row2, row3}
     }
-    row1:slide_widget(100, 100, 2, "ease_in", nil)
-    
+
+    row1:slide_widget(0,100,2,"ease_in", function() end)
+
+end)
+
     -- Example: Clean up when player leaves
-    Net:on("player_disconnect", function(leave_event)
-        if leave_event.player_id == player_id then
-            print("Cleaning up widgets for player: " .. player_id)
-            Widgets.clearPlayerWidgets(player_id)
-        end
-    end)
+Net:on("player_disconnect", function(event)    
+            -- Remove cursor
+            -- Widgets.removeCursor("menu_cursor", player_id)
+            
+            -- Clear widgets
+            Widgets.clearPlayerWidgets(event.player_id)
+            -- Widgets.clearPlayerCursors(event.player_id)
+            
+            -- Optional: Shutdown widget system if no players left
+            -- Widgets.shutdown()
 end)

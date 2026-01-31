@@ -5,7 +5,6 @@ local Widget = require('scripts/net-games/widgets/base-widget')
 local LOGGING = require('scripts/net-games/widgets/logging')
 local debug_print = LOGGING.debug_print
 local utils = require('scripts/net-games/widgets/utils')
-local SpriteDimensionCache = require('scripts/net-games/widgets/sprite-dimension-cache')
 
 local Grid = {}
 setmetatable(Grid, {__index = Widget})
@@ -44,7 +43,7 @@ function Grid:setSpacing(horizontal, vertical)
     self.state.dirty = true
     self.state.needs_layout = true
     
-    debug_print("DETAILED", "Grid.setSpacing: %s = h=%d, v=%d", 
+    debug_print("DETAILED", "Grid.setSpacing: %s = h=%g, v=%g", 
                self.id, self.horizontal_spacing, self.vertical_spacing)
     
     return self
@@ -56,7 +55,7 @@ function Grid:setCellSize(width, height)
     self.state.dirty = true
     self.state.needs_layout = true
     
-    debug_print("DETAILED", "Grid.setCellSize: %s = %dx%d", 
+    debug_print("DETAILED", "Grid.setCellSize: %s = %gx%g", 
                self.id, self.cell_width, self.cell_height)
     
     return self
@@ -90,7 +89,7 @@ function Grid:addItem(item_id, texture_path, anim_path, anim_state, data, layout
         id = item_id
     })
     
-    debug_print("DETAILED", "  Item sprite_id: %s, layout: %dx%d", 
+    debug_print("DETAILED", "  Item sprite_id: %s, layout: %gx%g", 
                item.sprite_id, layout_width or 0, layout_height or 0)
     debug_print("DETAILED", "  Total items: %d", #self.items)
     
@@ -175,10 +174,10 @@ function Grid:calculateLayout(available_width, available_height)
     local cell_width = self.cell_width
     local cell_height = self.cell_height
     
-    debug_print("DETAILED", "  Initial cell size: %dx%d", cell_width, cell_height)
+    debug_print("DETAILED", "  Initial cell size: %gx%g", cell_width, cell_height)
     
     if cell_width == 0 or cell_height == 0 then
-        -- Auto-size: find largest item
+        -- Auto-size: find largest item using sprite object dimensions
         local max_item_width, max_item_height = 0, 0
         
         for i, item in ipairs(self.items) do
@@ -194,12 +193,13 @@ function Grid:calculateLayout(available_width, available_height)
                     item_width, item_height = sprite:get_visual_dimensions()
                 end
             else
-                -- Fallback to dimension cache
-                item_width, item_height = SpriteDimensionCache.get_dimensions(
-                    item.texture_path, item.anim_path, item.anim_state)
+                -- Fallback to item's layout dimensions or default
+                item_width = item.layout_width or 32
+                item_height = item.layout_height or 32
+                debug_print("WARN", "  Sprite not found for item %d, using default dimensions", i)
             end
             
-            debug_print("DETAILED", "  Item %d (%s) dimensions: %dx%d", 
+            debug_print("DETAILED", "  Item %d (%s) dimensions: %gx%g", 
                        i, item.id, item_width, item_height)
             
             max_item_width = math.max(max_item_width, item_width)
@@ -209,7 +209,7 @@ function Grid:calculateLayout(available_width, available_height)
         cell_width = cell_width == 0 and max_item_width or cell_width
         cell_height = cell_height == 0 and max_item_height or cell_height
         
-        debug_print("DETAILED", "  Auto-sized cell: %dx%d", cell_width, cell_height)
+        debug_print("DETAILED", "  Auto-sized cell: %gx%g", cell_width, cell_height)
     end
     
     -- Calculate grid dimensions
@@ -217,7 +217,7 @@ function Grid:calculateLayout(available_width, available_height)
     local grid_width = (cell_width * self.columns) + (self.horizontal_spacing * (self.columns - 1))
     local grid_height = (cell_height * rows) + (self.vertical_spacing * (rows - 1))
     
-    debug_print("DETAILED", "  Grid dimensions: %dx%d (rows=%d)", grid_width, grid_height, rows)
+    debug_print("DETAILED", "  Grid dimensions: %gx%g (rows=%d)", grid_width, grid_height, rows)
     
     -- Position items
     local positioned_children = {}
@@ -229,10 +229,10 @@ function Grid:calculateLayout(available_width, available_height)
         local x = col * (cell_width + self.horizontal_spacing)
         local y = row * (cell_height + self.vertical_spacing)
         
-        debug_print("DETAILED", "  Item %d: row=%d, col=%d, base position=(%d,%d)", 
+        debug_print("DETAILED", "  Item %d: row=%d, col=%d, base position=(%g,%g)", 
                    i, row, col, x, y)
         
-        -- Get item dimensions
+        -- Get item dimensions from sprite object
         local sprite_width, sprite_height
         local sprite = self.sprite_objects[item.sprite_id]
         
@@ -246,16 +246,16 @@ function Grid:calculateLayout(available_width, available_height)
                 sprite_width, sprite_height = sprite:get_visual_dimensions()
             end
         else
-            -- Fallback
-            sprite_width, sprite_height = SpriteDimensionCache.get_dimensions(
-                item.texture_path, item.anim_path, item.anim_state)
+            -- Fallback to item's layout dimensions or default
+            sprite_width = item.layout_width or 32
+            sprite_height = item.layout_height or 32
         end
         
         -- Center sprite in cell
         local offset_x = (cell_width - sprite_width) / 2
         local offset_y = (cell_height - sprite_height) / 2
         
-        debug_print("DETAILED", "    Sprite: %dx%d, offset=(%d,%d)", 
+        debug_print("DETAILED", "    Sprite: %gx%g, offset=(%g,%g)", 
                    sprite_width, sprite_height, offset_x, offset_y)
         
         table.insert(positioned_children, {
@@ -266,7 +266,7 @@ function Grid:calculateLayout(available_width, available_height)
         })
     end
     
-    debug_print("INFO", "Grid layout calculated: %s = %dx%d, positioned %d items", 
+    debug_print("INFO", "Grid layout calculated: %s = %gx%g, positioned %d items", 
                self.id, grid_width, grid_height, #positioned_children)
     
     return grid_width, grid_height, positioned_children

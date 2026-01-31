@@ -5,7 +5,6 @@ local debug_print = LOGGING.debug_print
 local utils = require('scripts/net-games/widgets/utils')
 
 local SpriteDimensionCache = {}
-local _dimension_cache = {} -- texture_path|anim_path|anim_state -> {width, height}
 
 function SpriteDimensionCache.get_dimensions(texture_path, anim_path, anim_state)
     if not texture_path then

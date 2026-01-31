@@ -54,7 +54,7 @@ function Container:calculateLayout(available_width, available_height)
     local child_height = available_height - self.padding.top -
                              self.padding.bottom
 
-    debug_print("DETAILED", "  Available for child: %dx%d (after padding)",
+    debug_print("DETAILED", "  Available for child: %gx%g (after padding)",
                 child_width, child_height)
 
     -- Update child layout
@@ -64,7 +64,7 @@ function Container:calculateLayout(available_width, available_height)
     local child_layout_width, child_layout_height =
         self.child:getCalculatedSize()
 
-    debug_print("DETAILED", "  Child calculated size: %dx%d",
+    debug_print("DETAILED", "  Child calculated size: %gx%g",
                 child_layout_width, child_layout_height)
 
     -- Position child
@@ -82,7 +82,7 @@ function Container:calculateLayout(available_width, available_height)
     local layout_height = child_layout_height + self.padding.top +
                               self.padding.bottom
 
-    debug_print("INFO", "Container layout calculated: %s = %dx%d", self.id,
+    debug_print("INFO", "Container layout calculated: %s = %gx%g", self.id,
                 layout_width, layout_height)
 
     return layout_width, layout_height, positioned_children
