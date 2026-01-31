@@ -72,6 +72,9 @@ function SpriteObject:set_widget_animated(is_animated, properties)
     elseif not is_animated then
         self.widget_animation_properties = {}
     end
+    
+    debug_print("DETAILED", "SpriteObject.set_widget_animated: %s = %s (type: %s)", 
+               self.id, tostring(is_animated), properties and properties.type or "none")
 end
 
 -- Check if sprite is being animated by parent widget
@@ -170,33 +173,42 @@ function SpriteObject:allocate()
     end
 end
 
--- Get scaled position for drawing (screen space -> scaled coordinates)
 function SpriteObject:get_scaled_position()
-    local screen_x = self.properties.x
-    local screen_y = self.properties.y
-    
-    -- Get the widget hierarchy and add all parent positions (screen space)
-    local WidgetCache = require('scripts/net-games/widgets/cache')
-    local widget = WidgetCache.get(self.widget_id, self.player_id)
-    if widget then
-        -- Start with immediate widget position
-        screen_x = screen_x + widget.x
-        screen_y = screen_y + widget.y
+    -- If widget is animating, use the absolute position we set during animation
+    if self.widget_animated then
+        -- During widget animation, properties.x and properties.y are absolute
+        local screen_x = self.properties.x
+        local screen_y = self.properties.y
         
-        -- Add all parent widget positions
-        local parent = widget.parent
-        while parent do
-            screen_x = screen_x + parent.x
-            screen_y = screen_y + parent.y
-            parent = parent.parent
+        -- Scale to final coordinates
+        local scaled_x = utils.normalize_x(screen_x)
+        local scaled_y = utils.normalize_y(screen_y)
+        
+        return scaled_x, scaled_y, screen_x, screen_y
+    else
+        -- Normal case: relative position + widget position + parent positions
+        local screen_x = self.properties.x
+        local screen_y = self.properties.y
+        
+        local WidgetCache = require('scripts/net-games/widgets/cache')
+        local widget = WidgetCache.get(self.widget_id, self.player_id)
+        if widget then
+            screen_x = screen_x + widget.x
+            screen_y = screen_y + widget.y
+            
+            local parent = widget.parent
+            while parent do
+                screen_x = screen_x + parent.x
+                screen_y = screen_y + parent.y
+                parent = parent.parent
+            end
         end
+        
+        local scaled_x = utils.normalize_x(screen_x)
+        local scaled_y = utils.normalize_y(screen_y)
+        
+        return scaled_x, scaled_y, screen_x, screen_y
     end
-    
-    -- Scale to final coordinates
-    local scaled_x = utils.normalize_x(screen_x)
-    local scaled_y = utils.normalize_y(screen_y)
-    
-    return scaled_x, scaled_y, screen_x, screen_y
 end
 
 function SpriteObject:draw()

@@ -644,7 +644,6 @@ function Widget:calculateLayout(available_width, available_height)
     return width, height, positioned_children
 end
 
--- Modified slide_widget to use screen space coordinates with animation fallback
 function Widget:slide_widget(target_x, target_y, duration, easing, on_complete)
     if not self then
         debug_print("ERROR", "Widget.slide_widget: Invalid widget")
@@ -657,89 +656,109 @@ function Widget:slide_widget(target_x, target_y, duration, easing, on_complete)
     debug_print("INFO", "Widget.slide_widget: %s to screen(%g,%g) in %f seconds", 
                self.id, target_x, target_y, duration)
     
-    -- Mark layout animation as active
-    self._layout_animation_active = true
-    self._layout_animation_type = "position"
-    
     -- Get starting position
     local start_x = self.x
     local start_y = self.y
-    
-    -- Calculate delta for all sprites (in screen space)
     local delta_x = target_x - start_x
     local delta_y = target_y - start_y
+    
+    -- Store starting positions of all sprites (relative to widget)
+    local sprite_start_positions = {}
+    for sprite_id, sprite in pairs(self.sprite_objects) do
+        local props = sprite:get_properties()
+        sprite_start_positions[sprite_id] = {
+            x = props.x,
+            y = props.y
+        }
+        -- MARK SPRITES AS WIDGET-ANIMATED HERE
+        sprite:set_widget_animated(true, {type = "position"})
+        debug_print("DETAILED", "  Marked sprite %s as widget-animated", sprite_id)
+    end
+    
+    -- Store starting positions of child widgets
+    local child_widget_start_positions = {}
+    for _, child_widget in pairs(self._child_widgets) do
+        child_widget_start_positions[child_widget.id] = {
+            x = child_widget.x,
+            y = child_widget.y
+        }
+        child_widget._layout_animation_active = true
+        child_widget._layout_animation_type = "position"
+        debug_print("DETAILED", "  Marked child widget %s for animation", child_widget.id)
+    end
     
     -- Try to load animation modules
     local AnimationEngine, AnimationSequences, AnimationEnums = utils.load_animation_modules()
     
     if not AnimationEngine then
-        debug_print("WARN", "Widget.slide_widget: AnimationEngine not available, setting position directly")
-        
-        -- Directly set position for all sprites
-        for sprite_id, sprite in pairs(self.sprite_objects) do
-            local sprite_props = sprite:get_properties()
-            sprite:set_position(sprite_props.x + delta_x, sprite_props.y + delta_y)
-        end
-        
-        -- Also set for child widgets
-        for _, child_widget in pairs(self._child_widgets) do
-            child_widget:setPosition(child_widget.x + delta_x, child_widget.y + delta_y)
-        end
-        
-        -- Set widget position
+        debug_print("WARN", "Widget.slide_widget: AnimationEngine not available")
         self:setPosition(target_x, target_y)
         
-        -- Clear animation flags
-        self._layout_animation_active = false
-        self._layout_animation_type = nil
+        -- UNMARK SPRITES HERE (on_complete for fallback case)
+        for sprite_id, sprite in pairs(self.sprite_objects) do
+            sprite:set_widget_animated(false)
+        end
         
         if on_complete then
             on_complete({x = target_x, y = target_y}, false)
         end
-        
         return nil
     end
     
-    -- Animation engine is available, use it
+    -- Set animation flag
+    self._layout_animation_active = true
+    self._layout_animation_type = "position"
     
-    -- Animate ALL sprite objects within this widget
-    local sprite_animations = {}
-    for sprite_id, sprite in pairs(self.sprite_objects) do
-        sprite:set_widget_animated(true, {type = "position", delta_x = delta_x, delta_y = delta_y})
-        
-        local sprite_props = sprite:get_properties()
-        local sprite_target_x = sprite_props.x + delta_x
-        local sprite_target_y = sprite_props.y + delta_y
-        
-        local anim_id = sprite:slide_sprite(sprite_target_x, sprite_target_y, duration, easing)
-        if anim_id then
-            table.insert(sprite_animations, {id = anim_id, sprite = sprite})
-        end
-    end
-    
-    -- Also animate child widgets (with screen space coordinates)
-    local child_animations = {}
-    for _, child_widget in pairs(self._child_widgets) do
-        local anim_id = child_widget:slide_widget(
-            child_widget.x + delta_x,
-            child_widget.y + delta_y,
-            duration, easing)
-        if anim_id then
-            table.insert(child_animations, {id = anim_id, widget = child_widget})
-        end
-    end
-    
-    -- Animate the widget's position for layout purposes
-    local anim_id = nil
-    anim_id = AnimationEngine.animate(
-        {x = start_x, y = start_y},
-        {x = target_x, y = target_y},
+    -- Create a single animation that updates both widget and sprites
+    local anim_id = AnimationEngine.animate(
+        {t = 0},  -- t goes from 0 to 1
+        {t = 1},
         duration,
         {
             easing = easing,
             on_update = function(values)
-                -- Update widget position (in screen space)
-                self:setPosition(values.x, values.y)
+                local t = values.t
+                local current_x = start_x + delta_x * t
+                local current_y = start_y + delta_y * t
+                
+                -- Update widget position ONLY (don't trigger layout)
+                self.x = current_x
+                self.y = current_y
+                
+                -- Update ALL sprites to match widget position
+                -- Each sprite gets: widget_position + sprite_original_relative_position
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    local start_pos = sprite_start_positions[sprite_id]
+                    if start_pos then
+                        -- Calculate sprite's absolute position
+                        local sprite_x = current_x + start_pos.x
+                        local sprite_y = current_y + start_pos.y
+                        
+                        -- Set sprite position directly (no animation on sprite object)
+                        sprite.properties.x = sprite_x
+                        sprite.properties.y = sprite_y
+                        
+                        -- Force redraw
+                        sprite:draw()
+                        debug_print("DETAILED", "  Updated sprite %s to (%g,%g)", 
+                                   sprite_id, sprite_x, sprite_y)
+                    end
+                end
+                
+                -- Update child widgets to maintain their relative positions
+                for _, child_widget in pairs(self._child_widgets) do
+                    local start_pos = child_widget_start_positions[child_widget.id]
+                    if start_pos then
+                        -- Child maintains same relative position to parent
+                        child_widget.x = start_pos.x
+                        child_widget.y = start_pos.y
+                        
+                        -- Update child's layout (which will update its sprites)
+                        child_widget:updateLayout(false)
+                        debug_print("DETAILED", "  Updated child widget %s position", 
+                                   child_widget.id)
+                    end
+                end
             end,
             on_complete = function(values, interrupted)
                 -- Apply screen constraints after animation
@@ -747,33 +766,39 @@ function Widget:slide_widget(target_x, target_y, duration, easing, on_complete)
                     self:applyScreenConstraints()
                 end
                 
-                -- Clear animation flags
+                -- Clear widget animation flags
                 self._layout_animation_active = false
                 self._layout_animation_type = nil
                 
-                -- Clear sprite animation flags
+                -- UNMARK ALL SPRITES HERE (in on_complete)
                 for sprite_id, sprite in pairs(self.sprite_objects) do
                     sprite:set_widget_animated(false)
+                    debug_print("DETAILED", "  Unmarked sprite %s as widget-animated", sprite_id)
                 end
                 
                 -- Clear child widget animation flags
-                for _, child_data in ipairs(child_animations) do
-                    if child_data.widget then
-                        child_data.widget._layout_animation_active = false
-                        child_data.widget._layout_animation_type = nil
-                    end
+                for _, child_widget in pairs(self._child_widgets) do
+                    child_widget._layout_animation_active = false
+                    child_widget._layout_animation_type = nil
                 end
+                
+                -- Force final layout update
+                self:updateLayout(true)
                 
                 self.active_animations[anim_id] = nil
                 if on_complete then
-                    on_complete(values, interrupted)
+                    on_complete({x = target_x, y = target_y}, interrupted)
                 end
+                
+                debug_print("INFO", "Widget.slide_widget completed: %s at (%g,%g)", 
+                           self.id, target_x, target_y)
             end
         }
     )
     
     if anim_id then
         self.active_animations[anim_id] = true
+        debug_print("INFO", "Widget.slide_widget started animation: %s", anim_id)
     end
     
     return anim_id
