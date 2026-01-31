@@ -1549,6 +1549,1589 @@ function Widget:is_animating()
     return false
 end
 
+-- ===========================================================
+-- NEW ANIMATION METHODS FOLLOWING slide_widget PATTERN
+-- ===========================================================
+
+-- Complex transform animation combining multiple properties - Following slide_widget pattern
+function Widget:transform_widget(properties, duration, easing, user_on_complete)
+    if not self then
+        debug_print("ERROR", "Widget.transform_widget: Invalid widget")
+        return nil
+    end
+    
+    duration = duration or 0.3
+    easing = easing or "ease_in_out"
+    
+    debug_print("INFO", "Widget.transform_widget: %s with properties", self.id)
+    
+    -- Store starting states of all sprites
+    local sprite_start_states = {}
+    for sprite_id, sprite in pairs(self.sprite_objects) do
+        local props = sprite:get_properties()
+        sprite_start_states[sprite_id] = {
+            x = props.x,
+            y = props.y,
+            sx = props.sx,
+            sy = props.sy,
+            ro = props.ro or 0,
+            opacity = props.opacity or 255,
+            r = props.r or 255,
+            g = props.g or 255,
+            b = props.b or 255,
+            a = props.a or 255
+        }
+        -- MARK SPRITES AS WIDGET-ANIMATED HERE
+        sprite:set_widget_animated(true, {type = "transform"})
+        debug_print("DETAILED", "  Marked sprite %s as widget-animated", sprite_id)
+    end
+    
+    -- Store starting states of child widgets
+    local child_widget_start_states = {}
+    for _, child_widget in pairs(self._child_widgets) do
+        child_widget_start_states[child_widget.id] = {
+            x = child_widget.x,
+            y = child_widget.y,
+            sx = child_widget.sx,
+            sy = child_widget.sy,
+            ro = child_widget.ro,
+            opacity = child_widget.opacity,
+            r = child_widget.r,
+            g = child_widget.g,
+            b = child_widget.b,
+            a = child_widget.a
+        }
+        child_widget._layout_animation_active = true
+        child_widget._layout_animation_type = "transform"
+        debug_print("DETAILED", "  Marked child widget %s for animation", child_widget.id)
+    end
+    
+    -- Try to load animation modules
+    local AnimationEngine, AnimationSequences, AnimationEnums = utils.load_animation_modules()
+    
+    if not AnimationEngine then
+        debug_print("WARN", "Widget.transform_widget: AnimationEngine not available")
+        
+        -- Apply properties directly
+        if properties.x or properties.y then self:setPosition(properties.x or self.x, properties.y or self.y) end
+        if properties.sx or properties.sy then self:setScale(properties.sx or self.sx, properties.sy or self.sy) end
+        if properties.ro then self:setRotation(properties.ro) end
+        if properties.opacity then self:setOpacity(properties.opacity) end
+        if properties.r or properties.g or properties.b or properties.a then 
+            self:setColor(properties.r or self.r, properties.g or self.g, 
+                         properties.b or self.b, properties.a or self.a) 
+        end
+        
+        -- UNMARK SPRITES HERE
+        for sprite_id, sprite in pairs(self.sprite_objects) do
+            sprite:set_widget_animated(false)
+        end
+        
+        if user_on_complete then
+            user_on_complete(properties, false)
+        end
+        return nil
+    end
+    
+    -- Set animation flag
+    self._layout_animation_active = true
+    self._layout_animation_type = "transform"
+    
+    local start_properties = {
+        x = self.x,
+        y = self.y,
+        sx = self.sx,
+        sy = self.sy,
+        ro = self.ro,
+        opacity = self.opacity,
+        r = self.r,
+        g = self.g,
+        b = self.b,
+        a = self.a
+    }
+    
+    local target_properties = {}
+    for key, value in pairs(properties) do
+        if start_properties[key] ~= nil then
+            target_properties[key] = value
+        end
+    end
+    
+    local anim_id
+    
+    anim_id = AnimationEngine.animate(
+        start_properties,
+        target_properties,
+        duration,
+        {
+            easing = easing,
+            on_update = function(values)
+                -- Update widget properties
+                if values.x ~= nil then self.x = values.x end
+                if values.y ~= nil then self.y = values.y end
+                if values.sx ~= nil then self.sx = values.sx end
+                if values.sy ~= nil then self.sy = values.sy end
+                if values.ro ~= nil then self.ro = values.ro end
+                if values.opacity ~= nil then self.opacity = values.opacity end
+                if values.r ~= nil then self.r = values.r end
+                if values.g ~= nil then self.g = values.g end
+                if values.b ~= nil then self.b = values.b end
+                if values.a ~= nil then self.a = values.a end
+                
+                -- Update ALL sprites to match widget properties
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    local start_state = sprite_start_states[sprite_id]
+                    if start_state then
+                        -- Calculate sprite's absolute properties
+                        local sprite_x = self.x + (start_state.x - start_properties.x)
+                        local sprite_y = self.y + (start_state.y - start_properties.y)
+                        
+                        -- Calculate relative scale, rotation, etc.
+                        local sprite_sx = values.sx or start_state.sx
+                        local sprite_sy = values.sy or start_state.sy
+                        local sprite_ro = values.ro or start_state.ro
+                        local sprite_opacity = values.opacity or start_state.opacity
+                        local sprite_r = values.r or start_state.r
+                        local sprite_g = values.g or start_state.g
+                        local sprite_b = values.b or start_state.b
+                        local sprite_a = values.a or start_state.a
+                        
+                        -- Set sprite properties directly
+                        sprite.properties.x = sprite_x
+                        sprite.properties.y = sprite_y
+                        sprite.properties.sx = sprite_sx
+                        sprite.properties.sy = sprite_sy
+                        sprite.properties.ro = sprite_ro
+                        sprite.properties.opacity = sprite_opacity
+                        sprite.properties.r = sprite_r
+                        sprite.properties.g = sprite_g
+                        sprite.properties.b = sprite_b
+                        sprite.properties.a = sprite_a
+                        
+                        -- Force redraw
+                        sprite:draw()
+                    end
+                end
+                
+                -- Update child widgets to maintain their relative states
+                for _, child_widget in pairs(self._child_widgets) do
+                    local start_state = child_widget_start_states[child_widget.id]
+                    if start_state then
+                        -- Child maintains same relative state to parent
+                        child_widget.x = start_state.x
+                        child_widget.y = start_state.y
+                        child_widget.sx = start_state.sx
+                        child_widget.sy = start_state.sy
+                        child_widget.ro = start_state.ro
+                        child_widget.opacity = start_state.opacity
+                        child_widget.r = start_state.r
+                        child_widget.g = start_state.g
+                        child_widget.b = start_state.b
+                        child_widget.a = start_state.a
+                        
+                        -- Update child's layout
+                        child_widget:updateLayout(false)
+                    end
+                end
+            end,
+            on_complete = function(values, interrupted)
+                -- Apply screen constraints after animation
+                if self._constrain_to_screen then
+                    self:applyScreenConstraints()
+                end
+                
+                -- Clear widget animation flags
+                self._layout_animation_active = false
+                self._layout_animation_type = nil
+                
+                -- UNMARK ALL SPRITES HERE (in on_complete)
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite:set_widget_animated(false)
+                    debug_print("DETAILED", "  Unmarked sprite %s as widget-animated", sprite_id)
+                end
+                
+                -- Clear child widget animation flags
+                for _, child_widget in pairs(self._child_widgets) do
+                    child_widget._layout_animation_active = false
+                    child_widget._layout_animation_type = nil
+                end
+                
+                -- Force final layout update
+                self:updateLayout(true)
+                
+                self.active_animations[anim_id] = nil
+                if user_on_complete then
+                    user_on_complete(values, interrupted)
+                end
+                
+                debug_print("INFO", "Widget.transform_widget completed: %s", self.id)
+            end
+        }
+    )
+    
+    if anim_id then
+        self.active_animations[anim_id] = true
+        debug_print("INFO", "Widget.transform_widget started animation: %s", anim_id)
+    end
+    
+    return anim_id
+end
+
+-- Apply Bob animation (vertical bobbing) - Following slide_widget pattern
+function Widget:bob_widget(distance, duration, easing, loop, ping_pong, user_on_complete)
+    if not self then
+        debug_print("ERROR", "Widget.bob_widget: Invalid widget")
+        return nil
+    end
+    
+    duration = duration or 1.0
+    easing = easing or "smoothstep"
+    loop = loop or true
+    ping_pong = ping_pong or true
+    distance = distance or 3
+    
+    debug_print("INFO", "Widget.bob_widget: %s with distance %f, duration %f", 
+               self.id, distance, duration)
+    
+    -- Get starting position
+    local start_y = self.y
+    
+    -- Store starting positions of all sprites (relative to widget)
+    local sprite_start_positions = {}
+    for sprite_id, sprite in pairs(self.sprite_objects) do
+        local props = sprite:get_properties()
+        sprite_start_positions[sprite_id] = {
+            x = props.x,
+            y = props.y
+        }
+        -- MARK SPRITES AS WIDGET-ANIMATED HERE
+        sprite:set_widget_animated(true, {type = "bob"})
+        debug_print("DETAILED", "  Marked sprite %s as widget-animated", sprite_id)
+    end
+    
+    -- Store starting positions of child widgets
+    local child_widget_start_positions = {}
+    for _, child_widget in pairs(self._child_widgets) do
+        child_widget_start_positions[child_widget.id] = {
+            x = child_widget.x,
+            y = child_widget.y
+        }
+        child_widget._layout_animation_active = true
+        child_widget._layout_animation_type = "bob"
+        debug_print("DETAILED", "  Marked child widget %s for animation", child_widget.id)
+    end
+    
+    -- Try to load animation modules
+    local AnimationEngine, AnimationSequences, AnimationEnums = utils.load_animation_modules()
+    
+    if not AnimationEngine then
+        debug_print("WARN", "Widget.bob_widget: AnimationEngine not available")
+        
+        -- UNMARK SPRITES HERE (on_complete for fallback case)
+        for sprite_id, sprite in pairs(self.sprite_objects) do
+            sprite:set_widget_animated(false)
+        end
+        
+        if user_on_complete then
+            user_on_complete({y = start_y - distance}, false)
+        end
+        return nil
+    end
+    
+    -- Set animation flag
+    self._layout_animation_active = true
+    self._layout_animation_type = "bob"
+    local anim_id
+    
+    anim_id = AnimationEngine.animate(
+        {y = start_y},
+        {y = start_y - distance},
+        duration,
+        {
+            easing = easing,
+            on_update = function(values)
+                local current_y = values.y
+                
+                -- Update widget position ONLY (don't trigger layout)
+                self.y = current_y
+                
+                -- Update ALL sprites to match widget position
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    local start_pos = sprite_start_positions[sprite_id]
+                    if start_pos then
+                        -- Calculate sprite's absolute position
+                        local sprite_x = self.x + start_pos.x
+                        local sprite_y = current_y + start_pos.y
+                        
+                        -- Set sprite position directly
+                        sprite.properties.x = sprite_x
+                        sprite.properties.y = sprite_y
+                        
+                        -- Force redraw
+                        sprite:draw()
+                        debug_print("DETAILED", "  Updated sprite %s to (%g,%g)", 
+                                   sprite_id, sprite_x, sprite_y)
+                    end
+                end
+                
+                -- Update child widgets to maintain their relative positions
+                for _, child_widget in pairs(self._child_widgets) do
+                    local start_pos = child_widget_start_positions[child_widget.id]
+                    if start_pos then
+                        -- Child maintains same relative position to parent
+                        child_widget.y = start_pos.y
+                        
+                        -- Update child's layout (which will update its sprites)
+                        child_widget:updateLayout(false)
+                        debug_print("DETAILED", "  Updated child widget %s position", 
+                                   child_widget.id)
+                    end
+                end
+            end,
+            on_complete = function(values, interrupted)
+                -- Apply screen constraints after animation
+                if self._constrain_to_screen then
+                    self:applyScreenConstraints()
+                end
+                
+                -- Clear widget animation flags
+                self._layout_animation_active = false
+                self._layout_animation_type = nil
+                
+                -- UNMARK ALL SPRITES HERE (in on_complete)
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite:set_widget_animated(false)
+                    debug_print("DETAILED", "  Unmarked sprite %s as widget-animated", sprite_id)
+                end
+                
+                -- Clear child widget animation flags
+                for _, child_widget in pairs(self._child_widgets) do
+                    child_widget._layout_animation_active = false
+                    child_widget._layout_animation_type = nil
+                end
+                
+                -- Force final layout update
+                self:updateLayout(true)
+                
+                self.active_animations[anim_id] = nil
+                if user_on_complete then
+                    user_on_complete(values, interrupted)
+                end
+                
+                debug_print("INFO", "Widget.bob_widget completed: %s", self.id)
+            end,
+            loop = loop,
+            ping_pong = ping_pong
+        }
+    )
+    
+    if anim_id then
+        self.active_animations[anim_id] = true
+        debug_print("INFO", "Widget.bob_widget started animation: %s", anim_id)
+    end
+    
+    return anim_id
+end
+
+-- Pulse the scale of a widget - Following slide_widget pattern
+function Widget:pulse_scale_widget(min_scale, max_scale, pulse_duration, easing, loops, user_on_complete)
+    if not self then
+        debug_print("ERROR", "Widget.pulse_scale_widget: Invalid widget")
+        return nil
+    end
+    
+    local current_scale = self.sx or 1.0
+    min_scale = min_scale or current_scale * 0.9
+    max_scale = max_scale or current_scale * 1.1
+    pulse_duration = pulse_duration or 0.5
+    loops = loops or 1
+    
+    debug_print("INFO", "Widget.pulse_scale_widget: %s scale from %f to %f", 
+               self.id, min_scale, max_scale)
+    
+    -- Store starting scales of all sprites
+    local sprite_start_scales = {}
+    for sprite_id, sprite in pairs(self.sprite_objects) do
+        local props = sprite:get_properties()
+        sprite_start_scales[sprite_id] = {
+            sx = props.sx,
+            sy = props.sy
+        }
+        -- MARK SPRITES AS WIDGET-ANIMATED HERE
+        sprite:set_widget_animated(true, {type = "pulse_scale"})
+        debug_print("DETAILED", "  Marked sprite %s as widget-animated", sprite_id)
+    end
+    
+    -- Store starting scales of child widgets
+    local child_widget_start_scales = {}
+    for _, child_widget in pairs(self._child_widgets) do
+        child_widget_start_scales[child_widget.id] = {
+            sx = child_widget.sx,
+            sy = child_widget.sy
+        }
+        child_widget._layout_animation_active = true
+        child_widget._layout_animation_type = "pulse_scale"
+        debug_print("DETAILED", "  Marked child widget %s for animation", child_widget.id)
+    end
+    
+    -- Try to load animation modules
+    local AnimationEngine, AnimationSequences, AnimationEnums = utils.load_animation_modules()
+    
+    if not AnimationEngine then
+        debug_print("WARN", "Widget.pulse_scale_widget: AnimationEngine not available")
+        self:setScale(max_scale, max_scale)
+        
+        -- UNMARK SPRITES HERE (on_complete for fallback case)
+        for sprite_id, sprite in pairs(self.sprite_objects) do
+            sprite:set_widget_animated(false)
+        end
+        
+        if user_on_complete then
+            user_on_complete({sx = max_scale, sy = max_scale}, false)
+        end
+        return nil
+    end
+    
+    -- Set animation flag
+    self._layout_animation_active = true
+    self._layout_animation_type = "pulse_scale"
+    local anim_id
+    
+    anim_id = AnimationEngine.animate(
+        {scale = min_scale},
+        {scale = max_scale},
+        pulse_duration / 2,
+        {
+            easing = easing or "ease_in_out",
+            on_update = function(values)
+                local current_scale = values.scale
+                
+                -- Update widget scale ONLY (don't trigger layout)
+                self.sx = current_scale
+                self.sy = current_scale
+                
+                -- Update ALL sprites to match widget scale
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite.properties.sx = current_scale
+                    sprite.properties.sy = current_scale
+                    
+                    -- Force redraw
+                    sprite:draw()
+                    debug_print("DETAILED", "  Updated sprite %s scale to %f", 
+                               sprite_id, current_scale)
+                end
+                
+                -- Update child widgets to maintain their relative scales
+                for _, child_widget in pairs(self._child_widgets) do
+                    local start_scale = child_widget_start_scales[child_widget.id]
+                    if start_scale then
+                        -- Child maintains same relative scale to parent
+                        child_widget.sx = start_scale.sx
+                        child_widget.sy = start_scale.sy
+                        
+                        -- Update child's layout (which will update its sprites)
+                        child_widget:updateLayout(false)
+                        debug_print("DETAILED", "  Updated child widget %s scale", 
+                                   child_widget.id)
+                    end
+                end
+            end,
+            on_complete = function(values, interrupted)
+                -- Clear widget animation flags
+                self._layout_animation_active = false
+                self._layout_animation_type = nil
+                
+                -- UNMARK ALL SPRITES HERE (in on_complete)
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite:set_widget_animated(false)
+                    debug_print("DETAILED", "  Unmarked sprite %s as widget-animated", sprite_id)
+                end
+                
+                -- Clear child widget animation flags
+                for _, child_widget in pairs(self._child_widgets) do
+                    child_widget._layout_animation_active = false
+                    child_widget._layout_animation_type = nil
+                end
+                
+                -- Force final layout update
+                self:updateLayout(true)
+                
+                self.active_animations[anim_id] = nil
+                if user_on_complete then
+                    user_on_complete(values, interrupted)
+                end
+                
+                debug_print("INFO", "Widget.pulse_scale_widget completed: %s", self.id)
+            end,
+            loop = loops,
+            ping_pong = true
+        }
+    )
+    
+    if anim_id then
+        self.active_animations[anim_id] = true
+        debug_print("INFO", "Widget.pulse_scale_widget started animation: %s", anim_id)
+    end
+    
+    return anim_id
+end
+
+-- Apply shake animation - Following slide_widget pattern
+function Widget:shake_widget(intensity, duration, frequency, user_on_complete)
+    if not self then
+        debug_print("ERROR", "Widget.shake_widget: Invalid widget")
+        return nil
+    end
+    
+    intensity = intensity or 5
+    duration = duration or 0.5
+    frequency = frequency or 15
+    
+    debug_print("INFO", "Widget.shake_widget: %s intensity %f, duration %f", 
+               self.id, intensity, duration)
+    
+    -- Store starting positions of all sprites
+    local sprite_start_positions = {}
+    for sprite_id, sprite in pairs(self.sprite_objects) do
+        local props = sprite:get_properties()
+        sprite_start_positions[sprite_id] = {
+            x = props.x,
+            y = props.y
+        }
+        -- MARK SPRITES AS WIDGET-ANIMATED HERE
+        sprite:set_widget_animated(true, {type = "shake"})
+        debug_print("DETAILED", "  Marked sprite %s as widget-animated", sprite_id)
+    end
+    
+    -- Store starting positions of child widgets
+    local child_widget_start_positions = {}
+    for _, child_widget in pairs(self._child_widgets) do
+        child_widget_start_positions[child_widget.id] = {
+            x = child_widget.x,
+            y = child_widget.y
+        }
+        child_widget._layout_animation_active = true
+        child_widget._layout_animation_type = "shake"
+        debug_print("DETAILED", "  Marked child widget %s for animation", child_widget.id)
+    end
+    
+    -- Try to load animation modules
+    local AnimationEngine, AnimationSequences, AnimationEnums = utils.load_animation_modules()
+    
+    if not AnimationEngine then
+        debug_print("WARN", "Widget.shake_widget: AnimationEngine not available")
+        
+        -- UNMARK SPRITES HERE (on_complete for fallback case)
+        for sprite_id, sprite in pairs(self.sprite_objects) do
+            sprite:set_widget_animated(false)
+        end
+        
+        if user_on_complete then
+            user_on_complete({shake_completed = true}, false)
+        end
+        return nil
+    end
+    
+    -- Set animation flag
+    self._layout_animation_active = true
+    self._layout_animation_type = "shake"
+    
+    local start_x = self.x
+    local start_y = self.y
+    local elapsed_time = 0
+    local anim_id
+    
+    anim_id = AnimationEngine.animate(
+        {t = 0},
+        {t = 1},
+        duration,
+        {
+            easing = "linear",
+            on_update = function(values)
+                local t = values.t
+                elapsed_time = t * duration
+                
+                -- Calculate shake offset using sine waves
+                local shake_x = math.sin(elapsed_time * frequency * math.pi * 2) * intensity
+                local shake_y = math.cos(elapsed_time * frequency * math.pi * 2) * intensity
+                
+                -- Dampen shake over time
+                local dampen = 1.0 - t
+                shake_x = shake_x * dampen
+                shake_y = shake_y * dampen
+                
+                -- Update widget position
+                local current_x = start_x + shake_x
+                local current_y = start_y + shake_y
+                self.x = current_x
+                self.y = current_y
+                
+                -- Update ALL sprites to match widget position with shake
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    local start_pos = sprite_start_positions[sprite_id]
+                    if start_pos then
+                        -- Calculate sprite's absolute position with shake
+                        local sprite_x = current_x + start_pos.x
+                        local sprite_y = current_y + start_pos.y
+                        
+                        -- Set sprite position directly
+                        sprite.properties.x = sprite_x
+                        sprite.properties.y = sprite_y
+                        
+                        -- Force redraw
+                        sprite:draw()
+                        debug_print("DETAILED", "  Updated sprite %s to (%g,%g)", 
+                                   sprite_id, sprite_x, sprite_y)
+                    end
+                end
+                
+                -- Update child widgets to maintain their relative positions
+                for _, child_widget in pairs(self._child_widgets) do
+                    local start_pos = child_widget_start_positions[child_widget.id]
+                    if start_pos then
+                        -- Child gets shake effect too
+                        child_widget.x = start_pos.x + shake_x
+                        child_widget.y = start_pos.y + shake_y
+                        
+                        -- Update child's layout
+                        child_widget:updateLayout(false)
+                        debug_print("DETAILED", "  Updated child widget %s with shake", 
+                                   child_widget.id)
+                    end
+                end
+            end,
+            on_complete = function(values, interrupted)
+                -- Reset to original position
+                self.x = start_x
+                self.y = start_y
+                
+                -- Apply screen constraints after animation
+                if self._constrain_to_screen then
+                    self:applyScreenConstraints()
+                end
+                
+                -- Clear widget animation flags
+                self._layout_animation_active = false
+                self._layout_animation_type = nil
+                
+                -- UNMARK ALL SPRITES HERE (in on_complete)
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite:set_widget_animated(false)
+                    debug_print("DETAILED", "  Unmarked sprite %s as widget-animated", sprite_id)
+                end
+                
+                -- Clear child widget animation flags and reset positions
+                for _, child_widget in pairs(self._child_widgets) do
+                    local start_pos = child_widget_start_positions[child_widget.id]
+                    if start_pos then
+                        child_widget.x = start_pos.x
+                        child_widget.y = start_pos.y
+                    end
+                    child_widget._layout_animation_active = false
+                    child_widget._layout_animation_type = nil
+                end
+                
+                -- Force final layout update
+                self:updateLayout(true)
+                
+                self.active_animations[anim_id] = nil
+                if user_on_complete then
+                    user_on_complete({shake_completed = true}, interrupted)
+                end
+                
+                debug_print("INFO", "Widget.shake_widget completed: %s", self.id)
+            end
+        }
+    )
+    
+    if anim_id then
+        self.active_animations[anim_id] = true
+        debug_print("INFO", "Widget.shake_widget started animation: %s", anim_id)
+    end
+    
+    return anim_id
+end
+
+-- Apply summon animation (flies with arc) - Following slide_widget pattern
+function Widget:summon_widget(start_x, start_y, start_scale, end_x, end_y, end_scale, 
+                             duration, arc_height, peak_scale_mul, wobble_deg, easing, user_on_complete)
+    if not self then
+        debug_print("ERROR", "Widget.summon_widget: Invalid widget")
+        return nil
+    end
+    
+    duration = duration or 0.25
+    arc_height = arc_height or 24
+    peak_scale_mul = peak_scale_mul or 1.35
+    wobble_deg = wobble_deg or 5
+    easing = easing or "ease_in_out"
+    
+    debug_print("INFO", "Widget.summon_widget: %s from (%g,%g) to (%g,%g)", 
+               self.id, start_x, start_y, end_x, end_y)
+    
+    -- Set starting position and scale
+    self:setPosition(start_x, start_y)
+    self:setScale(start_scale, start_scale)
+    
+    -- Store starting states of all sprites
+    local sprite_start_states = {}
+    for sprite_id, sprite in pairs(self.sprite_objects) do
+        local props = sprite:get_properties()
+        sprite_start_states[sprite_id] = {
+            x = props.x,
+            y = props.y,
+            sx = props.sx,
+            sy = props.sy,
+            ro = props.ro or 0
+        }
+        -- MARK SPRITES AS WIDGET-ANIMATED HERE
+        sprite:set_widget_animated(true, {type = "summon"})
+        debug_print("DETAILED", "  Marked sprite %s as widget-animated", sprite_id)
+    end
+    
+    -- Store starting states of child widgets
+    local child_widget_start_states = {}
+    for _, child_widget in pairs(self._child_widgets) do
+        child_widget_start_states[child_widget.id] = {
+            x = child_widget.x,
+            y = child_widget.y,
+            sx = child_widget.sx,
+            sy = child_widget.sy,
+            ro = child_widget.ro
+        }
+        child_widget._layout_animation_active = true
+        child_widget._layout_animation_type = "summon"
+        debug_print("DETAILED", "  Marked child widget %s for animation", child_widget.id)
+    end
+    
+    -- Try to load animation modules
+    local AnimationEngine, AnimationSequences, AnimationEnums = utils.load_animation_modules()
+    
+    if not AnimationEngine then
+        debug_print("WARN", "Widget.summon_widget: AnimationEngine not available")
+        
+        -- Set directly to end position
+        self:setPosition(end_x, end_y)
+        self:setScale(end_scale, end_scale)
+        
+        -- Unmark sprites
+        for sprite_id, sprite in pairs(self.sprite_objects) do
+            sprite:set_widget_animated(false)
+        end
+        
+        if user_on_complete then
+            user_on_complete({x = end_x, y = end_y, sx = end_scale, sy = end_scale}, false)
+        end
+        return nil
+    end
+    
+    self._layout_animation_active = true
+    self._layout_animation_type = "summon"
+    
+    local control_x = (start_x + end_x) * 0.5
+    local control_y = (start_y + end_y) * 0.5 - arc_height
+    
+    local anim_id = AnimationEngine.animate(
+        {progress = 0},
+        {progress = 1},
+        duration,
+        {
+            easing = easing,
+            on_update = function(values)
+                local t = values.progress
+                local u = 1 - t
+                
+                -- Calculate position along quadratic Bezier curve
+                local x = u*u*start_x + 2*u*t*control_x + t*t*end_x
+                local y = u*u*start_y + 2*u*t*control_y + t*t*end_y
+                
+                -- Calculate scale with pulse effect
+                local base_scale = start_scale + (end_scale - start_scale) * t
+                local pulse = 1.0 + ((peak_scale_mul - 1.0) * math.sin(math.pi * t))
+                local current_scale = base_scale * pulse
+                
+                -- Calculate rotation wobble
+                local rotation = 0
+                if wobble_deg ~= 0 then
+                    rotation = math.sin(math.pi * 2 * t) * wobble_deg * (1 - t)
+                end
+                
+                -- Update widget
+                self.x = x
+                self.y = y
+                self.sx = current_scale
+                self.sy = current_scale
+                self.ro = rotation
+                
+                -- Update ALL sprites to match widget properties
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    local start_state = sprite_start_states[sprite_id]
+                    if start_state then
+                        -- Calculate sprite's absolute properties with relative offsets
+                        local sprite_x = x + (start_state.x - start_x)
+                        local sprite_y = y + (start_state.y - start_y)
+                        
+                        -- Set sprite properties directly
+                        sprite.properties.x = sprite_x
+                        sprite.properties.y = sprite_y
+                        sprite.properties.sx = current_scale
+                        sprite.properties.sy = current_scale
+                        sprite.properties.ro = rotation
+                        
+                        -- Force redraw
+                        sprite:draw()
+                    end
+                end
+                
+                -- Update child widgets to maintain their relative states
+                for _, child_widget in pairs(self._child_widgets) do
+                    local start_state = child_widget_start_states[child_widget.id]
+                    if start_state then
+                        -- Child maintains same relative state to parent
+                        child_widget.x = start_state.x
+                        child_widget.y = start_state.y
+                        child_widget.sx = start_state.sx
+                        child_widget.sy = start_state.sy
+                        child_widget.ro = start_state.ro
+                        
+                        -- Update child's layout
+                        child_widget:updateLayout(false)
+                    end
+                end
+            end,
+            on_complete = function(values, interrupted)
+                if not interrupted then
+                    -- Ensure final position and scale
+                    self:setPosition(end_x, end_y)
+                    self:setScale(end_scale, end_scale)
+                    self:setRotation(0)
+                end
+                
+                -- Apply screen constraints after animation
+                if self._constrain_to_screen then
+                    self:applyScreenConstraints()
+                end
+                
+                -- Clear widget animation flags
+                self._layout_animation_active = false
+                self._layout_animation_type = nil
+                
+                -- UNMARK ALL SPRITES HERE (in on_complete)
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite:set_widget_animated(false)
+                    debug_print("DETAILED", "  Unmarked sprite %s as widget-animated", sprite_id)
+                end
+                
+                -- Clear child widget animation flags
+                for _, child_widget in pairs(self._child_widgets) do
+                    child_widget._layout_animation_active = false
+                    child_widget._layout_animation_type = nil
+                end
+                
+                -- Force final layout update
+                self:updateLayout(true)
+                
+                self.active_animations[anim_id] = nil
+                if user_on_complete then
+                    user_on_complete({x = end_x, y = end_y, sx = end_scale, sy = end_scale}, interrupted)
+                end
+                
+                debug_print("INFO", "Widget.summon_widget completed: %s", self.id)
+            end
+        }
+    )
+    
+    if anim_id then
+        self.active_animations[anim_id] = true
+        debug_print("INFO", "Widget.summon_widget started animation: %s", anim_id)
+    end
+    
+    return anim_id
+end
+
+-- Apply complex summon animation with multiple steps - Following slide_widget pattern
+function Widget:complex_summon_widget(start_x, start_y, start_scale, end_x, end_y, end_scale,
+                                     arc_duration, wobble_duration, settle_duration, arc_height,
+                                     peak_scale_mul, wobble_deg, easing, user_on_complete,
+                                     on_update_step1, on_update_step2, on_update_step3)
+    if not self then
+        debug_print("ERROR", "Widget.complex_summon_widget: Invalid widget")
+        return nil
+    end
+    
+    arc_duration = arc_duration or 0.25
+    wobble_duration = wobble_duration or 0.1
+    settle_duration = settle_duration or 0.05
+    arc_height = arc_height or 40
+    peak_scale_mul = peak_scale_mul or 1.35
+    wobble_deg = wobble_deg or 10
+    easing = easing or "ease_in_out"
+    
+    debug_print("INFO", "Widget.complex_summon_widget: %s complex summon", self.id)
+    
+    -- Set starting position and scale
+    self:setPosition(start_x, start_y)
+    self:setScale(start_scale, start_scale)
+    self:setRotation(0)
+    
+    -- Store starting states of all sprites
+    local sprite_start_states = {}
+    for sprite_id, sprite in pairs(self.sprite_objects) do
+        local props = sprite:get_properties()
+        sprite_start_states[sprite_id] = {
+            x = props.x,
+            y = props.y,
+            sx = props.sx,
+            sy = props.sy,
+            ro = props.ro or 0
+        }
+        -- MARK SPRITES AS WIDGET-ANIMATED HERE
+        sprite:set_widget_animated(true, {type = "complex_summon"})
+        debug_print("DETAILED", "  Marked sprite %s as widget-animated", sprite_id)
+    end
+    
+    -- Store starting states of child widgets
+    local child_widget_start_states = {}
+    for _, child_widget in pairs(self._child_widgets) do
+        child_widget_start_states[child_widget.id] = {
+            x = child_widget.x,
+            y = child_widget.y,
+            sx = child_widget.sx,
+            sy = child_widget.sy,
+            ro = child_widget.ro
+        }
+        child_widget._layout_animation_active = true
+        child_widget._layout_animation_type = "complex_summon"
+        debug_print("DETAILED", "  Marked child widget %s for animation", child_widget.id)
+    end
+    
+    -- Try to load animation modules
+    local AnimationEngine, AnimationSequences, AnimationEnums = utils.load_animation_modules()
+    
+    if not AnimationEngine then
+        debug_print("WARN", "Widget.complex_summon_widget: AnimationEngine not available")
+        
+        -- Set directly to end position
+        self:setPosition(end_x, end_y)
+        self:setScale(end_scale, end_scale)
+        
+        -- Unmark sprites
+        for sprite_id, sprite in pairs(self.sprite_objects) do
+            sprite:set_widget_animated(false)
+        end
+        
+        if user_on_complete then
+            user_on_complete({x = end_x, y = end_y, sx = end_scale, sy = end_scale}, false)
+        end
+        return nil
+    end
+    
+    self._layout_animation_active = true
+    self._layout_animation_type = "complex_summon"
+    
+    local control_x = (start_x + end_x) * 0.5
+    local control_y = (start_y + end_y) * 0.5 - arc_height
+    local sequence_steps = {}
+    
+    -- Step 1: Arc movement with scale pulse
+    table.insert(sequence_steps, {
+        type = "animate",
+        duration = arc_duration,
+        easing = easing,
+        on_update = function(values, t, phase)
+            local u = 1 - t
+            local x = u*u*start_x + 2*u*t*control_x + t*t*end_x
+            local y = u*u*start_y + 2*u*t*control_y + t*t*end_y
+            
+            local base_scale = start_scale + (end_scale - start_scale) * t
+            local pulse = 1.0 + ((peak_scale_mul - 1.0) * math.sin(math.pi * t))
+            local current_scale = base_scale * pulse
+            
+            -- Update widget
+            self.x = x
+            self.y = y
+            self.sx = current_scale
+            self.sy = current_scale
+            
+            -- Update ALL sprites to match widget properties
+            for sprite_id, sprite in pairs(self.sprite_objects) do
+                local start_state = sprite_start_states[sprite_id]
+                if start_state then
+                    -- Calculate sprite's absolute properties with relative offsets
+                    local sprite_x = x + (start_state.x - start_x)
+                    local sprite_y = y + (start_state.y - start_y)
+                    
+                    -- Set sprite properties directly
+                    sprite.properties.x = sprite_x
+                    sprite.properties.y = sprite_y
+                    sprite.properties.sx = current_scale
+                    sprite.properties.sy = current_scale
+                    sprite.properties.ro = 0
+                    
+                    -- Force redraw
+                    sprite:draw()
+                end
+            end
+            
+            -- Update child widgets to maintain their relative states
+            for _, child_widget in pairs(self._child_widgets) do
+                local start_state = child_widget_start_states[child_widget.id]
+                if start_state then
+                    -- Child maintains same relative state to parent
+                    child_widget.x = start_state.x
+                    child_widget.y = start_state.y
+                    child_widget.sx = start_state.sx
+                    child_widget.sy = start_state.sy
+                    child_widget.ro = start_state.ro
+                    
+                    -- Update child's layout
+                    child_widget:updateLayout(false)
+                end
+            end
+            
+            if on_update_step1 then
+                on_update_step1({x = x, y = y, scale = current_scale, progress = t})
+            end
+        end
+    })
+    
+    -- Step 2: Rotation wobble
+    if wobble_deg and wobble_deg > 0 then
+        table.insert(sequence_steps, {
+            type = "animate",
+            duration = wobble_duration,
+            easing = "elastic_out",
+            on_update = function(values, t, phase)
+                local wobble = math.sin(t * math.pi * 4) * wobble_deg * (1 - t)
+                self.ro = wobble
+                
+                -- Update all sprites with wobble
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite.properties.ro = wobble
+                    sprite:draw()
+                end
+                
+                if on_update_step2 then
+                    on_update_step2({rotation = wobble, progress = t})
+                end
+            end
+        })
+    end
+    
+    -- Step 3: Final settle
+    table.insert(sequence_steps, {
+        type = "animate",
+        duration = settle_duration,
+        easing = "bounce_out",
+        on_update = function(values, t, phase)
+            local settle_scale = end_scale * (1 - 0.05 * (1 - t))
+            self.sx = settle_scale
+            self.sy = settle_scale
+            self.ro = 0
+            
+            -- Update all sprites with settle
+            for sprite_id, sprite in pairs(self.sprite_objects) do
+                sprite.properties.sx = settle_scale
+                sprite.properties.sy = settle_scale
+                sprite.properties.ro = 0
+                sprite:draw()
+            end
+            
+            if on_update_step3 then
+                on_update_step3({scale = settle_scale, progress = t})
+            end
+        end,
+        on_complete = function(values, interrupted)
+            if not interrupted then
+                -- Ensure final position and scale
+                self:setPosition(end_x, end_y)
+                self:setScale(end_scale, end_scale)
+                self:setRotation(0)
+                
+                -- Update all sprites to final state
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite.properties.x = end_x + (sprite_start_states[sprite_id].x - start_x)
+                    sprite.properties.y = end_y + (sprite_start_states[sprite_id].y - start_y)
+                    sprite.properties.sx = end_scale
+                    sprite.properties.sy = end_scale
+                    sprite.properties.ro = 0
+                    sprite:draw()
+                end
+            end
+            
+            -- Apply screen constraints after animation
+            if self._constrain_to_screen then
+                self:applyScreenConstraints()
+            end
+            
+            -- Clear widget animation flags
+            self._layout_animation_active = false
+            self._layout_animation_type = nil
+            
+            -- UNMARK ALL SPRITES HERE (in on_complete)
+            for sprite_id, sprite in pairs(self.sprite_objects) do
+                sprite:set_widget_animated(false)
+                debug_print("DETAILED", "  Unmarked sprite %s as widget-animated", sprite_id)
+            end
+            
+            -- Clear child widget animation flags
+            for _, child_widget in pairs(self._child_widgets) do
+                child_widget._layout_animation_active = false
+                child_widget._layout_animation_type = nil
+            end
+            
+            -- Force final layout update
+            self:updateLayout(true)
+            
+            if user_on_complete then
+                user_on_complete({x = end_x, y = end_y, sx = end_scale, sy = end_scale}, interrupted)
+            end
+            
+            debug_print("INFO", "Widget.complex_summon_widget completed: %s", self.id)
+        end
+    })
+    
+    local seq_id = nil
+    seq_id = AnimationEngine.create_sequence(sequence_steps, {
+        id = "complex_summon_" .. self.id .. "_" .. math.random(1000, 9999),
+        on_complete = function()
+            -- Clean up animation tracking
+            if seq_id then
+                self.active_sequences[seq_id] = nil
+            end
+        end
+    })
+    
+    if seq_id then
+        self.active_sequences[seq_id] = true
+        AnimationEngine.start_sequence(seq_id)
+    end
+    
+    return seq_id
+end
+
+-- Apply menu cursor animation (bob + pulse) - Following slide_widget pattern
+function Widget:menu_cursor_widget(bob_distance, pulse_scale, bob_duration, pulse_duration, orientation, easing, back_easing, user_on_complete)
+    if not self then
+        debug_print("ERROR", "Widget.menu_cursor_widget: Invalid widget")
+        return nil
+    end
+    
+    pulse_scale = pulse_scale or 1.1
+    bob_distance = bob_distance or 3
+    bob_duration = bob_duration or 0.8
+    pulse_duration = pulse_duration or (bob_duration * 1.5)
+    easing = easing or "smootherstep"
+    back_easing = back_easing or "smootherstep"
+    orientation = orientation or "vertical"
+    
+    debug_print("INFO", "Widget.menu_cursor_widget: %s menu cursor animation", self.id)
+    
+    -- Store starting states of all sprites
+    local sprite_start_states = {}
+    for sprite_id, sprite in pairs(self.sprite_objects) do
+        local props = sprite:get_properties()
+        sprite_start_states[sprite_id] = {
+            x = props.x,
+            y = props.y,
+            sx = props.sx,
+            sy = props.sy
+        }
+        -- MARK SPRITES AS WIDGET-ANIMATED HERE
+        sprite:set_widget_animated(true, {type = "menu_cursor"})
+        debug_print("DETAILED", "  Marked sprite %s as widget-animated", sprite_id)
+    end
+    
+    -- Store starting states of child widgets
+    local child_widget_start_states = {}
+    for _, child_widget in pairs(self._child_widgets) do
+        child_widget_start_states[child_widget.id] = {
+            x = child_widget.x,
+            y = child_widget.y,
+            sx = child_widget.sx,
+            sy = child_widget.sy
+        }
+        child_widget._layout_animation_active = true
+        child_widget._layout_animation_type = "menu_cursor"
+        debug_print("DETAILED", "  Marked child widget %s for animation", child_widget.id)
+    end
+    
+    -- Try to load animation modules
+    local AnimationEngine, AnimationSequences, AnimationEnums = utils.load_animation_modules()
+    
+    if not AnimationEngine then
+        debug_print("WARN", "Widget.menu_cursor_widget: AnimationEngine not available")
+        
+        -- Unmark sprites
+        for sprite_id, sprite in pairs(self.sprite_objects) do
+            sprite:set_widget_animated(false)
+        end
+        
+        if user_on_complete then
+            user_on_complete({menu_cursor_completed = true}, false)
+        end
+        return nil
+    end
+    
+    self._layout_animation_active = true
+    self._layout_animation_type = "menu_cursor"
+    
+    local axis = nil
+    if orientation == "vertical" then
+        axis = "y"
+    else
+        axis = "x"
+    end
+    
+    local start_pos = self[axis] or 0
+    local start_scale = self.sx or 1.0
+    
+    -- Bob animation
+    local bob_id = AnimationEngine.animate(
+        {[axis] = start_pos},
+        {[axis] = start_pos - bob_distance},
+        bob_duration,
+        {
+            easing = easing,
+            easing_back = back_easing,
+            on_update = function(values)
+                self[axis] = values[axis]
+                
+                -- Update ALL sprites to match widget position
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    local start_state = sprite_start_states[sprite_id]
+                    if start_state then
+                        -- Update appropriate axis
+                        if axis == "y" then
+                            sprite.properties.y = self.y + (start_state.y - start_pos)
+                        else
+                            sprite.properties.x = self.x + (start_state.x - start_pos)
+                        end
+                        
+                        -- Force redraw
+                        sprite:draw()
+                    end
+                end
+                
+                -- Update child widgets
+                for _, child_widget in pairs(self._child_widgets) do
+                    local start_state = child_widget_start_states[child_widget.id]
+                    if start_state then
+                        -- Child maintains same relative position
+                        child_widget[axis] = start_state[axis]
+                        
+                        -- Update child's layout
+                        child_widget:updateLayout(false)
+                    end
+                end
+            end,
+            loop = true,
+            ping_pong = true
+        }
+    )
+    
+    -- Pulse scale animation
+    local pulse_id = AnimationEngine.animate(
+        {scale = 1.0},
+        {scale = pulse_scale},
+        pulse_duration,
+        {
+            easing = "ease_in_out",
+            on_update = function(values)
+                local scale = start_scale * values.scale
+                self.sx = scale
+                self.sy = scale
+                
+                -- Update ALL sprites to match widget scale
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite.properties.sx = scale
+                    sprite.properties.sy = scale
+                    sprite:draw()
+                end
+                
+                -- Update child widgets
+                for _, child_widget in pairs(self._child_widgets) do
+                    local start_state = child_widget_start_states[child_widget.id]
+                    if start_state then
+                        -- Child maintains same relative scale
+                        child_widget.sx = start_state.sx
+                        child_widget.sy = start_state.sy
+                        
+                        -- Update child's layout
+                        child_widget:updateLayout(false)
+                    end
+                end
+            end,
+            loop = true,
+            ping_pong = true
+        }
+    )
+    
+    if bob_id then
+        self.active_animations[bob_id] = true
+    end
+    if pulse_id then
+        self.active_animations[pulse_id] = true
+    end
+    
+    -- Return a controller object to stop both animations
+    return {
+        bob = bob_id,
+        pulse = pulse_id,
+        stop = function()
+            if bob_id then
+                AnimationEngine.stop_animation(bob_id)
+                self.active_animations[bob_id] = nil
+            end
+            if pulse_id then
+                AnimationEngine.stop_animation(pulse_id)
+                self.active_animations[pulse_id] = nil
+            end
+            
+            -- Clear widget animation flags
+            self._layout_animation_active = false
+            self._layout_animation_type = nil
+            
+            -- UNMARK ALL SPRITES HERE
+            for sprite_id, sprite in pairs(self.sprite_objects) do
+                sprite:set_widget_animated(false)
+                debug_print("DETAILED", "  Unmarked sprite %s as widget-animated", sprite_id)
+            end
+            
+            -- Clear child widget animation flags
+            for _, child_widget in pairs(self._child_widgets) do
+                child_widget._layout_animation_active = false
+                child_widget._layout_animation_type = nil
+            end
+            
+            -- Force final layout update
+            self:updateLayout(true)
+            
+            if user_on_complete then
+                user_on_complete({stopped = true}, true)
+            end
+            
+            debug_print("INFO", "Widget.menu_cursor_widget stopped: %s", self.id)
+        end
+    }
+end
+
+-- Set widget properties instantly (no animation) - Following slide_widget pattern
+function Widget:set_widget_instant(properties)
+    if not self then
+        debug_print("ERROR", "Widget.set_widget_instant: Invalid widget")
+        return
+    end
+    
+    debug_print("INFO", "Widget.set_widget_instant: %s setting properties instantly", self.id)
+    
+    -- Apply each property directly with proper setters
+    if properties.x or properties.y then
+        self:setPosition(properties.x or self.x, properties.y or self.y)
+    end
+    if properties.sx or properties.sy then
+        self:setScale(properties.sx or self.sx, properties.sy or self.sy)
+    end
+    if properties.ro then
+        self:setRotation(properties.ro)
+    end
+    if properties.opacity then
+        self:setOpacity(properties.opacity)
+    end
+    if properties.r or properties.g or properties.b or properties.a then
+        self:setColor(properties.r or self.r, properties.g or self.g, 
+                     properties.b or self.b, properties.a or self.a)
+    end
+    if properties.visible ~= nil then
+        self:setVisible(properties.visible)
+    end
+    
+    -- Update all sprites directly
+    for sprite_id, sprite in pairs(self.sprite_objects) do
+        if properties.x or properties.y then
+            sprite:set_position(self.x, self.y)
+        end
+        if properties.sx or properties.sy then
+            sprite:set_scale(self.sx, self.sy)
+        end
+        if properties.ro then
+            sprite:set_rotation(self.ro)
+        end
+        if properties.opacity then
+            sprite:set_opacity(self.opacity)
+        end
+        if properties.r or properties.g or properties.b or properties.a then
+            sprite:set_color(self.r, self.g, self.b, self.a)
+        end
+        if properties.visible ~= nil then
+            sprite:set_visible(properties.visible)
+        end
+    end
+    
+    -- Update child widgets
+    for _, child_widget in pairs(self._child_widgets) do
+        child_widget:set_widget_instant(properties)
+    end
+    
+    -- Force immediate update
+    self:updateLayout(true)
+    self:draw(true)
+    
+    debug_print("DETAILED", "Widget.set_widget_instant: %s completed", self.id)
+end
+
+-- Reset widget to initial state - Following slide_widget pattern
+function Widget:reset_widget(initial_values, user_on_complete)
+    if not self then
+        debug_print("ERROR", "Widget.reset_widget: Invalid widget")
+        return
+    end
+    
+    debug_print("INFO", "Widget.reset_widget: %s resetting widget", self.id)
+    
+    -- Stop all animations first
+    self:stop_all_animations()
+    
+    -- Define default reset values
+    local reset_props = initial_values or {
+        x = 0,
+        y = 0,
+        sx = utils.SCREEN_SCALE,
+        sy = utils.SCREEN_SCALE,
+        ro = 0,
+        opacity = 255,
+        r = 255,
+        g = 255,
+        b = 255,
+        a = 255,
+        visible = true,
+        enabled = true
+    }
+    
+    -- Use instant set for reset
+    self:set_widget_instant(reset_props)
+    
+    if user_on_complete then
+        user_on_complete(reset_props, false)
+    end
+    
+    debug_print("DETAILED", "Widget.reset_widget: %s reset completed", self.id)
+end
+
+-- Apply color pulse animation - Using existing animate_properties for simplicity
+function Widget:color_pulse_widget(start_color, target_color, user_on_complete)
+    if not self then
+        debug_print("ERROR", "Widget.color_pulse_widget: Invalid widget")
+        return nil
+    end
+    
+    -- Use normalize_color helper if available, otherwise use defaults
+    start_color = start_color or {r = self.r, g = self.g, b = self.b, a = self.a}
+    target_color = target_color or start_color
+    
+    debug_print("INFO", "Widget.color_pulse_widget: %s color pulse", self.id)
+    
+    -- Use existing animate_properties method for color animation
+    return self:animate_properties({
+        r = target_color.r,
+        g = target_color.g,
+        b = target_color.b,
+        a = target_color.a or self.a
+    }, 0.5, {
+        easing = "ease_in_out",
+        on_complete = user_on_complete
+    })
+end
+
+-- Simple color pulse with RGB values
+function Widget:color_pulse_rgb(start_r, start_g, start_b, start_a, target_r, target_g, target_b, target_a, user_on_complete)
+    local start_color = {
+        r = start_r or self.r,
+        g = start_g or self.g,
+        b = start_b or self.b,
+        a = start_a or self.a
+    }
+    
+    local target_color = {
+        r = target_r or start_color.r,
+        g = target_g or start_color.g,
+        b = target_b or start_color.b,
+        a = target_a or start_color.a
+    }
+    
+    return self:color_pulse_widget(start_color, target_color, user_on_complete)
+end
+
+-- Color pulse from current color
+function Widget:color_pulse_from_current(target_color, user_on_complete)
+    local current_color = {
+        r = self.r or 255,
+        g = self.g or 255,
+        b = self.b or 255,
+        a = self.a or 255
+    }
+    
+    return self:color_pulse_widget(current_color, target_color, user_on_complete)
+end
+
+-- Check if widget has active animations
+function Widget:has_active_animations()
+    if next(self.active_animations) ~= nil then
+        return true
+    end
+    
+    if next(self.active_sequences) ~= nil then
+        return true
+    end
+    
+    -- Check sprites
+    for _, sprite in pairs(self.sprite_objects) do
+        if sprite:is_animating() then
+            return true
+        end
+    end
+    
+    -- Check child widgets
+    for _, widget in pairs(self._child_widgets) do
+        if widget:has_active_animations() then
+            return true
+        end
+    end
+    
+    return false
+end
+
+-- Check if specific animation is running
+function Widget:is_animation_running(anim_id)
+    if not anim_id then
+        return self:has_active_animations()
+    end
+    
+    if self.active_animations[anim_id] then
+        return true
+    end
+    
+    if self.active_sequences[anim_id] then
+        return true
+    end
+    
+    -- Check sprites
+    for _, sprite in pairs(self.sprite_objects) do
+        if sprite:is_animating() and sprite:get_animation_id() == anim_id then
+            return true
+        end
+    end
+    
+    -- Check child widgets recursively
+    for _, widget in pairs(self._child_widgets) do
+        if widget:is_animation_running(anim_id) then
+            return true
+        end
+    end
+    
+    return false
+end
+
 function Widget:printDebugInfo(level)
     level = level or 0
     local indent = string.rep("  ", level)
@@ -1569,6 +3152,7 @@ function Widget:printDebugInfo(level)
     print(indent .. "  Children: " .. #self.children)
     print(indent .. "  Child Widgets: " .. utils.table_count(self._child_widgets))
     print(indent .. "  Active Animations: " .. utils.table_count(self.active_animations))
+    print(indent .. "  Active Sequences: " .. utils.table_count(self.active_sequences))
     
     if utils.table_count(self.sprite_objects) > 0 then
         print(indent .. "  Sprite details:")
