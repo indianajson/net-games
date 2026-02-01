@@ -16,7 +16,8 @@ local Column = require('scripts/net-games/widgets/column')
 local Grid = require('scripts/net-games/widgets/grid')
 local Container = require('scripts/net-games/widgets/container')
 local Expanded = require('scripts/net-games/widgets/expanded')
-local Align = require('scripts/net-games/widgets/align')  -- Added Align widget
+local Align = require('scripts/net-games/widgets/align')
+local ListView = require('scripts/net-games/widgets/listview')  -- Added ListView widget
 
 local SpriteObject = require('scripts/net-games/widgets/sprite-object')
 local WidgetCache = require('scripts/net-games/widgets/cache')
@@ -115,8 +116,10 @@ local function createCenteredWidget(widget_type, id, player_id, width, height)
         widget = Container.new(id, player_id)
     elseif widget_type == "Expanded" then
         widget = Expanded.new(id, player_id)
-    elseif widget_type == "Align" then  -- Added Align widget
+    elseif widget_type == "Align" then
         widget = Align.new(id, player_id)
+    elseif widget_type == "ListView" then  -- Added ListView widget
+        widget = ListView.new(id, player_id)
     else
         widget = Widget.new(id, player_id)
     end
@@ -140,7 +143,8 @@ return {
     Grid = Grid,
     Container = Container,
     Expanded = Expanded,
-    Align = Align,  -- Added Align widget
+    Align = Align,
+    ListView = ListView,  -- Added ListView widget
     
     -- Managers
     SelectionManager = SelectionManager,
@@ -196,7 +200,8 @@ return {
     createGrid = function(id, player_id) return Grid.new(id, player_id) end,
     createContainer = function(id, player_id) return Container.new(id, player_id) end,
     createExpanded = function(id, player_id) return Expanded.new(id, player_id) end,
-    createAlign = function(id, player_id) return Align.new(id, player_id) end,  -- Added Align creation
+    createAlign = function(id, player_id) return Align.new(id, player_id) end,
+    createListView = function(id, player_id) return ListView.new(id, player_id) end,  -- Added ListView creation
     
     -- Screen-centered widget creation
     createCenteredRow = function(id, player_id, width, height) 
@@ -213,6 +218,9 @@ return {
     end,
     createCenteredAlign = function(id, player_id, width, height) 
         return createCenteredWidget("Align", id, player_id, width, height) 
+    end,
+    createCenteredListView = function(id, player_id, width, height) 
+        return createCenteredWidget("ListView", id, player_id, width, height) 
     end,
     
     -- Cache functions

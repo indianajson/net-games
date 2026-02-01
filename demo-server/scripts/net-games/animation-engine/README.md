@@ -1,299 +1,306 @@
-# 📘 Animation System Documentation
+# 🎞️ Animation Engine Documentation
+
 ## Overview
-### This animation system provides a data-driven, extensible animation framework supporting:
-- Value interpolation with easing
-- Looping, ping-pong, and instant animations
-- Discrete (step-based) value handling
-- Multi-step animation sequences
-- High-level, reusable animation presets
+The **Animation Engine** is a standalone Lua module for creating smooth, reusable animations and interpolations.  
+It provides a comprehensive system for animating object properties with support for:
 
-### The system is split into three layers:
-Layer	        File	                            Responsibility
-Enums	        animation-enums.lua	                Canonical animation constants
-Engine	        animation-engine.lua	            Core animation runtime
-Sequences	    animation-sequences.lua	            High-level animation helpers
+- **Easing functions**
+- **Looping & ping-pong animations**
+- **Animation sequences**
+- **Discrete (instant) value handling**
 
-# 📁 animation-enums.lua
-**Purpose: Defines all shared string enums used throughout the animation system to prevent magic strings and ensure consistency.**
+---
 
-## Easing Functions
-**AnimationEnums.easing_function_names**
+## 🛠️ Setup & Initialization
 
-**Name**	                **Description**
-instant	                No interpolation; value changes immediately
-linear	                Constant rate interpolation
-ease_in	                Slow start
-ease_out	            Slow end
-ease_in_out	            Slow start & end
-smoothstep	            Smooth polynomial interpolation
-smootherstep	        Higher-order smoothstep
-elastic_in	            Elastic overshoot at start
-elastic_out	            Elastic overshoot at end
-elastic_in_out	        Elastic both directions
-bounce_in	            Bounce at start
-bounce_out	            Bounce at end
-square	                Quadratic curve
-cubic	                Cubic curve
+### 1. Required Files
+```lua
+-- Core files (all required)
+animation-engine.lua      -- Main engine
+animation-enums.lua       -- Enum definitions
+animation-sequences.lua   -- Pre-built animations
+math-utils.lua            -- Math functions
+```
 
-## Animation Types
-**AnimationEnums.animation_types**
+### 2. Basic Setup
 
-**purpose: classification and metadata.**
+**Option 1: Let files register themselves globally**
+```lua
+-- Files automatically register to _G when required
+```
 
-**Type**	                **Usage**
-SUMMON	                    Entry animations
-SET	                        Instant transitions
-POSITION_CHANGE	            Movement
-ATTACK	                    Combat effects
-SLIDE	                    UI or entity sliding
-BOB	                        Vertical oscillation
-PULSE	                    Scaling pulses
-SHAKE	                    Screen or object shake
-FADE	                    Alpha transitions
-TINT	                    Color changes
-COLOR_PULSE	                Repeating color animations
+**Option 2: Require them explicitly**
+```lua
+local AnimationEngine = require("scripts/net-games/animation-engine/animation-engine")
+local AnimationSequences = require("scripts/net-games/animation-engine/animation-sequences")
+local MathUtils = require("scripts/net-games/animation-engine/math-utils")
+```
 
-## Animation Properties
-**AnimationEnums.animation_properties**
+### 3. Integration with Game Loop
+```lua
+-- The engine automatically hooks to Net:on("tick") in animation-engine.lua
+-- If using a custom loop, call manually:
 
-**Property**	     |       **Meaning**
-x, y	             |       Position
-scale	             |       Uniform scale
-scaleX, scaleY	     |       Non-uniform scale
-rotation	         |       Rotation angle
-alpha	             |       Transparency
-r, g, b, a	         |       Color channels
-Directions           |       AnimationEnums.directions
+function update(dt)
+    AnimationEngine.tick(dt)
+end
+```
 
-**Used by directional animations:** up, down, left, right, in, out
+---
 
-## Triggers
-**AnimationEnums.triggers**
+## ⚙️ Core Animation Engine API
 
-**Trigger**	                    **Fired When**
-on_click	                    Input click
-on_hover	                    Cursor hover
-on_show	                        Object appears
-on_hide	                        Object disappears
-on_start	                    Animation begins
-on_complete	                    Animation ends
+### `AnimationEngine.animate(start_values, target_values, duration, options)`
+Creates a smooth animation between values.
 
-# 📁 animation-engine.lua
-**Purpose: The core runtime that:**
-- Interpolates values over time
-- Manages animation lifecycle
-- Executes sequences and callbacks
-- Integrates with the game tick loop
+#### Parameters
+- **start_values** *(table, required)*  
+  Initial property values
+  ```lua
+  { x = 0, y = 0, scale = 1 }
+  ```
 
-## 🔹 Core API
-**AnimationEngine.animate(start, target, duration, options)**
-Creates and starts an animation.
+- **target_values** *(table, required)*  
+  Target property values
+  ```lua
+  { x = 100, y = 100, scale = 2 }
+  ```
 
-**Parameters:**
-**Name**	                **Type**	        **Description**
-start	                    table	Initial values
-target	                    table	Target values
-duration	                number	Seconds
-options	                    table	Behavior config
-Options                     Table
+- **duration** *(number, required)*  
+  Duration in seconds
 
-**Field**	                    **Type** **Description**
-easing	                    Easing function name
-easing_back	                Backward easing (ping-pong)
-loop	                    Boolean
-ping_pong	                Boolean
-max_cycles	                Number
-discrete	                table              { "key1", "key2" }
-on_update(values, t, phase)	Per-frame callback
-on_complete(values, interrupted)	Completion callback
+- **options** *(table, optional)*  
+  Animation configuration
 
-Example
-AnimationEngine.animate(
-  { x = 0 },
-  { x = 100 },
-  0.5,
-  {
-    easing = "ease_out",
-    on_update = function(v) sprite.x = v.x end
-  }
+#### Options
+- `easing` *(string, default: "linear")*
+- `easing_back` *(string, default: same as easing)*
+- `on_update(values, progress, phase)`
+- `on_complete(final_values, interrupted)`
+- `loop` *(boolean | number)*
+- `ping_pong` *(boolean)*
+- `discrete` *(array)*
+- `id` *(string)*
+
+#### Returns
+- **Animation ID** *(string)*
+
+#### Example
+```lua
+local animId = AnimationEngine.animate(
+    { x = 0, y = 0, scale = 1 },
+    { x = 100, y = 100, scale = 2 },
+    1.0,
+    {
+        easing = "ease_in_out",
+        on_update = function(values)
+            myObject.x = values.x
+            myObject.y = values.y
+            myObject.scale = values.scale
+        end,
+        on_complete = function()
+            print("Animation complete!")
+        end
+    }
 )
+```
 
-Instant Animations
+---
 
-If easing = "instant":
+### `AnimationEngine.animate_discrete_first(...)`
+Discrete values change immediately, then continuous values animate.
 
-Values apply immediately
-
-on_update fires once
-
-Animation completes same frame
-
-AnimationEngine.stop_animation(id)
-
-Stops an animation.
-
-Triggers on_complete(..., true)
-
-Returns true if stopped
-
-🔹 Sequences
-AnimationEngine.create_sequence(steps, options)
-
-Creates a multi-step animation.
-
-Step Types
-1. animate
-{
-  type = "animate",
-  duration = 0.3,
-  start = { x = "current" },
-  target = { x = "current+20" },
-  easing = "ease_out"
-}
-
-
-Supported value references:
-
-Keyword	Meaning
-"current"	Last step value
-"current+N"	Offset from last
-"original"	Initial snapshot
-2. delay
-{ type = "delay", duration = 0.2 }
-
-3. callback
-{
-  type = "callback",
-  callback = function() print("Step reached") end
-}
-
-AnimationEngine.start_sequence(id)
-
-Starts execution.
-
-AnimationEngine.update_sequences(dt)
-
-Advances delays and transitions.
-
-AnimationEngine.stop_sequence(id)
-
-Stops sequence and active animation.
-
-🔹 Discrete-First Animations
-AnimationEngine.animate_discrete_first(...)
-
-Discrete values (e.g. sprite frame, state) update immediately, while continuous values animate.
-
-Use Case
-
-Frame index changes instantly
-
-Position fades smoothly
-
-🔹 Instant Helpers
-AnimationEngine.set_to(object, values)
-
-Immediately applies values using setters when available.
-
-🔹 Utility
-Function	Purpose
-delay(seconds, fn)	Deferred callback
-update_callbacks()	Internal scheduler
-get_active_count()	Active animations
-clear_all()	Hard reset
-🔹 Engine Tick Hook
-Net:on("tick", function (event)
-  AnimationEngine.tick(event.delta_time)
-end)
-
-
-This ensures animations advance automatically.
-
-📁 animation-sequences.lua
-Purpose
-
-Provides high-level, reusable animation behaviors built on top of the engine.
-
-🔹 Common Animations
-Movement
-AnimationSequences.move_to(object, x, y, duration)
-
-Scaling
-AnimationSequences.scale_to(object, 1.2)
-
-Rotation
-AnimationSequences.rotate_to(object, 45)
-
-Fade
-AnimationSequences.fade_to(object, 128)
-
-Tint
-AnimationSequences.tint_to(object, 255, 0, 0)
-
-🔹 Advanced Effects
-Color Pulse
-AnimationSequences.color_pulse(
-  object,
-  { r=255, g=0, b=0, a=255 },
-  { r=0, g=0, b=255, a=200 },
-  { loop = true, ping_pong = true }
+```lua
+AnimationEngine.animate_discrete_first(
+    { x = 0, visible = false },
+    { x = 100, visible = true },
+    1.0,
+    {
+        discrete = { "visible" },
+        on_update = function(values)
+            myObject.x = values.x
+            myObject.visible = values.visible
+        end
+    }
 )
+```
 
-Shake
-AnimationSequences.shake(sprite, {
-  intensity = 5,
-  duration = 0.2
+---
+
+### `AnimationEngine.stop_animation(id)`
+Stops an active animation.  
+Returns **true** if stopped, otherwise **false**.
+
+---
+
+### `AnimationEngine.set_to(object, values)`
+Instantly sets object properties (no animation).
+
+```lua
+AnimationEngine.set_to(mySprite, {
+    x = 100,
+    y = 200,
+    scale = 1.5,
+    alpha = 255,
+    rotation = 45
 })
+```
 
+---
 
-Includes:
+## 🔗 Sequence Management
 
-Positional jitter
+### `AnimationEngine.create_sequence(steps, options)`
 
-Rotational wobble
+#### Step Types
 
-Intensity decay
+**Delay**
+```lua
+{ type = "delay", duration = 0.5 }
+```
 
-Complex Summon
+**Animate**
+```lua
+{
+    type = "animate",
+    start = { x = 0, y = 0 },
+    target = { x = 100, y = 100 },
+    duration = 1.0,
+    easing = "ease_in_out",
+    on_update = function(values) end
+}
+```
 
-A cinematic, multi-step animation:
+**Callback**
+```lua
+{ type = "callback", callback = function() end }
+```
 
-Bezier arc movement
+#### Sequence Options
+- `loop`
+- `on_complete`
+- `id`
 
-Scale pulse
+### Starting & Stopping Sequences
+```lua
+AnimationEngine.start_sequence(sequenceId)
+AnimationEngine.stop_sequence(sequenceId)
+```
 
-Optional rotation wobble
+---
 
-Bounce settle
+## 🧰 Utility Functions
+- `AnimationEngine.delay(duration, callback)`
+- `AnimationEngine.clear_all()`
+- `AnimationEngine.get_active_count()`
+- `AnimationEngine.get_sequence_count()`
+- `AnimationEngine.set_debug(true)`
+- `AnimationEngine.add_easing_function(name, func)`
 
-AnimationSequences.complexSummon(
-  sprite,
-  0, 100, 0.5,
-  100, 100, 1.0,
-  { arc_height = 40, wobble_deg = 10 }
+---
+
+## 🎬 Animation Sequences API
+Defined in **animation-sequences.lua**.
+
+Available animations:
+- `summon`
+- `positionChange`
+- `attack`
+- `slideIn`
+- `bob`
+- `pulse`
+- `color_pulse`
+- `shake`
+- `fade`
+- `tint`
+
+---
+
+## 📦 Object Property Requirements
+
+### Supported Properties
+- `x`, `y`
+- `scale`, `scaleX`, `scaleY`
+- `rotation` / `angle`
+- `alpha` *(0–255)*
+- `r`, `g`, `b`
+
+### Direct Properties
+```lua
+local myObject = {
+    x = 100,
+    y = 100,
+    scale = 1,
+    rotation = 0,
+    alpha = 255,
+    r = 255, g = 255, b = 255
+}
+```
+
+### Setter Methods (Also Supported)
+```lua
+local myObject = {
+    setPosition = function(self, x, y) end,
+    setScale = function(self, scale) end,
+    setRotation = function(self, rotation) end,
+    setAlpha = function(self, alpha) end,
+    setColor = function(self, r, g, b) end
+}
+```
+
+---
+
+## 🧠 Easing Functions
+Defined in **animation-enums.lua**:
+- `instant`
+- `linear`
+- `ease_in`, `ease_out`, `ease_in_out`
+- `smoothstep`, `smootherstep`
+- `elastic_in`, `elastic_out`, `elastic_in_out`
+- `bounce_in`, `bounce_out`
+- `square`, `cubic`
+
+---
+
+## 🚑 Troubleshooting
+
+| Problem | Solution |
+|------|--------|
+| Animations don’t play | Ensure `tick(dt)` is called |
+| Properties don’t update | Check object compatibility |
+| Animation completes instantly | Duration > 0 and easing ≠ `"instant"` |
+| Conflicting animations | Stop old animations or use IDs |
+
+---
+
+## 🚀 Quick Start Template
+```lua
+local AnimationEngine = require("animation-engine")
+
+local mySprite = {
+    x = 100,
+    y = 100,
+    scale = 1,
+    alpha = 255
+}
+
+AnimationEngine.animate(
+    { x = 100, scale = 1 },
+    { x = 200, scale = 2 },
+    1.5,
+    {
+        easing = "ease_in_out",
+        on_update = function(values)
+            mySprite.x = values.x
+            mySprite.scale = values.scale
+        end,
+        on_complete = function()
+            print("Done!")
+        end
+    }
 )
 
-Menu Cursor
-AnimationSequences.menuCursor(cursor)
-
-
-Returns:
-
-{ bob = animationId, pulse = animationId }
-
-🔹 Utilities
-Function	Description
-reset(object)	Restores base values
-stopAll()	Placeholder
-isAnimating()	Placeholder
-✅ Design Highlights
-
-Fully data-driven
-
-Deterministic lifecycle
-
-Composable sequences
-
-Game-loop safe
-
-UI & gameplay ready
+function update(dt)
+    AnimationEngine.tick(dt)
+end
+```

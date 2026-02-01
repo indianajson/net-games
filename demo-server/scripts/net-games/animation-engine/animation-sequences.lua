@@ -1015,6 +1015,245 @@ function AnimationSequences.reset(object, initial_values)
     })
 end
 
+-- Create a sequence animation for multiple sprites (animates sprites one after another)
+function AnimationSequences.sequenceAnimate(sprites, start_properties, end_properties, options)
+    options = options or {}
+    
+    local set_to_start_first = options.set_to_start_first ~= false  -- Default to true
+    local duration = options.duration or AnimationSequences.config.default_duration
+    local delay_between = options.delay_between or 0
+    local easing = options.easing or AnimationSequences.config.default_easing
+    local on_complete = options.on_complete
+    local on_sprite_complete = options.on_sprite_complete
+    local discrete = options.discrete or {}
+    
+    -- First, set all sprites to start properties if requested
+    if set_to_start_first then
+        for _, sprite in ipairs(sprites) do
+            for key, value in pairs(start_properties) do
+                if sprite.properties then
+                    -- Handle sprite with properties table
+                    sprite.properties[key] = value
+                else
+                    -- Handle regular object
+                    sprite[key] = value
+                end
+            end
+        end
+    end
+    
+    -- Create a sequence of animations, one for each sprite
+    local sequence_steps = {}
+    
+    for i, sprite in ipairs(sprites) do
+        -- Add delay between sprites (except for first one)
+        if i > 1 and delay_between > 0 then
+            table.insert(sequence_steps, {
+                type = "delay",
+                duration = delay_between
+            })
+        end
+        
+        -- Create animation step for this sprite
+        table.insert(sequence_steps, {
+            type = "animate",
+            duration = duration,
+            easing = easing,
+            discrete = discrete,
+            on_update = function(values, t, phase)
+                -- Apply animated values to sprite
+                for key, value in pairs(values) do
+                    if sprite.properties then
+                        -- Handle sprite with properties table
+                        
+                        -- Map animation property names to sprite property names
+                        local sprite_key = key
+                        if key == "scale" then
+                            sprite_key = "sx"
+                            sprite.properties.sy = value  -- Apply to both sx and sy for uniform scaling
+                        elseif key == "scaleX" then
+                            sprite_key = "sx"
+                        elseif key == "scaleY" then
+                            sprite_key = "sy"
+                        elseif key == "rotation" then
+                            sprite_key = "ro"
+                        elseif key == "alpha" then
+                            sprite_key = "opacity"
+                            sprite.properties.a = value  -- Also set color alpha
+                        elseif key == "x" or key == "y" or key == "z" then
+                            -- Direct mapping for position
+                            sprite_key = key
+                        elseif key == "r" or key == "g" or key == "b" or key == "a" then
+                            -- Direct mapping for color
+                            sprite_key = key
+                        end
+                        
+                        sprite.properties[sprite_key] = value
+                    else
+                        -- Handle regular object
+                        sprite[key] = value
+                    end
+                end
+            end,
+            on_complete = function(values, interrupted)
+                if not interrupted and on_sprite_complete then
+                    on_sprite_complete(sprite, i, #sprites)
+                end
+            end
+        })
+    end
+    
+    -- Create and start the sequence
+    local sequence_id = AnimationEngine.create_sequence(sequence_steps, {
+        on_complete = function()
+            if on_complete then
+                on_complete(sprites)
+            end
+        end
+    })
+    
+    AnimationEngine.start_sequence(sequence_id)
+    return sequence_id
+end
+
+-- Alternative version that animates sprites in parallel instead of series
+function AnimationSequences.parallelAnimate(sprites, start_properties, end_properties, options)
+    options = options or {}
+    
+    local set_to_start_first = options.set_to_start_first ~= false  -- Default to true
+    local duration = options.duration or AnimationSequences.config.default_duration
+    local easing = options.easing or AnimationSequences.config.default_easing
+    local on_complete = options.on_complete
+    local on_sprite_complete = options.on_sprite_complete
+    local discrete = options.discrete or {}
+    
+    -- First, set all sprites to start properties if requested
+    if set_to_start_first then
+        for _, sprite in ipairs(sprites) do
+            for key, value in pairs(start_properties) do
+                if sprite.properties then
+                    sprite.properties[key] = value
+                else
+                    sprite[key] = value
+                end
+            end
+        end
+    end
+    
+    -- Start all animations in parallel
+    local animation_ids = {}
+    local completed_count = 0
+    local total_count = #sprites
+    
+    for i, sprite in ipairs(sprites) do
+        -- Determine which properties to animate (only those in both start and end)
+        local anim_properties = {}
+        for key, _ in pairs(start_properties) do
+            if end_properties[key] ~= nil then
+                anim_properties[key] = true
+            end
+        end
+        for key, _ in pairs(end_properties) do
+            if start_properties[key] ~= nil then
+                anim_properties[key] = true
+            end
+        end
+        
+        -- Get start and target values for this sprite
+        local start_values = {}
+        local target_values = {}
+        
+        for key, _ in pairs(anim_properties) do
+            if sprite.properties then
+                start_values[key] = start_properties[key] or (function()
+                    -- Map from sprite properties to animation properties
+                    if key == "scale" then return sprite.properties.sx
+                    elseif key == "scaleX" then return sprite.properties.sx
+                    elseif key == "scaleY" then return sprite.properties.sy
+                    elseif key == "rotation" then return sprite.properties.ro
+                    elseif key == "alpha" then return sprite.properties.opacity
+                    elseif key == "x" or key == "y" or key == "z" then
+                        return sprite.properties[key]
+                    elseif key == "r" or key == "g" or key == "b" or key == "a" then
+                        return sprite.properties[key]
+                    end
+                    return 0
+                end)()
+            else
+                start_values[key] = start_properties[key] or sprite[key] or 0
+            end
+            
+            target_values[key] = end_properties[key]
+        end
+        
+        -- Start animation
+        local anim_id = AnimationEngine.animate(start_values, target_values, duration, {
+            easing = easing,
+            discrete = discrete,
+            on_update = function(values)
+                -- Apply animated values to sprite
+                for key, value in pairs(values) do
+                    if sprite.properties then
+                        -- Map animation property names to sprite property names
+                        local sprite_key = key
+                        if key == "scale" then
+                            sprite_key = "sx"
+                            sprite.properties.sy = value
+                        elseif key == "scaleX" then
+                            sprite_key = "sx"
+                        elseif key == "scaleY" then
+                            sprite_key = "sy"
+                        elseif key == "rotation" then
+                            sprite_key = "ro"
+                        elseif key == "alpha" then
+                            sprite_key = "opacity"
+                            sprite.properties.a = value
+                        elseif key == "x" or key == "y" or key == "z" then
+                            sprite_key = key
+                        elseif key == "r" or key == "g" or key == "b" or key == "a" then
+                            sprite_key = key
+                        end
+                        
+                        sprite.properties[sprite_key] = value
+                    else
+                        sprite[key] = value
+                    end
+                end
+                
+                if on_sprite_complete then
+                    on_sprite_complete(sprite, i, total_count, values)
+                end
+            end,
+            on_complete = function(values, interrupted)
+                if not interrupted then
+                    completed_count = completed_count + 1
+                    if completed_count >= total_count and on_complete then
+                        on_complete(sprites)
+                    end
+                end
+            end
+        })
+        
+        table.insert(animation_ids, {
+            id = anim_id,
+            sprite = sprite,
+            index = i
+        })
+    end
+    
+    return {
+        ids = animation_ids,
+        stop = function()
+            for _, anim in ipairs(animation_ids) do
+                AnimationEngine.stop_animation(anim.id)
+            end
+        end,
+        is_complete = function()
+            return completed_count >= total_count
+        end
+    }
+end
+
 -- ---------------------------------------------------------------------------
 -- Example Usage
 -- ---------------------------------------------------------------------------

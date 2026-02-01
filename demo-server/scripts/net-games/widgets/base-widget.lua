@@ -4274,7 +4274,7 @@ function Widget:reset_widget(initial_values, user_on_complete)
 end
 
 -- Apply color pulse animation - Using existing animate_properties for simplicity
-function Widget:color_pulse_widget(start_color, target_color, duration, easing, user_on_complete)
+function Widget:color_pulse_widget(start_color, target_color, duration, easing, user_on_complete, loop, ping_pong)
     if not self then
         debug_print("ERROR", "Widget.color_pulse_widget: Invalid widget")
         return nil
@@ -4282,6 +4282,8 @@ function Widget:color_pulse_widget(start_color, target_color, duration, easing, 
     
     duration = duration or 0.5
     easing = easing or "ease_in_out"
+    loop = loop or true
+    ping_pong =  ping_pong or true
     
     -- Normalize colors
     start_color = start_color or {r = self.r, g = self.g, b = self.b, a = self.a}
@@ -4429,7 +4431,9 @@ function Widget:color_pulse_widget(start_color, target_color, duration, easing, 
                 
                 debug_print("INFO", "Widget.color_pulse_widget completed: %s color (%d,%d,%d,%d)", 
                            self.id, values.r, values.g, values.b, values.a)
-            end
+            end,
+            loop = loop,
+            ping_ping = loop,
         }
     )
     

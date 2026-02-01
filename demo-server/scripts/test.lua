@@ -164,7 +164,7 @@ Net:on("player_join", function(event)
             "item_" .. i,
             "/server/assets/net-games/text_cursor.png",
             "/server/assets/net-games/text_cursor.anim",
-            "CURSOR_RIGHT",
+            "CURSOR_LEFT",
             {id = i, name = "Item " .. i}
         )
     end
@@ -179,7 +179,7 @@ Net:on("player_join", function(event)
     align1:addChild({widget = grid, id = grid.id})
     align1:updateLayout(true)
     align1:draw(true)
-    
+    row1:color_pulse_rgb(255, 255, 255, 255, 125, 200, 0, 255, 1, "ease_in", function()end)
 end)
     -- Example: Clean up when player leaves
 Net:on("player_disconnect", function(event)    
