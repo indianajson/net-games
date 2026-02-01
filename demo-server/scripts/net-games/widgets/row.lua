@@ -51,14 +51,16 @@ function Row:calculateLayout(available_width, available_height)
     local total_width = 0
     local max_height = 0
     local positioned_children = {}
+    local child_sizes = {}
     
     debug_print("VERBOSE", "  Main axis alignment: %s", self.main_axis_alignment)
     debug_print("VERBOSE", "  Cross axis alignment: %s", self.cross_axis_alignment)
     debug_print("VERBOSE", "  Spacing: %g", self.spacing)
     
-    -- First pass: calculate dimensions and collect positioned children
+    -- First pass: collect child dimensions and origin offsets
     for i, child in ipairs(self.children) do
         local child_width, child_height = 0, 0
+        local child_ox, child_oy = 0, 0
         local child_id = nil
         local child_sprite_id = nil
         local child_widget = nil
@@ -68,19 +70,17 @@ function Row:calculateLayout(available_width, available_height)
             child_sprite_id = child.sprite_id
             local sprite = self.sprite_objects[child.sprite_id]
             if sprite then
-                -- Use layout dimensions if specified, otherwise use visual dimensions
+                -- Use layout dimensions if specified
                 if child.layout_width and child.layout_height then
-                    -- Use custom layout dimensions (pre-scaling)
                     child_width = child.layout_width
                     child_height = child.layout_height
-                    debug_print("DETAILED", "  Child %d sprite using custom layout: %gx%g", 
-                               i, child_width, child_height)
                 else
-                    -- Use visual dimensions (including scale)
-                    child_width, child_height = sprite:get_visual_dimensions()
-                    debug_print("DETAILED", "  Child %d sprite using visual dimensions: %gx%g", 
-                               i, child_width, child_height)
+                    child_width, child_height = sprite:get_layout_dimensions()
                 end
+                -- Get origin offset for this sprite
+                child_ox, child_oy = sprite:get_origin_offset()
+                debug_print("DETAILED", "  Child %d sprite origin offset: (%g,%g)", 
+                           i, child_ox, child_oy)
             else
                 -- Sprite object not found, use layout dimensions if available
                 child_width = child.layout_width or 32
@@ -117,40 +117,18 @@ function Row:calculateLayout(available_width, available_height)
             child_height = 32
         end
         
-        -- Adjust for cross axis alignment
-        if self.cross_axis_alignment == "stretch" and child_widget then
-            -- Only stretch widgets, not sprites
-            child_widget:setSize(child_width, available_height)
-            child_widget:updateLayout()
-            child_width, child_height = child_widget:getCalculatedSize()
-            debug_print("DETAILED", "    Stretched widget height to: %g", child_height)
-        end
-        
-        -- Create positioned child object
-        local positioned_child = {
-            x = 0,
-            y = 0,
+        -- Store child size information
+        table.insert(child_sizes, {
             width = child_width,
             height = child_height,
-            visible = child.visible ~= false,
-            id = child_id
-        }
-        
-        -- Set type-specific properties
-        if child_sprite_id then
-            positioned_child.sprite_id = child_sprite_id
-            positioned_child.is_sprite = true
-        elseif child_widget then
-            positioned_child.widget = child_widget
-            positioned_child.is_widget = true
-            positioned_child.widget_type = child_widget.widget_type or "Widget"
-        end
-        
-        table.insert(positioned_children, positioned_child)
-        
-        debug_print("DETAILED", "  Child %d positioned at x=%g, y=%g, size=%gx%g, type=%s", 
-                   i, positioned_child.x, positioned_child.y, child_width, child_height,
-                   child_sprite_id and "sprite" or (child_widget and "widget" or "generic"))
+            ox = child_ox,
+            oy = child_oy,
+            index = i,
+            sprite_id = child_sprite_id,
+            widget = child_widget,
+            id = child_id,
+            visible = child.visible ~= false
+        })
         
         total_width = total_width + child_width
         max_height = math.max(max_height, child_height)
@@ -164,72 +142,73 @@ function Row:calculateLayout(available_width, available_height)
     
     debug_print("DETAILED", "  First pass total: total_width=%g, max_height=%g", total_width, max_height)
     
-    -- Adjust for main axis alignment
-    local extra_width = available_width - total_width - self.padding.left - self.padding.right
-    debug_print("DETAILED", "  Extra width available: %g", extra_width)
+    -- Calculate distribution for main axis alignment
+    local start_x, effective_spacing = utils.distribute_children_with_origin(
+        #self.children, available_width, total_width, self.spacing, 
+        self.main_axis_alignment, true)
     
-    if extra_width > 0 then
-        local start_x = 0
-        
-        if self.main_axis_alignment == "center" then
-            start_x = extra_width / 2
-            debug_print("DETAILED", "  Center alignment: start_x=%g", start_x)
-        elseif self.main_axis_alignment == "end" then
-            start_x = extra_width
-            debug_print("DETAILED", "  End alignment: start_x=%g", start_x)
-        elseif self.main_axis_alignment == "space_between" then
-            if #positioned_children > 1 then
-                local spacing = extra_width / (#positioned_children - 1)
-                debug_print("DETAILED", "  Space between: spacing=%g", spacing)
-                for i = 2, #positioned_children do
-                    positioned_children[i].x = positioned_children[i].x + (spacing * (i - 1))
-                end
-            end
-        elseif self.main_axis_alignment == "space_around" then
-            local spacing = extra_width / #positioned_children
-            debug_print("DETAILED", "  Space around: spacing=%g", spacing)
-            for i = 1, #positioned_children do
-                positioned_children[i].x = positioned_children[i].x + (spacing * (i - 0.5))
-            end
-        elseif self.main_axis_alignment == "space_evenly" then
-            local spacing = extra_width / (#positioned_children + 1)
-            debug_print("DETAILED", "  Space evenly: spacing=%g", spacing)
-            for i = 1, #positioned_children do
-                positioned_children[i].x = positioned_children[i].x + (spacing * i)
-            end
-        end
-        
-        -- Apply start offset
-        if start_x > 0 then
-            debug_print("DETAILED", "  Applying start offset: %g", start_x)
-            for _, child in ipairs(positioned_children) do
-                child.x = child.x + start_x
-            end
-        end
-    end
+    debug_print("DETAILED", "  Distribution: start_x=%g, spacing=%g", start_x, effective_spacing)
     
-    -- Adjust for cross axis alignment
-    for i, child in ipairs(positioned_children) do
-        local extra_height = max_height - child.height
+    -- Position children with proper origin offset handling
+    local current_x = start_x
+    
+    for i, child_info in ipairs(child_sizes) do
+        local child_width = child_info.width
+        local child_height = child_info.height
+        local child_ox = child_info.ox or 0
+        local child_oy = child_info.oy or 0
         
+        -- Calculate Y position based on cross axis alignment
+        local y = 0
         if self.cross_axis_alignment == "center" then
-            child.y = extra_height / 2
-            debug_print("DETAILED", "  Child %d centered vertically: y=%g", i, child.y)
+            y = (max_height - child_height) / 2
         elseif self.cross_axis_alignment == "end" then
-            child.y = extra_height
-            debug_print("DETAILED", "  Child %d aligned to end: y=%g", i, child.y)
-        elseif self.cross_axis_alignment == "stretch" then
-            if child.is_widget then
-                -- Widget is already stretched, position at 0
-                child.y = 0
-            else
-                -- For non-widgets, use start alignment
-                child.y = 0
-            end
-            debug_print("DETAILED", "  Child %d stretched/start aligned: y=0", i)
-        else
-            debug_print("DETAILED", "  Child %d aligned to start: y=0", i)
+            y = max_height - child_height
+        elseif self.cross_axis_alignment == "stretch" and child_info.widget then
+            -- Only stretch widgets, not sprites
+            child_info.widget:setSize(child_width, max_height)
+            child_info.widget:updateLayout()
+            child_width, child_height = child_info.widget:getCalculatedSize()
+            debug_print("DETAILED", "    Stretched widget height to: %g", child_height)
         end
+        
+        -- Adjust Y position for origin offset
+        -- We're positioning the TOP-LEFT corner, so subtract origin Y offset
+        local top_left_y = y - child_oy
+        
+        -- Adjust X position for origin offset
+        -- We're positioning the TOP-LEFT corner, so subtract origin X offset
+        local top_left_x = current_x - child_ox
+        
+        -- Create positioned child object
+        local positioned_child = {
+            x = top_left_x,
+            y = top_left_y,
+            width = child_width,
+            height = child_height,
+            ox = child_ox,
+            oy = child_oy,
+            visible = child_info.visible,
+            id = child_info.id
+        }
+        
+        -- Set type-specific properties
+        if child_info.sprite_id then
+            positioned_child.sprite_id = child_info.sprite_id
+            positioned_child.is_sprite = true
+        elseif child_info.widget then
+            positioned_child.widget = child_info.widget
+            positioned_child.is_widget = true
+            positioned_child.widget_type = child_info.widget.widget_type or "Widget"
+        end
+        
+        table.insert(positioned_children, positioned_child)
+        
+        debug_print("DETAILED", "  Child %d positioned: top-left=(%g,%g), size=%gx%g, origin=(%g,%g)", 
+                   i, top_left_x, top_left_y, child_width, child_height, child_ox, child_oy)
+        
+        -- Move to next position
+        current_x = current_x + child_width + effective_spacing
     end
     
     local layout_width = math.max(total_width, self.width)

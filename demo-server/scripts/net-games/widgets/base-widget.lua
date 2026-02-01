@@ -1,4 +1,3 @@
--- widgets/base-widget.lua
 -- Base Widget class for the widget system
 
 local LOGGING = require('scripts/net-games/widgets/logging')
@@ -137,7 +136,7 @@ end
 
 function Widget:setScale(sx, sy)
     self.sx = sx or self.sx
-    self.sy = sy or sx or self.sy
+    self.sy = sy or self.sy
     self.state.dirty = true
     self.state.needs_layout = true
     
@@ -316,9 +315,9 @@ function Widget:create_sprite(sprite_id, texture_path, anim_path, anim_state, la
         y = 0,  -- Will be positioned by layout
         sx = self.sx or utils.SCREEN_SCALE,  -- Inherit widget scale
         sy = self.sy or utils.SCREEN_SCALE,
-        ro = self.ox or  0,  -- No rotation by default
-        ox = self.ox or  0,  -- Origin at top-left
-        oy = self.ox or 0,
+        ro = self.ro or 0,  -- No rotation by default
+        ox = self.ox or 0,  -- Origin at top-left
+        oy = self.oy or 0,
         
         -- Color and opacity from widget
         a = self.a or 255,
@@ -1218,7 +1217,6 @@ function Widget:set_opacity_widget(target_opacity, duration, easing, user_on_com
     })
 end
 
--- Modified updateLayout to handle screen constraints
 function Widget:updateLayout(force)
     debug_print("VERBOSE", "Widget.updateLayout: %s dirty=%s, force=%s, needs_layout=%s, layout_animation=%s, parent=%s", 
                self.id, tostring(self.state.dirty), tostring(force), tostring(self.state.needs_layout),
@@ -1260,10 +1258,10 @@ function Widget:updateLayout(force)
             local child_widget_x = child.x + self.padding.left + self.margin.left
             local child_widget_y = child.y + self.padding.top + self.margin.top
             
-            debug_print("DETAILED", "  Child %d: type=%s, widget-relative=(%g,%g), layout=(%g,%g), abs_parent=(%g,%g)",
+            debug_print("DETAILED", "  Child %d: type=%s, widget-relative=(%g,%g), layout=(%g,%g), abs_parent=(%g,%g), origin=(%g,%g)",
                        i, child.sprite_id and "sprite" or "widget", 
                        child_widget_x, child_widget_y, child.x, child.y,
-                       self.x, self.y)
+                       self.x, self.y, child.ox or 0, child.oy or 0)
             
             if child.sprite_id then
                 -- Update sprite position (using widget-relative coordinates in screen space)
@@ -1271,10 +1269,16 @@ function Widget:updateLayout(force)
                 if sprite then
                     -- Check if sprite is being animated by widget
                     if not sprite:is_widget_animated() then
-                        -- Only set sprite position if it's not being animated
-                        sprite:set_position(child_widget_x, child_widget_y)
-                        debug_print("DETAILED", "    Sprite %s positioned at widget-relative (%g,%g) in widget %s (abs=%g,%g)", 
-                                   child.sprite_id, child_widget_x, child_widget_y, self.id, self.x, self.y)
+                        -- IMPORTANT: The positioned_children table now stores TOP-LEFT positions
+                        -- We need to convert this to ORIGIN position for the sprite
+                        local origin_x = child_widget_x + (child.ox or 0)
+                        local origin_y = child_widget_y + (child.oy or 0)
+                        
+                        -- Set sprite's origin position
+                        sprite:set_position(origin_x, origin_y)
+                        debug_print("DETAILED", "    Sprite %s: top-left=(%g,%g), origin=(%g,%g), origin_offset=(%g,%g)", 
+                                   child.sprite_id, child_widget_x, child_widget_y,
+                                   origin_x, origin_y, child.ox or 0, child.oy or 0)
                     else
                         debug_print("DETAILED", "    Sprite %s is being animated, skipping layout position", 
                                    child.sprite_id)
@@ -2609,36 +2613,39 @@ function Widget:summon_widget(start_x, start_y, start_scale, end_x, end_y, end_s
     wobble_deg = wobble_deg or 5
     easing = easing or "ease_in_out"
     
-    debug_print("INFO", "Widget.summon_widget: %s from (%g,%g) to (%g,%g)", 
-               self.id, start_x, start_y, end_x, end_y)
+    debug_print("INFO", "Widget.summon_widget: %s from screen(%g,%g) to screen(%g,%g) scale %f->%f", 
+               self.id, start_x, start_y, end_x, end_y, start_scale, end_scale)
     
-    -- Set starting position and scale
+    -- Set starting position and scale (these are in SCREEN SPACE already)
     self:setPosition(start_x, start_y)
     self:setScale(start_scale, start_scale)
     
-    -- Store starting states of all sprites
+    -- Store starting states of all sprites (relative to widget in screen space)
     local sprite_start_states = {}
     for sprite_id, sprite in pairs(self.sprite_objects) do
         local props = sprite:get_properties()
         sprite_start_states[sprite_id] = {
-            x = props.x,
+            x = props.x,  -- Sprite's origin position (screen space, relative to widget)
             y = props.y,
-            sx = props.sx,
+            sx = props.sx,  -- Sprite's own scale
             sy = props.sy,
-            ro = props.ro or 0
+            ro = props.ro or 0,
+            ox = sprite.origin_x or 0,  -- Origin offset (screen space)
+            oy = sprite.origin_y or 0
         }
         -- MARK SPRITES AS WIDGET-ANIMATED HERE
         sprite:set_widget_animated(true, {type = "summon"})
-        debug_print("DETAILED", "  Marked sprite %s as widget-animated", sprite_id)
+        debug_print("DETAILED", "  Marked sprite %s as widget-animated, origin offset=(%g,%g)", 
+                   sprite_id, sprite.origin_x or 0, sprite.origin_y or 0)
     end
     
     -- Store starting states of child widgets
     local child_widget_start_states = {}
     for _, child_widget in pairs(self._child_widgets) do
         child_widget_start_states[child_widget.id] = {
-            x = child_widget.x,
+            x = child_widget.x,  -- Position in screen space (relative to parent)
             y = child_widget.y,
-            sx = child_widget.sx,
+            sx = child_widget.sx,  -- Widget's scale
             sy = child_widget.sy,
             ro = child_widget.ro
         }
@@ -2657,6 +2664,24 @@ function Widget:summon_widget(start_x, start_y, start_scale, end_x, end_y, end_s
         self:setPosition(end_x, end_y)
         self:setScale(end_scale, end_scale)
         
+        -- Update all sprites to new position
+        for sprite_id, sprite in pairs(self.sprite_objects) do
+            local start_state = sprite_start_states[sprite_id]
+            if start_state then
+                -- Calculate sprite's new origin position (screen space)
+                local sprite_x = end_x + (start_state.x - start_x)
+                local sprite_y = end_y + (start_state.y - start_y)
+                
+                sprite:update({
+                    x = sprite_x,
+                    y = sprite_y,
+                    sx = start_state.sx,  -- Keep sprite's own scale
+                    sy = start_state.sy,
+                    ro = 0
+                })
+            end
+        end
+        
         -- Unmark sprites
         for sprite_id, sprite in pairs(self.sprite_objects) do
             sprite:set_widget_animated(false)
@@ -2667,13 +2692,14 @@ function Widget:summon_widget(start_x, start_y, start_scale, end_x, end_y, end_s
         end
         return nil
     end
-    local anim_id = nil
+    
     self._layout_animation_active = true
     self._layout_animation_type = "summon"
-    
+    local anim_id = nil
+    -- Control point for Bezier curve (in screen space)
     local control_x = (start_x + end_x) * 0.5
     local control_y = (start_y + end_y) * 0.5 - arc_height
-  
+    
     anim_id = AnimationEngine.animate(
         {progress = 0},
         {progress = 1},
@@ -2684,45 +2710,55 @@ function Widget:summon_widget(start_x, start_y, start_scale, end_x, end_y, end_s
                 local t = values.progress
                 local u = 1 - t
                 
-                -- Calculate position along quadratic Bezier curve
+                -- Calculate position along quadratic Bezier curve (in SCREEN SPACE)
                 local x = u*u*start_x + 2*u*t*control_x + t*t*end_x
                 local y = u*u*start_y + 2*u*t*control_y + t*t*end_y
                 
-                -- Calculate scale with pulse effect
+                -- Calculate scale with pulse effect (widget scale, not sprite scale)
                 local base_scale = start_scale + (end_scale - start_scale) * t
                 local pulse = 1.0 + ((peak_scale_mul - 1.0) * math.sin(math.pi * t))
-                local current_scale = base_scale * pulse
+                local current_widget_scale = base_scale * pulse
                 
-                -- Calculate rotation wobble
+                -- Calculate rotation wobble (degrees)
                 local rotation = 0
                 if wobble_deg ~= 0 then
                     rotation = math.sin(math.pi * 2 * t) * wobble_deg * (1 - t)
                 end
                 
-                -- Update widget
+                -- Update widget properties (screen space)
                 self.x = x
                 self.y = y
-                self.sx = current_scale
-                self.sy = current_scale
+                self.sx = current_widget_scale
+                self.sy = current_widget_scale
                 self.ro = rotation
                 
                 -- Update ALL sprites to match widget properties
                 for sprite_id, sprite in pairs(self.sprite_objects) do
                     local start_state = sprite_start_states[sprite_id]
                     if start_state then
-                        -- Calculate sprite's absolute properties with relative offsets
+                        -- Calculate sprite's absolute origin position (screen space)
+                        -- Relative position from start + widget movement
                         local sprite_x = x + (start_state.x - start_x)
                         local sprite_y = y + (start_state.y - start_y)
                         
-                        -- Set sprite properties directly
+                        -- IMPORTANT: We're setting the ORIGIN position here
+                        -- The sprite's draw() method will convert to top-left using origin offset
                         sprite.properties.x = sprite_x
                         sprite.properties.y = sprite_y
-                        sprite.properties.sx = current_scale
-                        sprite.properties.sy = current_scale
+                        
+                        -- Keep sprite's own scale (don't override with widget scale)
+                        -- The widget scale will be applied in the sprite's draw() method
+                        sprite.properties.sx = start_state.sx
+                        sprite.properties.sy = start_state.sy
+                        
+                        -- Apply rotation
                         sprite.properties.ro = rotation
                         
                         -- Force redraw
                         sprite:draw()
+                        
+                        debug_print("DETAILED", "    Sprite %s: origin at screen(%g,%g)", 
+                                   sprite_id, sprite_x, sprite_y)
                     end
                 end
                 
@@ -2730,24 +2766,43 @@ function Widget:summon_widget(start_x, start_y, start_scale, end_x, end_y, end_s
                 for _, child_widget in pairs(self._child_widgets) do
                     local start_state = child_widget_start_states[child_widget.id]
                     if start_state then
-                        -- Child maintains same relative state to parent
+                        -- Child maintains same relative position to parent (screen space)
                         child_widget.x = start_state.x
                         child_widget.y = start_state.y
+                        
+                        -- Child maintains its own scale (don't inherit parent's animated scale)
                         child_widget.sx = start_state.sx
                         child_widget.sy = start_state.sy
                         child_widget.ro = start_state.ro
                         
-                        -- Update child's layout
+                        -- Update child's layout (which will update its sprites)
                         child_widget:updateLayout(false)
+                        debug_print("DETAILED", "    Updated child widget %s", child_widget.id)
                     end
                 end
             end,
             on_complete = function(values, interrupted)
                 if not interrupted then
-                    -- Ensure final position and scale
+                    -- Ensure final position and scale (screen space)
                     self:setPosition(end_x, end_y)
                     self:setScale(end_scale, end_scale)
                     self:setRotation(0)
+                    
+                    -- Update all sprites to final state
+                    for sprite_id, sprite in pairs(self.sprite_objects) do
+                        local start_state = sprite_start_states[sprite_id]
+                        if start_state then
+                            -- Calculate final sprite origin position (screen space)
+                            local sprite_x = end_x + (start_state.x - start_x)
+                            local sprite_y = end_y + (start_state.y - start_y)
+                            
+                            sprite:update({
+                                x = sprite_x,
+                                y = sprite_y,
+                                ro = 0
+                            })
+                        end
+                    end
                 end
                 
                 -- Apply screen constraints after animation
@@ -2779,7 +2834,8 @@ function Widget:summon_widget(start_x, start_y, start_scale, end_x, end_y, end_s
                     user_on_complete({x = end_x, y = end_y, sx = end_scale, sy = end_scale}, interrupted)
                 end
                 
-                debug_print("INFO", "Widget.summon_widget completed: %s", self.id)
+                debug_print("INFO", "Widget.summon_widget completed: %s at screen(%g,%g) scale=%f", 
+                           self.id, end_x, end_y, end_scale)
             end
         }
     )
@@ -2810,9 +2866,10 @@ function Widget:complex_summon_widget(start_x, start_y, start_scale, end_x, end_
     wobble_deg = wobble_deg or 10
     easing = easing or "ease_in_out"
     
-    debug_print("INFO", "Widget.complex_summon_widget: %s complex summon", self.id)
+    debug_print("INFO", "Widget.complex_summon_widget: %s from screen(%g,%g) to screen(%g,%g)", 
+               self.id, start_x, start_y, end_x, end_y)
     
-    -- Set starting position and scale
+    -- Set starting position and scale (screen space)
     self:setPosition(start_x, start_y)
     self:setScale(start_scale, start_scale)
     self:setRotation(0)
@@ -2822,24 +2879,27 @@ function Widget:complex_summon_widget(start_x, start_y, start_scale, end_x, end_
     for sprite_id, sprite in pairs(self.sprite_objects) do
         local props = sprite:get_properties()
         sprite_start_states[sprite_id] = {
-            x = props.x,
+            x = props.x,  -- Sprite origin position (screen space, relative to widget)
             y = props.y,
-            sx = props.sx,
+            sx = props.sx,  -- Sprite's own scale
             sy = props.sy,
-            ro = props.ro or 0
+            ro = props.ro or 0,
+            ox = sprite.origin_x or 0,  -- Origin offset (screen space)
+            oy = sprite.origin_y or 0
         }
         -- MARK SPRITES AS WIDGET-ANIMATED HERE
         sprite:set_widget_animated(true, {type = "complex_summon"})
-        debug_print("DETAILED", "  Marked sprite %s as widget-animated", sprite_id)
+        debug_print("DETAILED", "  Marked sprite %s as widget-animated, origin offset=(%g,%g)", 
+                   sprite_id, sprite.origin_x or 0, sprite.origin_y or 0)
     end
     
     -- Store starting states of child widgets
     local child_widget_start_states = {}
     for _, child_widget in pairs(self._child_widgets) do
         child_widget_start_states[child_widget.id] = {
-            x = child_widget.x,
+            x = child_widget.x,  -- Position in screen space
             y = child_widget.y,
-            sx = child_widget.sx,
+            sx = child_widget.sx,  -- Widget's scale
             sy = child_widget.sy,
             ro = child_widget.ro
         }
@@ -2857,6 +2917,22 @@ function Widget:complex_summon_widget(start_x, start_y, start_scale, end_x, end_
         -- Set directly to end position
         self:setPosition(end_x, end_y)
         self:setScale(end_scale, end_scale)
+        
+        -- Update all sprites to final position
+        for sprite_id, sprite in pairs(self.sprite_objects) do
+            local start_state = sprite_start_states[sprite_id]
+            if start_state then
+                -- Calculate final sprite origin position (screen space)
+                local sprite_x = end_x + (start_state.x - start_x)
+                local sprite_y = end_y + (start_state.y - start_y)
+                
+                sprite:update({
+                    x = sprite_x,
+                    y = sprite_y,
+                    ro = 0
+                })
+            end
+        end
         
         -- Unmark sprites
         for sprite_id, sprite in pairs(self.sprite_objects) do
@@ -2883,32 +2959,35 @@ function Widget:complex_summon_widget(start_x, start_y, start_scale, end_x, end_
         easing = easing,
         on_update = function(values, t, phase)
             local u = 1 - t
+            -- Calculate position along quadratic Bezier curve (screen space)
             local x = u*u*start_x + 2*u*t*control_x + t*t*end_x
             local y = u*u*start_y + 2*u*t*control_y + t*t*end_y
             
             local base_scale = start_scale + (end_scale - start_scale) * t
             local pulse = 1.0 + ((peak_scale_mul - 1.0) * math.sin(math.pi * t))
-            local current_scale = base_scale * pulse
+            local current_widget_scale = base_scale * pulse
             
-            -- Update widget
+            -- Update widget (screen space)
             self.x = x
             self.y = y
-            self.sx = current_scale
-            self.sy = current_scale
+            self.sx = current_widget_scale
+            self.sy = current_widget_scale
             
             -- Update ALL sprites to match widget properties
             for sprite_id, sprite in pairs(self.sprite_objects) do
                 local start_state = sprite_start_states[sprite_id]
                 if start_state then
-                    -- Calculate sprite's absolute properties with relative offsets
+                    -- Calculate sprite's absolute origin position (screen space)
                     local sprite_x = x + (start_state.x - start_x)
                     local sprite_y = y + (start_state.y - start_y)
                     
-                    -- Set sprite properties directly
+                    -- Set sprite's origin position
                     sprite.properties.x = sprite_x
                     sprite.properties.y = sprite_y
-                    sprite.properties.sx = current_scale
-                    sprite.properties.sy = current_scale
+                    
+                    -- Keep sprite's own scale (don't override with widget scale)
+                    sprite.properties.sx = start_state.sx
+                    sprite.properties.sy = start_state.sy
                     sprite.properties.ro = 0
                     
                     -- Force redraw
@@ -2933,7 +3012,7 @@ function Widget:complex_summon_widget(start_x, start_y, start_scale, end_x, end_
             end
             
             if on_update_step1 then
-                on_update_step1({x = x, y = y, scale = current_scale, progress = t})
+                on_update_step1({x = x, y = y, scale = current_widget_scale, progress = t})
             end
         end
     })
@@ -2948,7 +3027,7 @@ function Widget:complex_summon_widget(start_x, start_y, start_scale, end_x, end_
                 local wobble = math.sin(t * math.pi * 4) * wobble_deg * (1 - t)
                 self.ro = wobble
                 
-                -- Update all sprites with wobble
+                -- Update all sprites with wobble (keep their positions, just add rotation)
                 for sprite_id, sprite in pairs(self.sprite_objects) do
                     sprite.properties.ro = wobble
                     sprite:draw()
@@ -2972,10 +3051,8 @@ function Widget:complex_summon_widget(start_x, start_y, start_scale, end_x, end_
             self.sy = settle_scale
             self.ro = 0
             
-            -- Update all sprites with settle
+            -- Update all sprites with settle (keep positions, update rotation)
             for sprite_id, sprite in pairs(self.sprite_objects) do
-                sprite.properties.sx = settle_scale
-                sprite.properties.sy = settle_scale
                 sprite.properties.ro = 0
                 sprite:draw()
             end
@@ -2986,19 +3063,27 @@ function Widget:complex_summon_widget(start_x, start_y, start_scale, end_x, end_
         end,
         on_complete = function(values, interrupted)
             if not interrupted then
-                -- Ensure final position and scale
+                -- Ensure final position and scale (screen space)
                 self:setPosition(end_x, end_y)
                 self:setScale(end_scale, end_scale)
                 self:setRotation(0)
                 
                 -- Update all sprites to final state
                 for sprite_id, sprite in pairs(self.sprite_objects) do
-                    sprite.properties.x = end_x + (sprite_start_states[sprite_id].x - start_x)
-                    sprite.properties.y = end_y + (sprite_start_states[sprite_id].y - start_y)
-                    sprite.properties.sx = end_scale
-                    sprite.properties.sy = end_scale
-                    sprite.properties.ro = 0
-                    sprite:draw()
+                    local start_state = sprite_start_states[sprite_id]
+                    if start_state then
+                        -- Calculate final sprite origin position (screen space)
+                        local sprite_x = end_x + (start_state.x - start_x)
+                        local sprite_y = end_y + (start_state.y - start_y)
+                        
+                        sprite:update({
+                            x = sprite_x,
+                            y = sprite_y,
+                            sx = start_state.sx,  -- Keep sprite's own scale
+                            sy = start_state.sy,
+                            ro = 0
+                        })
+                    end
                 end
             end
             
@@ -3030,13 +3115,559 @@ function Widget:complex_summon_widget(start_x, start_y, start_scale, end_x, end_
                 user_on_complete({x = end_x, y = end_y, sx = end_scale, sy = end_scale}, interrupted)
             end
             
-            debug_print("INFO", "Widget.complex_summon_widget completed: %s", self.id)
+            debug_print("INFO", "Widget.complex_summon_widget completed: %s at screen(%g,%g) scale=%f", 
+                       self.id, end_x, end_y, end_scale)
         end
     })
     
     local seq_id = nil
     seq_id = AnimationEngine.create_sequence(sequence_steps, {
         id = "complex_summon_" .. self.id .. "_" .. math.random(1000, 9999),
+        on_complete = function()
+            -- Clean up animation tracking
+            if seq_id then
+                self.active_sequences[seq_id] = nil
+            end
+        end
+    })
+    
+    if seq_id then
+        self.active_sequences[seq_id] = true
+        AnimationEngine.start_sequence(seq_id)
+    end
+    
+    return seq_id
+end
+
+-- Apply summon animation from current position to relative offset
+function Widget:summon_widget_relative(offset_x, offset_y, scale_offset, 
+                                      duration, arc_height, peak_scale_mul, wobble_deg, easing, user_on_complete)
+    if not self then
+        debug_print("ERROR", "Widget.summon_widget_relative: Invalid widget")
+        return nil
+    end
+    
+    duration = duration or 0.25
+    arc_height = arc_height or 24
+    peak_scale_mul = peak_scale_mul or 1.35
+    wobble_deg = wobble_deg or 5
+    easing = easing or "ease_in_out"
+    scale_offset = scale_offset or 0  -- Relative scale change (0 = no change, 0.5 = increase by 50%)
+    
+    -- Calculate target position and scale relative to current
+    local start_x, start_y = self.x, self.y
+    local start_scale = self.sx or 1.0
+    local end_x = start_x + offset_x
+    local end_y = start_y + offset_y
+    local end_scale = start_scale + scale_offset
+    
+    debug_print("INFO", "Widget.summon_widget_relative: %s from current screen(%g,%g) to relative screen(%g,%g) scale %f->%f", 
+               self.id, start_x, start_y, end_x, end_y, start_scale, end_scale)
+    
+    -- Store starting states of all sprites (relative to widget in screen space)
+    local sprite_start_states = {}
+    for sprite_id, sprite in pairs(self.sprite_objects) do
+        local props = sprite:get_properties()
+        sprite_start_states[sprite_id] = {
+            x = props.x,  -- Sprite's origin position (screen space, relative to widget)
+            y = props.y,
+            sx = props.sx,  -- Sprite's own scale
+            sy = props.sy,
+            ro = props.ro or 0,
+            ox = sprite.origin_x or 0,  -- Origin offset (screen space)
+            oy = sprite.origin_y or 0
+        }
+        -- MARK SPRITES AS WIDGET-ANIMATED HERE
+        sprite:set_widget_animated(true, {type = "summon_relative"})
+        debug_print("DETAILED", "  Marked sprite %s as widget-animated, origin offset=(%g,%g)", 
+                   sprite_id, sprite.origin_x or 0, sprite.origin_y or 0)
+    end
+    
+    -- Store starting states of child widgets
+    local child_widget_start_states = {}
+    for _, child_widget in pairs(self._child_widgets) do
+        child_widget_start_states[child_widget.id] = {
+            x = child_widget.x,  -- Position in screen space (relative to parent)
+            y = child_widget.y,
+            sx = child_widget.sx,  -- Widget's scale
+            sy = child_widget.sy,
+            ro = child_widget.ro
+        }
+        child_widget._layout_animation_active = true
+        child_widget._layout_animation_type = "summon_relative"
+        debug_print("DETAILED", "  Marked child widget %s for animation", child_widget.id)
+    end
+    
+    -- Try to load animation modules
+    local AnimationEngine, AnimationSequences, AnimationEnums = utils.load_animation_modules()
+    
+    if not AnimationEngine then
+        debug_print("WARN", "Widget.summon_widget_relative: AnimationEngine not available")
+        
+        -- Set directly to end position
+        self:setPosition(end_x, end_y)
+        self:setScale(end_scale, end_scale)
+        
+        -- Update all sprites to new position
+        for sprite_id, sprite in pairs(self.sprite_objects) do
+            local start_state = sprite_start_states[sprite_id]
+            if start_state then
+                -- Calculate sprite's new origin position (screen space)
+                local sprite_x = end_x + (start_state.x - start_x)
+                local sprite_y = end_y + (start_state.y - start_y)
+                
+                sprite:update({
+                    x = sprite_x,
+                    y = sprite_y,
+                    sx = start_state.sx,  -- Keep sprite's own scale
+                    sy = start_state.sy,
+                    ro = 0
+                })
+            end
+        end
+        
+        -- Unmark sprites
+        for sprite_id, sprite in pairs(self.sprite_objects) do
+            sprite:set_widget_animated(false)
+        end
+        
+        if user_on_complete then
+            user_on_complete({x = end_x, y = end_y, sx = end_scale, sy = end_scale}, false)
+        end
+        return nil
+    end
+    
+    self._layout_animation_active = true
+    self._layout_animation_type = "summon_relative"
+    local anim_id = nil
+    -- Control point for Bezier curve (in screen space)
+    local control_x = (start_x + end_x) * 0.5
+    local control_y = (start_y + end_y) * 0.5 - arc_height
+    
+    anim_id = AnimationEngine.animate(
+        {progress = 0},
+        {progress = 1},
+        duration,
+        {
+            easing = easing,
+            on_update = function(values)
+                local t = values.progress
+                local u = 1 - t
+                
+                -- Calculate position along quadratic Bezier curve (in SCREEN SPACE)
+                local x = u*u*start_x + 2*u*t*control_x + t*t*end_x
+                local y = u*u*start_y + 2*u*t*control_y + t*t*end_y
+                
+                -- Calculate scale with pulse effect (widget scale, not sprite scale)
+                local base_scale = start_scale + (end_scale - start_scale) * t
+                local pulse = 1.0 + ((peak_scale_mul - 1.0) * math.sin(math.pi * t))
+                local current_widget_scale = base_scale * pulse
+                
+                -- Calculate rotation wobble (degrees)
+                local rotation = 0
+                if wobble_deg ~= 0 then
+                    rotation = math.sin(math.pi * 2 * t) * wobble_deg * (1 - t)
+                end
+                
+                -- Update widget properties (screen space)
+                self.x = x
+                self.y = y
+                self.sx = current_widget_scale
+                self.sy = current_widget_scale
+                self.ro = rotation
+                
+                -- Update ALL sprites to match widget properties
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    local start_state = sprite_start_states[sprite_id]
+                    if start_state then
+                        -- Calculate sprite's absolute origin position (screen space)
+                        -- Relative position from start + widget movement
+                        local sprite_x = x + (start_state.x - start_x)
+                        local sprite_y = y + (start_state.y - start_y)
+                        
+                        -- IMPORTANT: We're setting the ORIGIN position here
+                        sprite.properties.x = sprite_x
+                        sprite.properties.y = sprite_y
+                        
+                        -- Keep sprite's own scale (don't override with widget scale)
+                        sprite.properties.sx = start_state.sx
+                        sprite.properties.sy = start_state.sy
+                        
+                        -- Apply rotation
+                        sprite.properties.ro = rotation
+                        
+                        -- Force redraw
+                        sprite:draw()
+                        
+                        debug_print("DETAILED", "    Sprite %s: origin at screen(%g,%g)", 
+                                   sprite_id, sprite_x, sprite_y)
+                    end
+                end
+                
+                -- Update child widgets to maintain their relative states
+                for _, child_widget in pairs(self._child_widgets) do
+                    local start_state = child_widget_start_states[child_widget.id]
+                    if start_state then
+                        -- Child maintains same relative position to parent (screen space)
+                        child_widget.x = start_state.x
+                        child_widget.y = start_state.y
+                        
+                        -- Child maintains its own scale
+                        child_widget.sx = start_state.sx
+                        child_widget.sy = start_state.sy
+                        child_widget.ro = start_state.ro
+                        
+                        -- Update child's layout
+                        child_widget:updateLayout(false)
+                        debug_print("DETAILED", "    Updated child widget %s", child_widget.id)
+                    end
+                end
+            end,
+            on_complete = function(values, interrupted)
+                if not interrupted then
+                    -- Ensure final position and scale (screen space)
+                    self:setPosition(end_x, end_y)
+                    self:setScale(end_scale, end_scale)
+                    self:setRotation(0)
+                    
+                    -- Update all sprites to final state
+                    for sprite_id, sprite in pairs(self.sprite_objects) do
+                        local start_state = sprite_start_states[sprite_id]
+                        if start_state then
+                            -- Calculate final sprite origin position (screen space)
+                            local sprite_x = end_x + (start_state.x - start_x)
+                            local sprite_y = end_y + (start_state.y - start_y)
+                            
+                            sprite:update({
+                                x = sprite_x,
+                                y = sprite_y,
+                                ro = 0
+                            })
+                        end
+                    end
+                end
+                
+                -- Apply screen constraints after animation
+                if self._constrain_to_screen then
+                    self:applyScreenConstraints()
+                end
+                
+                -- Clear widget animation flags
+                self._layout_animation_active = false
+                self._layout_animation_type = nil
+                
+                -- UNMARK ALL SPRITES HERE (in on_complete)
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite:set_widget_animated(false)
+                    debug_print("DETAILED", "  Unmarked sprite %s as widget-animated", sprite_id)
+                end
+                
+                -- Clear child widget animation flags
+                for _, child_widget in pairs(self._child_widgets) do
+                    child_widget._layout_animation_active = false
+                    child_widget._layout_animation_type = nil
+                end
+                
+                -- Force final layout update
+                self:updateLayout(true)
+                
+                self.active_animations[anim_id] = nil
+                if user_on_complete then
+                    user_on_complete({x = end_x, y = end_y, sx = end_scale, sy = end_scale}, interrupted)
+                end
+                
+                debug_print("INFO", "Widget.summon_widget_relative completed: %s at screen(%g,%g) scale=%f", 
+                           self.id, end_x, end_y, end_scale)
+            end
+        }
+    )
+    
+    if anim_id then
+        self.active_animations[anim_id] = true
+        debug_print("INFO", "Widget.summon_widget_relative started animation: %s", anim_id)
+    end
+    
+    return anim_id
+end
+
+-- Apply complex summon animation from current position to relative offset
+function Widget:complex_summon_widget_relative(offset_x, offset_y, scale_offset,
+                                             arc_duration, wobble_duration, settle_duration, arc_height,
+                                             peak_scale_mul, wobble_deg, easing, user_on_complete,
+                                             on_update_step1, on_update_step2, on_update_step3)
+    if not self then
+        debug_print("ERROR", "Widget.complex_summon_widget_relative: Invalid widget")
+        return nil
+    end
+    
+    arc_duration = arc_duration or 0.25
+    wobble_duration = wobble_duration or 0.1
+    settle_duration = settle_duration or 0.05
+    arc_height = arc_height or 40
+    peak_scale_mul = peak_scale_mul or 1.35
+    wobble_deg = wobble_deg or 10
+    easing = easing or "ease_in_out"
+    scale_offset = scale_offset or 0  -- Relative scale change
+    
+    -- Calculate target position and scale relative to current
+    local start_x, start_y = self.x, self.y
+    local start_scale = self.sx or 2.0
+    local end_x = start_x + offset_x
+    local end_y = start_y + offset_y
+    local end_scale = start_scale + scale_offset
+    
+    debug_print("INFO", "Widget.complex_summon_widget_relative: %s from current screen(%g,%g) to relative screen(%g,%g)", 
+               self.id, start_x, start_y, end_x, end_y)
+    
+    -- Store starting states of all sprites
+    local sprite_start_states = {}
+    for sprite_id, sprite in pairs(self.sprite_objects) do
+        local props = sprite:get_properties()
+        sprite_start_states[sprite_id] = {
+            x = props.x,  -- Sprite origin position (screen space, relative to widget)
+            y = props.y,
+            sx = props.sx,  -- Sprite's own scale
+            sy = props.sy,
+            ro = props.ro or 0,
+            ox = sprite.origin_x or 0,  -- Origin offset (screen space)
+            oy = sprite.origin_y or 0
+        }
+        -- MARK SPRITES AS WIDGET-ANIMATED HERE
+        sprite:set_widget_animated(true, {type = "complex_summon_relative"})
+        debug_print("DETAILED", "  Marked sprite %s as widget-animated, origin offset=(%g,%g)", 
+                   sprite_id, sprite.origin_x or 0, sprite.origin_y or 0)
+    end
+    
+    -- Store starting states of child widgets
+    local child_widget_start_states = {}
+    for _, child_widget in pairs(self._child_widgets) do
+        child_widget_start_states[child_widget.id] = {
+            x = child_widget.x,  -- Position in screen space
+            y = child_widget.y,
+            sx = child_widget.sx,  -- Widget's scale
+            sy = child_widget.sy,
+            ro = child_widget.ro
+        }
+        child_widget._layout_animation_active = true
+        child_widget._layout_animation_type = "complex_summon_relative"
+        debug_print("DETAILED", "  Marked child widget %s for animation", child_widget.id)
+    end
+    
+    -- Try to load animation modules
+    local AnimationEngine, AnimationSequences, AnimationEnums = utils.load_animation_modules()
+    
+    if not AnimationEngine then
+        debug_print("WARN", "Widget.complex_summon_widget_relative: AnimationEngine not available")
+        
+        -- Set directly to end position
+        self:setPosition(end_x, end_y)
+        self:setScale(end_scale, end_scale)
+        
+        -- Update all sprites to final position
+        for sprite_id, sprite in pairs(self.sprite_objects) do
+            local start_state = sprite_start_states[sprite_id]
+            if start_state then
+                -- Calculate final sprite origin position (screen space)
+                local sprite_x = end_x + (start_state.x - start_x)
+                local sprite_y = end_y + (start_state.y - start_y)
+                
+                sprite:update({
+                    x = sprite_x,
+                    y = sprite_y,
+                    ro = 0
+                })
+            end
+        end
+        
+        -- Unmark sprites
+        for sprite_id, sprite in pairs(self.sprite_objects) do
+            sprite:set_widget_animated(false)
+        end
+        
+        if user_on_complete then
+            user_on_complete({x = end_x, y = end_y, sx = end_scale, sy = end_scale}, false)
+        end
+        return nil
+    end
+    
+    self._layout_animation_active = true
+    self._layout_animation_type = "complex_summon_relative"
+    
+    local control_x = (start_x + end_x) * 0.5
+    local control_y = (start_y + end_y) * 0.5 - arc_height
+    local sequence_steps = {}
+    
+    -- Step 1: Arc movement with scale pulse
+    table.insert(sequence_steps, {
+        type = "animate",
+        duration = arc_duration,
+        easing = easing,
+        on_update = function(values, t, phase)
+            local u = 1 - t
+            -- Calculate position along quadratic Bezier curve (screen space)
+            local x = u*u*start_x + 2*u*t*control_x + t*t*end_x
+            local y = u*u*start_y + 2*u*t*control_y + t*t*end_y
+            
+            local base_scale = start_scale + (end_scale - start_scale) * t
+            local pulse = 1.0 + ((peak_scale_mul - 1.0) * math.sin(math.pi * t))
+            local current_widget_scale = base_scale * pulse
+            
+            -- Update widget (screen space)
+            self.x = x
+            self.y = y
+            self.sx = current_widget_scale
+            self.sy = current_widget_scale
+            
+            -- Update ALL sprites to match widget properties
+            for sprite_id, sprite in pairs(self.sprite_objects) do
+                local start_state = sprite_start_states[sprite_id]
+                if start_state then
+                    -- Calculate sprite's absolute origin position (screen space)
+                    local sprite_x = x + (start_state.x - start_x)
+                    local sprite_y = y + (start_state.y - start_y)
+                    
+                    -- Set sprite's origin position
+                    sprite.properties.x = sprite_x
+                    sprite.properties.y = sprite_y
+                    
+                    -- Keep sprite's own scale (don't override with widget scale)
+                    sprite.properties.sx = start_state.sx
+                    sprite.properties.sy = start_state.sy
+                    sprite.properties.ro = 0
+                    
+                    -- Force redraw
+                    sprite:draw()
+                end
+            end
+            
+            -- Update child widgets to maintain their relative states
+            for _, child_widget in pairs(self._child_widgets) do
+                local start_state = child_widget_start_states[child_widget.id]
+                if start_state then
+                    -- Child maintains same relative state to parent
+                    child_widget.x = start_state.x
+                    child_widget.y = start_state.y
+                    child_widget.sx = start_state.sx
+                    child_widget.sy = start_state.sy
+                    child_widget.ro = start_state.ro
+                    
+                    -- Update child's layout
+                    child_widget:updateLayout(false)
+                end
+            end
+            
+            if on_update_step1 then
+                on_update_step1({x = x, y = y, scale = current_widget_scale, progress = t})
+            end
+        end
+    })
+    
+    -- Step 2: Rotation wobble
+    if wobble_deg and wobble_deg > 0 then
+        table.insert(sequence_steps, {
+            type = "animate",
+            duration = wobble_duration,
+            easing = "elastic_out",
+            on_update = function(values, t, phase)
+                local wobble = math.sin(t * math.pi * 4) * wobble_deg * (1 - t)
+                self.ro = wobble
+                
+                -- Update all sprites with wobble (keep their positions, just add rotation)
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    sprite.properties.ro = wobble
+                    sprite:draw()
+                end
+                
+                if on_update_step2 then
+                    on_update_step2({rotation = wobble, progress = t})
+                end
+            end
+        })
+    end
+    
+    -- Step 3: Final settle
+    table.insert(sequence_steps, {
+        type = "animate",
+        duration = settle_duration,
+        easing = "bounce_out",
+        on_update = function(values, t, phase)
+            local settle_scale = end_scale * (1 - 0.05 * (1 - t))
+            self.sx = settle_scale
+            self.sy = settle_scale
+            self.ro = 0
+            
+            -- Update all sprites with settle (keep positions, update rotation)
+            for sprite_id, sprite in pairs(self.sprite_objects) do
+                sprite.properties.ro = 0
+                sprite:draw()
+            end
+            
+            if on_update_step3 then
+                on_update_step3({scale = settle_scale, progress = t})
+            end
+        end,
+        on_complete = function(values, interrupted)
+            if not interrupted then
+                -- Ensure final position and scale (screen space)
+                self:setPosition(end_x, end_y)
+                self:setScale(end_scale, end_scale)
+                self:setRotation(0)
+                
+                -- Update all sprites to final state
+                for sprite_id, sprite in pairs(self.sprite_objects) do
+                    local start_state = sprite_start_states[sprite_id]
+                    if start_state then
+                        -- Calculate final sprite origin position (screen space)
+                        local sprite_x = end_x + (start_state.x - start_x)
+                        local sprite_y = end_y + (start_state.y - start_y)
+                        
+                        sprite:update({
+                            x = sprite_x,
+                            y = sprite_y,
+                            sx = start_state.sx,  -- Keep sprite's own scale
+                            sy = start_state.sy,
+                            ro = 0
+                        })
+                    end
+                end
+            end
+            
+            -- Apply screen constraints after animation
+            if self._constrain_to_screen then
+                self:applyScreenConstraints()
+            end
+            
+            -- Clear widget animation flags
+            self._layout_animation_active = false
+            self._layout_animation_type = nil
+            
+            -- UNMARK ALL SPRITES HERE (in on_complete)
+            for sprite_id, sprite in pairs(self.sprite_objects) do
+                sprite:set_widget_animated(false)
+                debug_print("DETAILED", "  Unmarked sprite %s as widget-animated", sprite_id)
+            end
+            
+            -- Clear child widget animation flags
+            for _, child_widget in pairs(self._child_widgets) do
+                child_widget._layout_animation_active = false
+                child_widget._layout_animation_type = nil
+            end
+            
+            -- Force final layout update
+            self:updateLayout(true)
+            
+            if user_on_complete then
+                user_on_complete({x = end_x, y = end_y, sx = end_scale, sy = end_scale}, interrupted)
+            end
+            
+            debug_print("INFO", "Widget.complex_summon_widget_relative completed: %s at screen(%g,%g) scale=%f", 
+                       self.id, end_x, end_y, end_scale)
+        end
+    })
+    
+    local seq_id = nil
+    seq_id = AnimationEngine.create_sequence(sequence_steps, {
+        id = "complex_summon_relative_" .. self.id .. "_" .. math.random(1000, 9999),
         on_complete = function()
             -- Clean up animation tracking
             if seq_id then

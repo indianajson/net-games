@@ -185,12 +185,12 @@ function Grid:calculateLayout(available_width, available_height)
             local sprite = self.sprite_objects[item.sprite_id]
             
             if sprite then
-                -- Use layout dimensions if specified, otherwise use visual dimensions
+                -- Use layout dimensions if specified
                 if item.layout_width and item.layout_height then
                     item_width = item.layout_width
                     item_height = item.layout_height
                 else
-                    item_width, item_height = sprite:get_visual_dimensions()
+                    item_width, item_height = sprite:get_layout_dimensions()
                 end
             else
                 -- Fallback to item's layout dimensions or default
@@ -219,21 +219,22 @@ function Grid:calculateLayout(available_width, available_height)
     
     debug_print("DETAILED", "  Grid dimensions: %gx%g (rows=%d)", grid_width, grid_height, rows)
     
-    -- Position items
+    -- Position items with origin offset handling
     local positioned_children = {}
     
     for i, item in ipairs(self.items) do
         local row = math.floor((i - 1) / self.columns)
         local col = (i - 1) % self.columns
         
-        local x = col * (cell_width + self.horizontal_spacing)
-        local y = row * (cell_height + self.vertical_spacing)
+        -- Calculate cell top-left position
+        local cell_x = col * (cell_width + self.horizontal_spacing)
+        local cell_y = row * (cell_height + self.vertical_spacing)
         
-        debug_print("DETAILED", "  Item %d: row=%d, col=%d, base position=(%g,%g)", 
-                   i, row, col, x, y)
+        debug_print("DETAILED", "  Item %d: row=%d, col=%d, cell position=(%g,%g)", 
+                   i, row, col, cell_x, cell_y)
         
-        -- Get item dimensions from sprite object
-        local sprite_width, sprite_height
+        -- Get item dimensions and origin offset from sprite object
+        local sprite_width, sprite_height, ox, oy
         local sprite = self.sprite_objects[item.sprite_id]
         
         if sprite then
@@ -242,26 +243,39 @@ function Grid:calculateLayout(available_width, available_height)
                 sprite_width = item.layout_width
                 sprite_height = item.layout_height
             else
-                -- Use visual dimensions
-                sprite_width, sprite_height = sprite:get_visual_dimensions()
+                -- Use layout dimensions
+                sprite_width, sprite_height = sprite:get_layout_dimensions()
             end
+            -- Get origin offset
+            ox, oy = sprite:get_origin_offset()
         else
             -- Fallback to item's layout dimensions or default
             sprite_width = item.layout_width or 32
             sprite_height = item.layout_height or 32
+            ox, oy = 0, 0
         end
         
-        -- Center sprite in cell
-        local offset_x = (cell_width - sprite_width) / 2
-        local offset_y = (cell_height - sprite_height) / 2
+        -- Calculate position to center the ORIGIN point in the cell
+        -- First, calculate where we want the origin point to be (center of cell)
+        local target_origin_x = cell_x + (cell_width / 2)
+        local target_origin_y = cell_y + (cell_height / 2)
         
-        debug_print("DETAILED", "    Sprite: %gx%g, offset=(%g,%g)", 
-                   sprite_width, sprite_height, offset_x, offset_y)
+        -- Then calculate the top-left position needed to place the origin there
+        local top_left_x = target_origin_x - ox
+        local top_left_y = target_origin_y - oy
+        
+        debug_print("DETAILED", "    Sprite: %gx%g, origin=(%g,%g)", 
+                   sprite_width, sprite_height, ox, oy)
+        debug_print("DETAILED", "    Target origin at cell center: (%g,%g)", 
+                   target_origin_x, target_origin_y)
+        debug_print("DETAILED", "    Top-left position: (%g,%g)", top_left_x, top_left_y)
         
         table.insert(positioned_children, {
             sprite_id = item.sprite_id,
-            x = x + offset_x,
-            y = y + offset_y,
+            x = top_left_x,
+            y = top_left_y,
+            ox = ox,
+            oy = oy,
             visible = true
         })
     end

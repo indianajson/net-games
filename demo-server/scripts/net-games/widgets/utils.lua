@@ -325,4 +325,99 @@ function utils.debug_print_table(tbl, indent)
     end
 end
 
+-- NEW: Convert table to string for debugging
+function utils.table_to_string(tbl)
+    local result = "{"
+    local first = true
+    for k, v in pairs(tbl) do
+        if not first then result = result .. ", " end
+        if type(k) == "string" then
+            result = result .. k .. "="
+        end
+        if type(v) == "table" then
+            result = result .. utils.table_to_string(v)
+        elseif type(v) == "string" then
+            result = result .. '"' .. v .. '"'
+        else
+            result = result .. tostring(v)
+        end
+        first = false
+    end
+    return result .. "}"
+end
+
+-- NEW: Calculate alignment with origin offset
+-- This positions the ORIGIN point at the aligned position
+function utils.align_with_origin(width, height, ox, oy, container_width, container_height, 
+                                 main_align, cross_align, is_main_axis_horizontal)
+    local x, y = 0, 0
+    
+    if is_main_axis_horizontal then
+        -- For Row widget (main axis is horizontal)
+        -- Main axis alignment affects X position
+        if main_align == "center" then
+            x = (container_width - width) / 2
+        elseif main_align == "end" then
+            x = container_width - width
+        end
+        -- "start" alignment leaves x at 0
+        
+        -- Cross axis alignment affects Y position
+        if cross_align == "center" then
+            y = (container_height - height) / 2
+        elseif cross_align == "end" then
+            y = container_height - height
+        end
+        -- "start" alignment leaves y at 0
+    else
+        -- For Column widget (main axis is vertical)
+        -- Main axis alignment affects Y position
+        if main_align == "center" then
+            y = (container_height - height) / 2
+        elseif main_align == "end" then
+            y = container_height - height
+        end
+        -- "start" alignment leaves y at 0
+        
+        -- Cross axis alignment affects X position
+        if cross_align == "center" then
+            x = (container_width - width) / 2
+        elseif cross_align == "end" then
+            x = container_width - width
+        end
+        -- "start" alignment leaves x at 0
+    end
+    
+    -- Adjust position so the ORIGIN point is at (x, y)
+    -- The layout stores top-left positions, so we need to add the origin offset
+    local top_left_x = x - ox
+    local top_left_y = y - oy
+    
+    return top_left_x, top_left_y
+end
+
+-- NEW: Calculate alignment for multiple children with spacing
+function utils.distribute_children_with_origin(total_children, container_size, total_size, 
+                                              spacing, alignment, is_main_axis)
+    local positions = {}
+    local start_pos = 0
+    
+    if alignment == "center" then
+        start_pos = (container_size - total_size) / 2
+    elseif alignment == "end" then
+        start_pos = container_size - total_size
+    elseif alignment == "space_between" and total_children > 1 then
+        spacing = (container_size - total_size) / (total_children - 1)
+        start_pos = 0
+    elseif alignment == "space_around" then
+        spacing = (container_size - total_size) / total_children
+        start_pos = spacing / 2
+    elseif alignment == "space_evenly" then
+        spacing = (container_size - total_size) / (total_children + 1)
+        start_pos = spacing
+    end
+    
+    return start_pos, spacing
+end
+
 return utils

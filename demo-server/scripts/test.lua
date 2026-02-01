@@ -20,14 +20,12 @@ Net:on("player_join", function(event)
     column:setPosition(0, 0)  -- Move to visible position
 
     -- Set column properties
-    column:setSpacing(5)
-    column:setAlignment("start", "stretch")
+    column:setAlignment("start", "center")
 
     -- Create rows with proper layout
     local row1 = Widgets.Row.new("menu_item_1", player_id)
-    row1:setSize(240, 17) 
-    row1:setSpacing(10)
-    row1:setAlignment("space_around", "center")
+    row1:setSize(0, 17) 
+    row1:setAlignment("space_evenly", "center")
     
     -- Create sprites directly with custom layout dimensions
     -- create_sprite already adds them to the widget
@@ -50,9 +48,8 @@ Net:on("player_join", function(event)
     )
     
     local row2 = Widgets.Row.new("menu_item_2", player_id)
-    row2:setSize(240, 17)
-    row2:setSpacing(10)
-    row2:setAlignment("space_around", "center")
+    row2:setSize(0, 17)
+    row2:setAlignment("space_evenly", "center")
     
     -- Create sprites for row2
     row2:create_sprite(
@@ -74,9 +71,9 @@ Net:on("player_join", function(event)
     )
 
     local row3 = Widgets.Row.new("menu_item_3", player_id)
-    row3:setSize(240,17)
-    row3:setSpacing(10)
-    row3:setAlignment("space_around", "center")
+    row3:setSize(0,17)
+    row3:setSpacing()
+    row3:setAlignment("space_evenly", "center")
     
     -- Create sprites for row3 with UNIQUE IDs
     row3:create_sprite(
@@ -97,7 +94,7 @@ Net:on("player_join", function(event)
         17
     )
     
-    row3:create_sprite(
+    local sprite7 = row3:create_sprite(
         "option_7",  -- Changed from option_6 to option_7
         "/server/assets/demo/order_points.png",
         "/server/assets/demo/order_points.anim",
@@ -144,11 +141,13 @@ Net:on("player_join", function(event)
         rows = {row1, row2, row3}
     }
 
-    row1:slide_widget(0,100,2,"ease_in", function() end)
+    row1:setPosition(-240, 0)
+    row1:slide_widget(0,0,3,"ease_in", function() end)
     row2:shake_widget(10,100,15,function () end)
-    row3:summon_widget(10, 10, 0, 10, 10, 2.0, 5, 10, .45, .10, "ease_in", function() end)
+    row3:setScale(0,0)
+    
+    row3:complex_summon_widget_relative(0, 44, 2.0, 10, 10, 2.0, 5, 1.1, 1.0, .10, "ease_in",(function()end), (function() end), (function() end))
 end)
-
     -- Example: Clean up when player leaves
 Net:on("player_disconnect", function(event)    
             -- Remove cursor

@@ -37,8 +37,8 @@ function SpriteObject.new(sprite_id, widget_id, player_id, texture_path, anim_pa
     
     -- Properties are in screen space (240x160)
     self.properties = {
-        x = 0,  -- Screen space X
-        y = 0,  -- Screen space Y
+        x = 0,  -- Screen space X (position of origin point)
+        y = 0,  -- Screen space Y (position of origin point)
         z = 0,
         sx = 1.0,  -- Sprite's own scale (multiplies layout dimensions)
         sy = 1.0,
@@ -139,6 +139,32 @@ function SpriteObject:get_origin_offset()
     return self.origin_x, self.origin_y
 end
 
+-- Get position of top-left corner (for layout calculations)
+function SpriteObject:get_top_left_position()
+    local x = self.properties.x - self.origin_x
+    local y = self.properties.y - self.origin_y
+    return x, y
+end
+
+-- Set position of top-left corner
+function SpriteObject:set_top_left_position(x, y)
+    self.properties.x = x + self.origin_x
+    self.properties.y = y + self.origin_y
+    return self
+end
+
+-- Get position of origin point
+function SpriteObject:get_origin_position()
+    return self.properties.x, self.properties.y
+end
+
+-- Set position of origin point
+function SpriteObject:set_origin_position(x, y)
+    self.properties.x = x
+    self.properties.y = y
+    return self
+end
+
 function SpriteObject:allocate()
     if self.allocated then
         debug_print("VERBOSE", "SpriteObject.allocate: %s already allocated", self.id)
@@ -224,13 +250,18 @@ function SpriteObject:draw()
         return true
     end
     
-    -- Get scaled position
+    -- Get scaled position (this is the position of the ORIGIN point)
     local scaled_x, scaled_y, screen_x, screen_y = self:get_scaled_position()
     
     -- Get origin offset (in screen space, will be scaled)
     local ox, oy = self:get_origin_offset()
     local scaled_ox = utils.normalize_x(ox)
     local scaled_oy = utils.normalize_y(oy)
+    
+    -- Calculate final position: The Net API expects the top-left position,
+    -- so we subtract the origin offset from our origin position
+    local final_x = scaled_x - scaled_ox
+    local final_y = scaled_y - scaled_oy
     
     -- Get widget scale
     local WidgetCache = require('scripts/net-games/widgets/cache')
@@ -243,13 +274,13 @@ function SpriteObject:draw()
     
     local sprite_data = {
         id = self.id,  -- Use sprite object ID as the instance ID
-        x = scaled_x,  -- Scaled screen coordinates
-        y = scaled_y,
+        x = final_x,   -- Top-left position (origin position minus origin offset)
+        y = final_y,
         z = self.properties.z,
         sx = final_scale_x,
         sy = final_scale_y,
         ro = self.properties.ro,
-        ox = scaled_ox,  -- Scaled origin
+        ox = scaled_ox,  -- Origin offset (Net API will apply this)
         oy = scaled_oy,
         a = self.properties.a,
         r = self.properties.r,
@@ -260,9 +291,9 @@ function SpriteObject:draw()
         opacity = self.properties.opacity
     }
     
-    debug_print("VERBOSE", "SpriteObject.draw: %s at screen(%g,%g)->scaled(%g,%g) scale=%f,%f widget_scale=%f",
-               self.id, screen_x, screen_y, scaled_x, scaled_y,
-               self.properties.sx, self.properties.sy, widget_scale)
+    debug_print("VERBOSE", "SpriteObject.draw: %s origin at screen(%g,%g)->scaled(%g,%g) top-left(%g,%g) ox/oy=(%g,%g) scale=%f,%f",
+               self.id, screen_x, screen_y, scaled_x, scaled_y, final_x, final_y,
+               ox, oy, self.properties.sx, self.properties.sy)
     
     -- Draw sprite instance using the template
     local success, result = pcall(Net.player_draw_sprite, self.player_id, self.template_id, sprite_data)
@@ -312,6 +343,7 @@ function SpriteObject:update(properties)
 end
 
 function SpriteObject:set_position(x, y)
+    -- This sets the position of the ORIGIN point
     return self:update({x = x, y = y})
 end
 
