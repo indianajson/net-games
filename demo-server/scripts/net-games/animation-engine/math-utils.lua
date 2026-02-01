@@ -14,6 +14,26 @@ function MathUtils.clamp01(t)
     return t < 0 and 0 or (t > 1 and 1 or t)
 end
 
+-- TODO: old name kept to make sure things continue working for now.
+function MathUtils.ease_clamped(t, easing_name)
+    return MathUtils.clamp01(MathUtils.ease(t, easing_name))
+end
+
+-- Apply easing and clamp between 0 and 1
+function MathUtils.ease_clamped01(t, easing_name)
+    return MathUtils.clamp01(MathUtils.ease(t, easing_name))
+end
+
+-- Clamp a value between 0 and 1
+function MathUtils.clamp255(value)
+    return math.min(math.max(0, value), 255)
+end
+
+-- Apply easing and clamp between 0 and 1
+function MathUtils.ease_clamped255(t, easing_name)
+    return MathUtils.clamp255(MathUtils.ease(t, easing_name))
+end
+
 -- Linear interpolation between a and b
 function MathUtils.lerp(a, b, t)
     return a + (b - a) * t
@@ -228,10 +248,6 @@ function MathUtils.ease(t, easing_name)
     return t  -- Default to linear if easing not found
 end
 
--- Apply easing and clamp between 0 and 1
-function MathUtils.ease_clamped(t, easing_name)
-    return MathUtils.clamp01(MathUtils.ease(t, easing_name))
-end
 
 -- ---------------------------------------------------------------------------
 -- Animation Math Functions

@@ -10,7 +10,7 @@
 -- ===========================================================
 local Displayer = require("scripts/net-games/displayer/displayer")
 local AnimationEngine = require("scripts/net-games/animation-engine/animation-engine")
-local AnimationSequences = require("scripts/net-games/animation-engine/animation-sequences")
+-- local AnimationSequences = require("scripts/net-games/animation-engine/animation-sequences")
 
 -- ===========================================================
 -- INITIALIZATION
@@ -1406,7 +1406,7 @@ function frame.color_pulse_ui_element(sprite_id, player_id, start_color, target_
         end
     }
     
-    local anim_id = AnimationSequences.color_pulse(proxy, start_color, target_color)
+    local anim_id = AnimationEngine.color_pulse(proxy, start_color, target_color)
     
     if not element.animations then
         element.animations = {}
@@ -1544,7 +1544,7 @@ function frame.shake_ui_element(sprite_id, player_id, intensity, duration, frequ
     }
     local seq_id = nil
 
-    seq_id = AnimationSequences.shake(shake_object, {
+    seq_id = AnimationEngine.shake(shake_object, {
         intensity = intensity,
         duration = duration,
         frequency = frequency,

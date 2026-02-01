@@ -102,14 +102,41 @@ Net:on("player_join", function(event)
         78,
         17
     )
+
+        
+    local row4 = Widgets.Row.new("menu_item_4", player_id)
+    row4:setSize(0, 17)
+    row4:setAlignment("space_evenly", "center")
+    
+    -- Create sprites for row2
+    row4:create_sprite(
+        "option_8",
+        "/server/assets/demo/order_points.png",
+        "/server/assets/demo/order_points.anim",
+        "6POINT",
+        78,
+        17
+    )
+    
+    row4:create_sprite(
+        "option_9",
+        "/server/assets/demo/order_points.png",
+        "/server/assets/demo/order_points.anim",
+        "5POINT",
+        78,
+        17
+    )
     
     -- Add rows to column
     column:addChild({widget = row1, id = row1.id})
     column:addChild({widget = row2, id = row2.id})
     column:addChild({widget = row3, id = row3.id})
+    column:addChild({widget = row4, id = row4.id})
+
     row1:updateLayout(true)
     row2:updateLayout(true)
     row3:updateLayout(true)
+    row4:updateLayout(true)
     -- Update layout
     column:updateLayout(true)
     
@@ -180,6 +207,9 @@ Net:on("player_join", function(event)
     align1:updateLayout(true)
     align1:draw(true)
     row1:color_pulse_rgb(255, 255, 255, 255, 125, 200, 0, 255, 1, "ease_in", function()end)
+    local animSequences = Widgets.getAnimationSequences()
+    local summonAnim = animSequences["summon"]
+    print(summonAnim)
 end)
     -- Example: Clean up when player leaves
 Net:on("player_disconnect", function(event)    
