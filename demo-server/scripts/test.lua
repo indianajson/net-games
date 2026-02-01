@@ -146,7 +146,7 @@ Net:on("player_join", function(event)
 
     row1:slide_widget(0,100,2,"ease_in", function() end)
     row2:shake_widget(10,100,15,function () end)
-    row3:color_pulse_from_current({r = 222, g = 210, b =42, a = 255}, function()end)
+    row3:summon_widget(10, 10, 0, 10, 10, 2.0, 5, 10, .45, .10, "ease_in", function() end)
 end)
 
     -- Example: Clean up when player leaves
