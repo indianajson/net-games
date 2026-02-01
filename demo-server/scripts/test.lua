@@ -177,10 +177,9 @@ Net:on("player_join", function(event)
     align1:setBoundingBox(0, 0, 240, 160)
     align1:alignCenter(0,0)
     align1:addChild({widget = grid, id = grid.id})
-
-
     align1:updateLayout(true)
     align1:draw(true)
+    
 end)
     -- Example: Clean up when player leaves
 Net:on("player_disconnect", function(event)    
