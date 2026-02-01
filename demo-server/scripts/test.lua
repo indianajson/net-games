@@ -42,7 +42,7 @@ Net:on("player_join", function(event)
         "option_2", 
         "/server/assets/demo/order_points.png",
         "/server/assets/demo/order_points.anim",
-        "8POINT",
+        "7POINT",
         78,
         17
     )
@@ -56,7 +56,7 @@ Net:on("player_join", function(event)
         "option_3",
         "/server/assets/demo/order_points.png",
         "/server/assets/demo/order_points.anim",
-        "7POINT",
+        "6POINT",
         78,
         17
     )
@@ -65,7 +65,7 @@ Net:on("player_join", function(event)
         "option_4",
         "/server/assets/demo/order_points.png",
         "/server/assets/demo/order_points.anim",
-        "6POINT",
+        "5POINT",
         78,
         17
     )
@@ -80,7 +80,7 @@ Net:on("player_join", function(event)
         "option_5",
         "/server/assets/demo/order_points.png",
         "/server/assets/demo/order_points.anim",
-        "5POINT",
+        "4POINT",
         78,
         17
     )
@@ -89,7 +89,7 @@ Net:on("player_join", function(event)
         "option_6",
         "/server/assets/demo/order_points.png",
         "/server/assets/demo/order_points.anim",
-        "4POINT",
+        "3POINT",
         78,
         17
     )
@@ -98,7 +98,7 @@ Net:on("player_join", function(event)
         "option_7",  -- Changed from option_6 to option_7
         "/server/assets/demo/order_points.png",
         "/server/assets/demo/order_points.anim",
-        "3POINT",
+        "2POINT",
         78,
         17
     )
@@ -141,12 +141,34 @@ Net:on("player_join", function(event)
         rows = {row1, row2, row3}
     }
 
-    row1:setPosition(-240, 0)
-    row1:slide_widget(0,0,3,"ease_in", function() end)
+    --row1:setPosition(-240, 0)
+    -- row1:slide_widget(0,0,0.2,"ease_in", function()
+    --     --row1:swap_and_animate_sprites_at_indices(1, 2, 2, "ease_in", function ()end)
+    -- end)
     row2:shake_widget(10,100,15,function () end)
-    row3:setScale(0,0)
+    --row3:setScale(0,0)
+    --local sprite1_row1 = row1:get_sprite("option_1")
+    --sprite1_row1:shake_widget(10,100,15,function () end)
+    -- row3:complex_summon_widget_relative(0, 44, 0.2, 0.2, 0.2, 0.2, 5, 1.1, 1.0, .10, "ease_in",(function()end), (function() end), (function() end))
+    column:swap_and_animate_child_widgets("menu_item_1","menu_item_3",1,"ease_in",function()end)
+
+    local grid = Widgets.Grid.new("grid1", player_id)
+    grid:setColumns(5)
+    grid:setSpacing(5,5)
+    grid:setCellSize(20,20)
     
-    row3:complex_summon_widget_relative(0, 44, 2.0, 10, 10, 2.0, 5, 1.1, 1.0, .10, "ease_in",(function()end), (function() end), (function() end))
+    for i = 1, 10 do
+        grid:addItem(
+            "item_" .. i,
+            "/server/assets/net-games/text_cursor.png",
+            "/server/assets/net-games/text_cursor.anim",
+            "CURSOR_RIGHT",
+            {id = i, name = "Item " .. i}
+        )
+    end
+    
+    grid:updateLayout(true)
+    grid:draw(true)
 end)
     -- Example: Clean up when player leaves
 Net:on("player_disconnect", function(event)    

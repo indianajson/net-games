@@ -441,6 +441,176 @@ function Widget:set_sprite_full_properties(sprite_id, properties)
     end
 end
 
+-- ===========================================================
+-- REORDERING METHODS FOR SPRITES AND CHILDREN
+-- ===========================================================
+
+-- Move a child (sprite or widget) to a new position in the children array
+function Widget:move_child_to_index(child_id, new_index)
+    if new_index < 1 or new_index > #self.children then
+        debug_print("ERROR", "Widget.move_child_to_index: Invalid index %d for child %s", 
+                   new_index, child_id)
+        return false
+    end
+    
+    -- Find the child in the current children array
+    local current_index = nil
+    local child_data = nil
+    
+    for i, child in ipairs(self.children) do
+        if child.sprite_id == child_id or child.id == child_id or 
+           (child.widget and child.widget.id == child_id) then
+            current_index = i
+            child_data = child
+            break
+        end
+    end
+    
+    if not current_index then
+        debug_print("ERROR", "Widget.move_child_to_index: Child %s not found", child_id)
+        return false
+    end
+    
+    -- If already at the target index, do nothing
+    if current_index == new_index then
+        debug_print("DETAILED", "Widget.move_child_to_index: Child %s already at index %d", 
+                   child_id, new_index)
+        return true
+    end
+    
+    -- Remove from current position
+    table.remove(self.children, current_index)
+    
+    -- Adjust target index if we removed before it
+    if current_index < new_index then
+        new_index = new_index - 1
+    end
+    
+    -- Insert at new position
+    table.insert(self.children, new_index, child_data)
+    
+    -- Mark for layout update
+    self.state.dirty = true
+    self.state.needs_layout = true
+    
+    debug_print("INFO", "Widget.move_child_to_index: Moved child %s from index %d to %d", 
+               child_id, current_index, new_index)
+    return true
+end
+
+-- Swap positions of two children
+function Widget:swap_children(child1_id, child2_id)
+    local index1, index2 = nil, nil
+    
+    -- Find indices of both children
+    for i, child in ipairs(self.children) do
+        if child.sprite_id == child1_id or child.id == child1_id or 
+           (child.widget and child.widget.id == child1_id) then
+            index1 = i
+        end
+        if child.sprite_id == child2_id or child.id == child2_id or 
+           (child.widget and child.widget.id == child2_id) then
+            index2 = i
+        end
+    end
+    
+    if not index1 then
+        debug_print("ERROR", "Widget.swap_children: Child1 %s not found", child1_id)
+        return false
+    end
+    
+    if not index2 then
+        debug_print("ERROR", "Widget.swap_children: Child2 %s not found", child2_id)
+        return false
+    end
+    
+    -- Swap in children array
+    self.children[index1], self.children[index2] = self.children[index2], self.children[index1]
+    
+    -- Mark for layout update
+    self.state.dirty = true
+    self.state.needs_layout = true
+    
+    debug_print("INFO", "Widget.swap_children: Swapped %s (index %d) with %s (index %d)", 
+               child1_id, index1, child2_id, index2)
+    return true
+end
+
+-- Bring child to front (last in children array)
+function Widget:bring_to_front(child_id)
+    return self:move_child_to_index(child_id, #self.children)
+end
+
+-- Send child to back (first in children array)
+function Widget:send_to_back(child_id)
+    return self:move_child_to_index(child_id, 1)
+end
+
+-- Get current index of a child
+function Widget:get_child_index(child_id)
+    for i, child in ipairs(self.children) do
+        if child.sprite_id == child_id or child.id == child_id or 
+           (child.widget and child.widget.id == child_id) then
+            return i
+        end
+    end
+    return nil
+end
+
+-- Reorder children by a list of IDs
+function Widget:reorder_children(ordered_ids)
+    -- Create a lookup table for child data
+    local child_data = {}
+    for i, child in ipairs(self.children) do
+        local id = child.sprite_id or child.id or (child.widget and child.widget.id)
+        if id then
+            child_data[id] = child
+        end
+    end
+    
+    -- Rebuild children array in the specified order
+    local new_children = {}
+    for _, id in ipairs(ordered_ids) do
+        local data = child_data[id]
+        if data then
+            table.insert(new_children, data)
+            child_data[id] = nil  -- Remove to track which were used
+        else
+            debug_print("WARN", "Widget.reorder_children: Child %s not found in current children", id)
+        end
+    end
+    
+    -- Add any remaining children (in their original order)
+    for _, child in ipairs(self.children) do
+        local id = child.sprite_id or child.id or (child.widget and child.widget.id)
+        if child_data[id] then  -- Still in lookup table, wasn't in ordered_ids
+            table.insert(new_children, child)
+        end
+    end
+    
+    -- Replace children array
+    self.children = new_children
+    
+    -- Mark for layout update
+    self.state.dirty = true
+    self.state.needs_layout = true
+    
+    debug_print("INFO", "Widget.reorder_children: Reordered %d children", #ordered_ids)
+    return true
+end
+
+-- Sort children using a comparison function
+function Widget:sort_children(compare_func)
+    table.sort(self.children, compare_func)
+    
+    -- Mark for layout update
+    self.state.dirty = true
+    self.state.needs_layout = true
+    
+    debug_print("INFO", "Widget.sort_children: Sorted %d children", #self.children)
+    return true
+end
+
 -- Set layout dimensions for sprite (pre-scaling)
 function Widget:set_sprite_layout_dimensions(sprite_id, width, height)
     local sprite = self.sprite_objects[sprite_id]
@@ -466,6 +636,117 @@ function Widget:set_sprite_layout_dimensions(sprite_id, width, height)
         debug_print("WARN", "Widget.set_sprite_layout_dimensions: Sprite %s not found", sprite_id)
         return false
     end
+end
+
+-- Swap two sprites and animate their positions
+function Widget:swap_and_animate_sprites(sprite1_id, sprite2_id, duration, easing, user_on_complete)
+    if not self then
+        debug_print("ERROR", "Widget.swap_and_animate_sprites: Invalid widget")
+        return nil
+    end
+    
+    duration = duration or 0.3
+    easing = easing or "ease_in_out"
+    
+    debug_print("INFO", "Widget.swap_and_animate_sprites: Swapping %s and %s in %s", 
+               sprite1_id, sprite2_id, self.id)
+    
+    -- Get the sprite objects
+    local sprite1 = self.sprite_objects[sprite1_id]
+    local sprite2 = self.sprite_objects[sprite2_id]
+    
+    if not sprite1 or not sprite2 then
+        debug_print("ERROR", "  One or both sprites not found: %s, %s", sprite1_id, sprite2_id)
+        if user_on_complete then
+            user_on_complete({success = false, reason = "sprites_not_found"}, false)
+        end
+        return nil
+    end
+    
+    -- Get current positions of both sprites (relative to widget)
+    local pos1 = {x = sprite1.properties.x, y = sprite1.properties.y}
+    local pos2 = {x = sprite2.properties.x, y = sprite2.properties.y}
+    
+    -- Mark sprites as widget-animated
+    sprite1:set_widget_animated(true, {type = "swap"})
+    sprite2:set_widget_animated(true, {type = "swap"})
+    
+    -- Try to load animation modules
+    local AnimationEngine, AnimationSequences, AnimationEnums = utils.load_animation_modules()
+    
+    if not AnimationEngine then
+        debug_print("WARN", "Widget.swap_and_animate_sprites: AnimationEngine not available")
+        
+        -- Just swap positions without animation
+        sprite1:set_position(pos2.x, pos2.y)
+        sprite2:set_position(pos1.x, pos1.y)
+        
+        -- Unmark sprites
+        sprite1:set_widget_animated(false)
+        sprite2:set_widget_animated(false)
+        
+        if user_on_complete then
+            user_on_complete({sprite1 = sprite1_id, sprite2 = sprite2_id, success = true}, false)
+        end
+        return nil
+    end
+    
+    local anim_id1, anim_id2
+    
+    -- Animate sprite1 to sprite2's position
+    anim_id1 = sprite1:slide_sprite(pos2.x, pos2.y, duration, easing)
+    
+    -- Animate sprite2 to sprite1's position
+    anim_id2 = sprite2:slide_sprite(pos1.x, pos1.y, duration, easing)
+    
+    -- Track both animations
+    if anim_id1 then
+        self.active_animations[anim_id1] = true
+    end
+    if anim_id2 then
+        self.active_animations[anim_id2] = true
+    end
+    
+    -- Set up completion handler
+    local animations_completed = 0
+    local function check_completion()
+        animations_completed = animations_completed + 1
+        if animations_completed >= 2 then
+            -- Unmark sprites
+            sprite1:set_widget_animated(false)
+            sprite2:set_widget_animated(false)
+            
+            -- Clean up animation tracking
+            if anim_id1 then
+                self.active_animations[anim_id1] = nil
+            end
+            if anim_id2 then
+                self.active_animations[anim_id2] = nil
+            end
+            
+            if user_on_complete then
+                user_on_complete({sprite1 = sprite1_id, sprite2 = sprite2_id, success = true}, false)
+            end
+            
+            debug_print("INFO", "Widget.swap_and_animate_sprites: Swap completed for %s and %s", 
+                       sprite1_id, sprite2_id)
+        end
+    end
+    
+    -- If animations were created, set up their completion handlers
+    if anim_id1 then
+        AnimationEngine.set_animation_callback(anim_id1, "on_complete", check_completion)
+    else
+        check_completion()
+    end
+    
+    if anim_id2 then
+        AnimationEngine.set_animation_callback(anim_id2, "on_complete", check_completion)
+    else
+        check_completion()
+    end
+    
+    return {anim1 = anim_id1, anim2 = anim_id2}
 end
 
 -- Set properties for sprite group
@@ -4293,6 +4574,197 @@ function Widget:printDebugInfo(level)
             print(indent .. "    " .. group_name .. ": " .. #sprite_ids .. " sprites")
         end
     end
+end
+
+-- ===========================================================
+-- WIDGET SWAPPING METHODS (for swapping child widgets)
+-- ===========================================================
+
+-- Swap two child widgets and animate their positions
+function Widget:swap_and_animate_child_widgets(widget1_id, widget2_id, duration, easing, on_complete)
+    if not self then
+        debug_print("ERROR", "Widget.swap_and_animate_child_widgets: Invalid widget")
+        return nil
+    end
+    
+    duration = duration or 0.3
+    easing = easing or "ease_in_out"
+    
+    debug_print("INFO", "Widget.swap_and_animate_child_widgets: Swapping %s and %s in %s", 
+               widget1_id, widget2_id, self.id)
+    
+    -- Find the child widgets in our children array
+    local child1_data, child2_data = nil, nil
+    local index1, index2 = nil, nil
+    
+    for i, child in ipairs(self.children) do
+        if child.widget and child.widget.id == widget1_id then
+            child1_data = child
+            index1 = i
+        elseif child.widget and child.widget.id == widget2_id then
+            child2_data = child
+            index2 = i
+        end
+    end
+    
+    if not child1_data or not child2_data then
+        debug_print("ERROR", "  One or both child widgets not found")
+        if on_complete then on_complete({success = false, reason = "not_found"}, false) end
+        return nil
+    end
+    
+    local widget1 = child1_data.widget
+    local widget2 = child2_data.widget
+    
+    debug_print("DETAILED", "  Found widgets: %s at index %d, %s at index %d", 
+               widget1.id, index1, widget2.id, index2)
+    
+    -- Store current positions (relative to parent)
+    local pos1 = {x = widget1.x, y = widget1.y}
+    local pos2 = {x = widget2.x, y = widget2.y}
+    
+    -- Swap in children array
+    self.children[index1], self.children[index2] = self.children[index2], self.children[index1]
+    
+    -- Update layout to calculate new positions
+    self:updateLayout(true)
+    
+    -- Get new positions
+    local new_pos1 = {x = widget1.x, y = widget1.y}
+    local new_pos2 = {x = widget2.x, y = widget2.y}
+    
+    debug_print("DETAILED", "  Original positions: %s=(%g,%g), %s=(%g,%g)", 
+               widget1.id, pos1.x, pos1.y, widget2.id, pos2.x, pos2.y)
+    debug_print("DETAILED", "  New positions: %s=(%g,%g), %s=(%g,%g)", 
+               widget1.id, new_pos1.x, new_pos1.y, widget2.id, new_pos2.x, new_pos2.y)
+    
+    -- Temporarily set back to original positions
+    widget1:setPosition(pos1.x, pos1.y)
+    widget2:setPosition(pos2.x, pos2.y)
+    
+    -- Set animation flags on the widgets
+    widget1._layout_animation_active = true
+    widget1._layout_animation_type = "widget_swap"
+    widget2._layout_animation_active = true
+    widget2._layout_animation_type = "widget_swap"
+    
+    -- Animate both widgets to their new positions
+    local animations_completed = 0
+    local total_animations = 2
+    
+    local function check_completion()
+        animations_completed = animations_completed + 1
+        if animations_completed >= total_animations then
+            -- Clear animation flags
+            widget1._layout_animation_active = false
+            widget1._layout_animation_type = nil
+            widget2._layout_animation_active = false
+            widget2._layout_animation_type = nil
+            
+            -- Final layout update
+            self:updateLayout(true)
+            
+            if on_complete then
+                on_complete({
+                    widget1 = widget1_id, 
+                    widget2 = widget2_id, 
+                    success = true,
+                    new_index1 = index2,
+                    new_index2 = index1
+                }, false)
+            end
+            
+            debug_print("INFO", "Widget.swap_and_animate_child_widgets: Swap completed")
+        end
+    end
+    
+    -- Animate widget1
+    widget1:slide_widget(new_pos1.x, new_pos1.y, duration, easing, function()
+        check_completion()
+    end)
+    
+    -- Animate widget2
+    widget2:slide_widget(new_pos2.x, new_pos2.y, duration, easing, function()
+        check_completion()
+    end)
+    
+    return {widget1_anim = widget1.id, widget2_anim = widget2.id}
+end
+
+-- Simple swap of child widgets
+function Widget:simple_swap_child_widgets(widget1_id, widget2_id, duration, easing, on_complete)
+    duration = duration or 0.3
+    easing = easing or "ease_in_out"
+    
+    debug_print("INFO", "Widget.simple_swap_child_widgets: Swapping %s and %s in %s", 
+               widget1_id, widget2_id, self.id)
+    
+    -- Find the child widgets
+    local widget1, widget2 = nil, nil
+    local index1, index2 = nil, nil
+    
+    for i, child in ipairs(self.children) do
+        if child.widget and child.widget.id == widget1_id then
+            widget1 = child.widget
+            index1 = i
+        elseif child.widget and child.widget.id == widget2_id then
+            widget2 = child.widget
+            index2 = i
+        end
+    end
+    
+    if not widget1 or not widget2 then
+        debug_print("ERROR", "  Child widgets not found")
+        if on_complete then on_complete(false) end
+        return false
+    end
+    
+    -- Store positions
+    local pos1 = {x = widget1.x, y = widget1.y}
+    local pos2 = {x = widget2.x, y = widget2.y}
+    
+    -- Swap in children array
+    self.children[index1], self.children[index2] = self.children[index2], self.children[index1]
+    
+    -- Update layout
+    self:updateLayout(true)
+    
+    -- Get new positions
+    local new_pos1 = {x = widget1.x, y = widget1.y}
+    local new_pos2 = {x = widget2.x, y = widget2.y}
+    
+    -- Set back to original positions
+    widget1:setPosition(pos1.x, pos1.y)
+    widget2:setPosition(pos2.x, pos2.y)
+    
+    -- Animate
+    widget1:slide_widget(new_pos1.x, new_pos1.y, duration, easing)
+    widget2:slide_widget(new_pos2.x, new_pos2.y, duration, easing, function()
+        self:updateLayout(true)
+        if on_complete then on_complete(true) end
+    end)
+    
+    return true
+end
+
+-- Get child widget by ID
+function Widget:get_child_widget(widget_id)
+    for _, child in ipairs(self.children) do
+        if child.widget and child.widget.id == widget_id then
+            return child.widget
+        end
+    end
+    return nil
+end
+
+-- Get position (index) of child widget
+function Widget:get_child_widget_position(widget_id)
+    for i, child in ipairs(self.children) do
+        if child.widget and child.widget.id == widget_id then
+            return i
+        end
+    end
+    return nil
 end
 
 return Widget
