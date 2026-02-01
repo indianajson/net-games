@@ -153,10 +153,12 @@ Net:on("player_join", function(event)
     column:swap_and_animate_child_widgets("menu_item_1","menu_item_3",1,"ease_in",function()end)
 
     local grid = Widgets.Grid.new("grid1", player_id)
+    grid:centerOnScreen()
     grid:setColumns(5)
     grid:setSpacing(5,5)
     grid:setCellSize(20,20)
-    
+    grid:setSize(100,100)
+
     for i = 1, 10 do
         grid:addItem(
             "item_" .. i,
@@ -166,9 +168,19 @@ Net:on("player_join", function(event)
             {id = i, name = "Item " .. i}
         )
     end
+
     
     grid:updateLayout(true)
     grid:draw(true)
+
+    local align1 = Widgets.Align.new("alignment1", player_id)
+    align1:setBoundingBox(0, 0, 240, 160)
+    align1:alignCenter(0,0)
+    align1:addChild({widget = grid, id = grid.id})
+
+
+    align1:updateLayout(true)
+    align1:draw(true)
 end)
     -- Example: Clean up when player leaves
 Net:on("player_disconnect", function(event)    
