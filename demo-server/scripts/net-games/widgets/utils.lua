@@ -116,24 +116,18 @@ function utils.table_contains(tbl, value)
     return false
 end
 
--- Load animation modules
+-- Load animation modules correctly
 function utils.load_animation_modules()
-    if not utils._animation_modules then
-        utils._animation_modules = {}
-        local success, engine = pcall(require, 'scripts/net-games/animation-engine/animation-engine')
-        if success then
-            utils._animation_modules.engine = engine
-        end
-        local success2, sequences = pcall(require, 'scripts/net-games/animation-engine/animation-sequences')
-        if success2 then
-            utils._animation_modules.sequences = sequences
-        end
-        local success3, enums = pcall(require, 'scripts/net-games/animation-engine/animation-enums')
-        if success3 then
-            utils._animation_modules.enums = enums
-        end
+    debug_print("INFO", "Loading animation modules via AnimationEngine...")
+    
+    local AnimationEngine = require('scripts/net-games/animation-engine/animation-engine')
+    
+    -- Use the backward compatibility method if available, otherwise get from engine
+    if AnimationEngine.load_animation_modules then
+        return AnimationEngine.load_animation_modules()
+    else
+        return AnimationEngine, AnimationEngine.Sequences, AnimationEngine.Enums
     end
-    return utils._animation_modules.engine, utils._animation_modules.sequences, utils._animation_modules.enums
 end
 
 -- Safe wrapper for Net API calls

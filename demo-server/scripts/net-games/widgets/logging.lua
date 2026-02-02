@@ -41,8 +41,12 @@ function LOGGING.debug_print(level, message, ...)
     
     local level_num = DEBUG_LEVELS[level:upper()] or 0
     if level_num <= current_level then
-        local formatted = string.format(message, ...)
-        print("[Widgets:" .. level:upper() .. "] " .. formatted)
+        local success, formatted = pcall(string.format, message, ...)
+        if success then
+            print("[Widgets:" .. level:upper() .. "] " .. formatted)
+        else
+            print("[Widgets:" .. level:upper() .. "] ERROR formatting message: " .. tostring(message))
+        end
     end
 end
 

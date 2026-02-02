@@ -177,7 +177,7 @@ Net:on("player_join", function(event)
     --local sprite1_row1 = row1:get_sprite("option_1")
     --sprite1_row1:shake_widget(10,100,15,function () end)
     -- row3:complex_summon_widget_relative(0, 44, 0.2, 0.2, 0.2, 0.2, 5, 1.1, 1.0, .10, "ease_in",(function()end), (function() end), (function() end))
-    column:swap_and_animate_child_widgets("menu_item_1","menu_item_3",1,"ease_in",function()end)
+    column:swap_and_animate_child_widgets("menu_item_1","menu_item_3",10,"ease_in",function()end)
 
     local grid = Widgets.Grid.new("grid1", player_id)
     grid:centerOnScreen()
@@ -206,10 +206,11 @@ Net:on("player_join", function(event)
     align1:addChild({widget = grid, id = grid.id})
     align1:updateLayout(true)
     align1:draw(true)
-    row1:color_pulse_rgb(255, 255, 255, 255, 125, 200, 0, 255, 1, "ease_in", function()end)
-    local animSequences = Widgets.getAnimationSequences()
-    local summonAnim = animSequences["summon"]
-    print(summonAnim)
+    
+    row4:color_pulse_widget({r = 255, g = 255,b= 255,a= 255},{r = 125,g= 200,b= 0,a= 255}, 1, "ease_in", function()end, true, false)()
+    --local animSequences = Widgets.getAnimationSequences()
+    --local summonAnim = animSequences["summon"]
+    -- print(summonAnim)
 end)
     -- Example: Clean up when player leaves
 Net:on("player_disconnect", function(event)    

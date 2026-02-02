@@ -38,8 +38,6 @@ function WidgetAnimations.slideWidget(widget, target_x, target_y, duration, ...)
     end
     
     -- Ensure animation modules are loaded
-    utils.load_animation_modules()
-    
     local AnimationEngine, AnimationSequences, AnimationEnums = utils.load_animation_modules()
     
     if not AnimationEngine then
@@ -85,8 +83,6 @@ function WidgetAnimations.fadeWidget(widget, target_opacity, duration, ...)
     end
     
     -- Ensure animation modules are loaded
-    utils.load_animation_modules()
-    
     local AnimationEngine, AnimationSequences, AnimationEnums = utils.load_animation_modules()
     
     if not AnimationEngine then
@@ -110,8 +106,6 @@ function WidgetAnimations.heroAnimation(from_widget, from_child_id, to_widget, t
     end
     
     -- Ensure animation modules are loaded
-    utils.load_animation_modules()
-    
     local AnimationEngine, AnimationSequences, AnimationEnums = utils.load_animation_modules()
     
     if not AnimationSequences then

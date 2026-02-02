@@ -5,10 +5,6 @@
 local LOGGING = require('scripts/net-games/widgets/logging')
 local debug_print = LOGGING.debug_print
 
--- Cache for animation modules to avoid loading every tick
-local _animation_modules_loaded = false
-local _AnimationEngine, _AnimationSequences, _AnimationEnums
-
 -- Load all widget modules
 local Widget = require('scripts/net-games/widgets/base-widget')
 local Row = require('scripts/net-games/widgets/row')
@@ -29,25 +25,13 @@ local SelectionManager = require('scripts/net-games/widgets/selection-manager')
 local WidgetAnimations = require('scripts/net-games/widgets/animations')
 local WidgetEvents = require('scripts/net-games/widgets/events')
 local WidgetDebug = require('scripts/net-games/widgets/debug')
+local AnimationEngine = require('scripts/net-games/animation-engine/animation-engine')
 
--- Function to load animation modules once and cache them
-local function load_animation_modules_once()
-    if not _animation_modules_loaded then
-        debug_print("INFO", "Loading animation modules...")
-        _AnimationEngine, _AnimationSequences, _AnimationEnums = utils.load_animation_modules()
-        _animation_modules_loaded = true
-        debug_print("INFO", "Animation modules loaded and cached")
-    end
-    return _AnimationEngine, _AnimationSequences, _AnimationEnums
-end
-
--- Update all widgets with cached animation modules
+-- Update all widgets with cached animation engine
 local function update_all_widgets(dt)
     debug_print("VERBOSE", "WidgetSystem.tick: Updating all widgets with dt=%f", dt)
     
-    -- Get cached animation modules
-    local AnimationEngine = _AnimationEngine
-    
+    -- Get cached animation engine
     if AnimationEngine then
         AnimationEngine.tick(dt)
     end
@@ -76,9 +60,6 @@ end
 local function initialize_widget_system()
     debug_print("INFO", "Initializing widget system...")
     
-    -- Preload animation modules
-    load_animation_modules_once()
-    
     -- Set up tick event handler if Net is available
     if Net and Net.on then
         Net:on("tick", function(event)
@@ -98,9 +79,9 @@ local function initialize_widget_system()
     return true
 end
 
--- Check if animation modules are loaded
-local function are_animation_modules_loaded()
-    return _animation_modules_loaded and _AnimationEngine ~= nil
+-- Check if animation engine is loaded
+local function is_animation_engine_loaded()
+    return AnimationEngine ~= nil
 end
 
 -- Screen helper functions
@@ -241,11 +222,14 @@ return {
     end,
     
     -- Animation control
-    loadAnimationModules = load_animation_modules_once,
-    areAnimationModulesLoaded = are_animation_modules_loaded,
-    getAnimationEngine = function() return _AnimationEngine end,
-    getAnimationSequences = function() return _AnimationSequences end,
-    getAnimationEnums = function() return _AnimationEnums end,
+    isAnimationEngineLoaded = is_animation_engine_loaded,
+    getAnimationEngine = function() return AnimationEngine end,
+    getAnimationSequences = function() 
+        return AnimationEngine and AnimationEngine.Sequences 
+    end,
+    getAnimationEnums = function() 
+        return AnimationEngine and AnimationEngine.Enums 
+    end,
     
     stopAllAnimations = function(widget)
         if widget then
@@ -277,7 +261,6 @@ return {
     
     -- Animation system management
     updateAnimationEngine = function(dt)
-        local AnimationEngine = _AnimationEngine
         if AnimationEngine then
             AnimationEngine.tick(dt)
             return true
@@ -290,7 +273,7 @@ return {
     
     -- System status
     isInitialized = function()
-        return _animation_modules_loaded
+        return AnimationEngine ~= nil
     end,
     
     -- Clean shutdown
@@ -309,11 +292,8 @@ return {
             WidgetCache.clear_player(player_id)
         end
         
-        -- Clear animation modules cache
-        _AnimationEngine = nil
-        _AnimationSequences = nil
-        _AnimationEnums = nil
-        _animation_modules_loaded = false
+        -- Clear animation engine cache
+        AnimationEngine = nil
         
         debug_print("INFO", "Widget system shut down")
         return true
