@@ -116,9 +116,13 @@ end
 
 -- Default bindings: keep confirm/cancel *pure* so Scroll-y gameplay actions
 -- can't masquerade as UI confirm/cancel.
-local DEFAULT_BINDINGS = {
+Input.DEFAULT_BINDINGS = {
   confirm = { "Confirm", "A", "OK", "Accept" },
   cancel  = { "Cancel", "Back", "B" },
+  minimap = { "Minimap" },
+  l_shoulder = {"Shoulder L"},
+  r_shoulder = {"Shoulder R"},
+  option = { "Option" },
 
   left    = { "UI Left", "Move Left", "Left" },
   right   = { "UI Right", "Move Right", "Right" },
@@ -315,7 +319,7 @@ function Input.attach_virtual_input_listener(bindings)
   LISTENER_ATTACHED = true
   print("[Input] attaching Net:on('virtual_input') listener")
 
-  bindings = bindings or DEFAULT_BINDINGS
+  bindings = bindings or Input.DEFAULT_BINDINGS
 
   Net:on("virtual_input", function(event)
     local player_id = event.player_id

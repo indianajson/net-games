@@ -1,0 +1,322 @@
+
+--[[
+* ---------------------------------------------------------- *
+          Net Games Demo by Indiana - Version 0.06
+	      https://github.com/indianajson/net-games 
+* ---------------------------------------------------------- *
+]]--
+
+--the below line is required to access net-games functions
+local games = require("scripts/net-games/framework")
+local NetHelpers = require("scripts/net-games/helpers/net-helpers")
+NetHelpers.patch_net()
+
+NetHelpers.safe_require("scripts/net-games/dialogue/startup")
+
+--purpose: Shorthand for async
+local function async(p)
+    local co = coroutine.create(p)
+    return Async.promisify(co)
+end
+
+--purpose: Shorthand for await
+local function await(v) return Async.await(v) end
+
+-------------------------------------------
+-- DEMO CODE FOR NPC THAT LITTERALLY JUST TALK (WOW) --
+-------------------------------------------
+
+require("scripts/net-games/npcs/prog_banner_dialogue")
+require("scripts/net-games/npcs/prog_basic_dialogue")
+require("scripts/net-games/npcs/prog_basic_freedraw")
+require("scripts/net-games/npcs/prog_dramatic_dialogue")
+require("scripts/net-games/npcs/prog_dyed_dialogue")
+require("scripts/net-games/npcs/prog_prompt_dialogue")
+require("scripts/net-games/npcs/prog_basic_nameplate")
+require("scripts/net-games/npcs/prog_talk_dialogue")
+require("scripts/net-games/npcs/prog_talk_colors")
+require("scripts/net-games/npcs/prog_vert_prompt")
+require("scripts/net-games/npcs/prog_vert_prompt_2")
+require("scripts/net-games/npcs/prog_vert_prompt_sapphire")
+require("scripts/net-games/npcs/prog_vert_prompt_pink")
+require("scripts/net-games/npcs/prog_vert_prompt_lime")
+require("scripts/net-games/npcs/prog_vert_prompt_charcoal_grey")
+require("scripts/net-games/npcs/prog_vert_prompt_red")
+require("scripts/net-games/npcs/prog_vert_prompt_emerald")
+require("scripts/net-games/npcs/prog_shop")
+-------------------------------------------
+-- DEMO CODE FOR NPC THAT GIVES COSMETIC --
+-------------------------------------------
+
+Net.create_bot("cosmo", { area_id="default", warp_in=false, texture_path="/server/assets/demo/roll.png", animation_path="/server/assets/demo/roll.animation", x=25.5, y=18.5, z=0, solid=true})
+local cosmo = {}
+
+Net:on("actor_interaction", function(event)
+    local cosmetic_id = "confetti"
+    if event.actor_id == "cosmo" and event.button == 0 and (cosmo[event.player_id] ~= true) then
+        local texture_path = "/server/assets/demo/shock.png"
+        local animation_path = "/server/assets/demo/shock.animation"
+        games.set_cosmetic(cosmetic_id, event.player_id, texture_path, animation_path, "cosmetic", 2, -40, true,-2)
+        cosmo[event.player_id] = true
+        Net.message_player(event.player_id, "Cosmetic enabled. So shiny!")
+    elseif event.actor_id == "cosmo" and event.button == 0 and cosmo[event.player_id] == true then
+        cosmo[event.player_id] = false
+        games.remove_cosmetic(cosmetic_id, event.player_id)
+
+        Net.message_player(event.player_id, "Cosmetic removed!")
+    end
+end)
+
+
+----------------------------------------------------------
+-- DEMO CODE FOR BASIC MARQUEE EXAMPLE [IN DEVELOPMENT] --
+----------------------------------------------------------
+-- local holoshine = require("scripts/net-games/animation-engine/holoshine")
+local marquee_active = {}
+
+Net.create_bot("marquee_demo", { 
+    area_id="default", 
+    warp_in=false, 
+    texture_path="/server/assets/demo/cyber_bat.png", 
+    animation_path="/server/assets/demo/cyber_bat.animation", 
+    x=24, y=21, z=0, 
+    solid=true
+})
+
+local backdrop_config = {
+    x = 0,          -- Just set backdrop position
+    y = 0,        -- Text will be automatically centered
+    width = 240,    -- Width of the backdrop we currently are using
+    height = 30,    -- Backdrop height (text will be centered within this)
+    loops = 1,      -- (int : optional) Set loops to how many times you would like it to show before removing or using a custom `on_finish` function to be called when the loops for marquee text have completed.
+                    --      - If nil or 0 is provided it will default to infinite be on screen until it is manually removed by the programmer.
+--  EXTRA OPTIONAL FIELDS NOT LISTED ABOVE
+--  on_finish     = (function : optional) some_x_function() end 
+--      - If none is provided it will remove marquee text and its backdrop.
+--  keep_backdrop = (bool : optional) true or false
+--      - If none is provided then this will default to false.
+}
+
+Net:on("actor_interaction", function(event)
+    if event.actor_id == "marquee_demo" and event.button == 0 and (marquee_active[event.player_id] ~= true) then
+        -- Create a marquee with backdrop
+        games.draw_marquee_text(event.player_id,"demo_marquee","Welcome to the Net Games Demo! This is a scrolling marquee text!", 10, "THICK", 2,1, 30 , backdrop_config, {r = 255, g = 128, b = 128, a = 255, opacity = 255, color_mode = 2})
+        marquee_active[event.player_id] = true
+        Net.message_player(event.player_id, "Marquee text activated! Watch it scroll across the screen.")
+    elseif event.actor_id == "marquee_demo" and event.button == 0 and marquee_active[event.player_id] == true then
+        marquee_active[event.player_id] = false
+        Net.message_player(event.player_id, "Marquee text was removed!")
+        games.remove_text("demo_marquee", event.player_id)
+    end
+end)
+
+Net:on("player_join", function(event)
+    marquee_active[event.player_id] = false
+
+-- Change palette later
+-- holoshine.change_holoshine_colors(overlay, 2)  -- Switch to rainbow
+
+-- Stop animation
+-- holoshine.stop_holoshine_animation(overlay)
+
+-- Clean up
+-- holoshine.remove_holoshine_overlay(overlay)
+-- Remove when done
+-- holoshine.remove_holoshine_overlay(overlay, event.player_id)
+end)
+
+Net:on("player_disconnect", function(event)
+    marquee_active[event.player_id] = false
+end)
+
+--------------------------------------------------------------
+-- DEMO CODE FOR THE BAT NPC THAT SPAWNS THE ORDER POINT UI --
+--------------------------------------------------------------
+
+local bat_active = {} 
+
+Net.create_bot("bat", { area_id="default", warp_in=false, texture_path="/server/assets/demo/cyber_bat.png", animation_path="/server/assets/demo/cyber_bat.animation", x=26, y=21, z=0, solid=true})
+
+Net:on("virtual_input", function(event)
+    if bat_active[event.player_id] == true then 
+        for i,button in next,event.events do 
+            if button.name == "Shoulder R" and button.state == 1 then 
+                if points > 0 then
+                    points = points - 1 
+                    games.set_ui_animation("points",event.player_id,tostring(points.."POINT"))
+                else
+                    points = 8
+                    games.set_ui_animation("points",event.player_id,tostring(points.."POINT"))
+                end
+            elseif button.name == "Shoulder L" and button.state == 1 then
+                if points < 8 then
+                    points = points + 1 
+                    games.set_ui_animation("points",event.player_id,tostring(points.."POINT"))
+                else
+                    points = 0
+                    games.set_ui_animation("points",event.player_id,tostring(points.."POINT"))
+                end
+            elseif button.name == "Move Down" or button.name == "Move Left" or button.name == "Move Right" or button.name == "Move Up" and button.state == 1 then
+                games.remove_ui_element("points",event.player_id)
+                bat_active[event.player_id] = false
+                Net.unlock_player_input(event.player_id)
+            end 
+        end 
+    end 
+end)
+
+Net:on("actor_interaction", function (event)
+
+    if event.actor_id == "bat" and event.button == 0 and bat_active[event.player_id] == false then
+        points = 8
+        Net.message_player(event.player_id, "Press Left Shoulder to incfease and Right Shoulder to decrease. Press any arrow key to stop.","","") 
+        Net.lock_player_input(event.player_id)
+        
+    ------------------------------------------------------------------------
+    ----- re-use for initial params for most games.{x_name}_ui_element -----
+    ------------------------------------------------------------------------
+    local spr_id = "points"
+    local pid = event.player_id
+    ------------------------------------------------------------------------
+    
+    ------------------------------------------------------------------------
+    ---- TESTED AND WORKING FRAMEWORK API CALLS FOR {X_NAME}_UI_ELEMENT ----
+    ------------------------------------------------------------------------
+    games.add_ui_element(spr_id,pid,"/server/assets/demo/order_points.png","/server/assets/demo/order_points.animation","8POINT",161,2,0, 2,2)
+    games.add_ui_element(spr_id.."a",pid,"/server/assets/demo/order_points.png","/server/assets/demo/order_points.animation","8POINT",4,4,0, 2,2)
+    games.add_ui_element(spr_id.."b",pid,"/server/assets/demo/order_points.png","/server/assets/demo/order_points.animation","8POINT",4,4,0, 2,2)
+    async(function()
+        ------------------------------------------------------------------------
+        ---------------- DEBUGGING REMOVE WHEN NO LONGER NEEDED ----------------
+        ------------------------------------------------------------------------
+        local eprops = games.get_ui_element_properties(spr_id,pid)
+        print(eprops)
+        ------------------------------------------------------------------------
+    
+        -- summon test
+        -- games.summon_ui_element("points",event.player_id, 120, 0, 0.5, 0, 140, 2.0, 3, 24, 1.35, 5, function() 
+        -- end)
+
+        -- await(Async.sleep(3))        
+        ---- complex summon test
+        games.complex_summon_ui_element(spr_id,pid, 110, 50, 2.0, 4, 141, 2.0)
+        await(Async.sleep(2))
+
+        ---- bob test:
+        -- games.bob_ui_element(spr_id, pid, 10, 2, AnimationEngine.AnimEnums.EasingFns.smootherstep, true, false)
+
+        ---- pulse scale test:
+        -- games.pulse_scale_ui_element(spr_id, pid, 0.0, 2.0, 10.0, AnimationEngine.AnimEnums.EasingFns.smootherstep, true)
+        
+        ---- color pulse  from sprite info test:
+        -- games.color_pulse_from_current(spr_id, pid, {r = 255, g = 125, b = 125, a = 125})
+
+        ---- rotate in circle test
+        games.shake_ui_element(spr_id.."b",pid,1, 100, 10)
+
+        ---- fade test
+        -- games.set_opacity_ui_element(spr_id,pid,128, 2, AnimationEngine.AnimEnums.EasingFns.smoothstep)
+
+        ---- color pulse x -> y test
+        -- games.color_pulse_rgb(spr_id, pid, 122, 0, 127, 255, 125,127,155,255)
+
+        ---- slide test
+        games.slide_ui_element(spr_id, pid, 4, 141, 2, AnimationEngine.AnimEnums.EasingFns.cubic)
+
+        ---- cursor bob test
+        games.menu_cursor_ui_element(spr_id, pid, 10, 1.1, 2,1, "horizontal")
+
+        ---- set color test
+        -- games.set_ui_element_color(spr_id, pid, 214, 124, 111, 1, AnimationEngine.AnimEnums.EasingFns.bounce_in)
+
+        ---- second slide test
+        games.slide_ui_element(spr_id.."a",pid,161, 4, 3, AnimationEngine.AnimEnums.EasingFns.linear)
+    
+        games.bob_ui_element(spr_id.."a",pid, 5, 2)
+
+                ---- second slide test
+        games.summon_ui_element(spr_id.."b",pid,161, 151, 0.0, 161, 141, 2.0,3,20,1.1,30, AnimationEngine.AnimEnums.EasingFns.linear)
+    
+        games.color_pulse_from_current(spr_id.."b",pid, {r = 10, g = 122, b = 125, a = 255})
+
+    end)
+    ------------------------------------------------------------------------
+
+
+    bat_active[event.player_id] = true
+    end 
+end)
+
+Net:on("player_join", function(event)
+    bat_active[event.player_id] = false
+end)
+
+Net:on("player_disconnect", function(event)
+    bat_active[event.player_id] = false
+end)
+
+----------------------------------------------------------------------
+-- DEMO CODE FOR THE NPC THAT SPAWNS A CURSOR TO CHANGE IT'S AVATAR --
+----------------------------------------------------------------------
+
+local points = 8
+
+Net.create_bot("changer", { area_id="default", warp_in=false, texture_path="/server/assets/demo/protoman-bn5.png", animation_path="/server/assets/demo/protoman-bn5.animation", animation="IDLE_DL", x=26, y=19.5, z=0, solid=true})
+
+Net:on("cursor_selection", function(event)
+    if event.cursor == "navi_changer" then
+        print("Player ".. event.player_id .." used cursor "..event.cursor.." to select "..event.selection)
+        games.remove_text("roll_label",event.player_id)
+        games.remove_text("megaman_label",event.player_id)
+        games.remove_text("protoman_label",event.player_id)
+        games.remove_cursor("navi_changer",event.player_id)
+        Net.unlock_player_input(event.player_id)
+
+        local texture = ""
+        local animation = ""
+        if event.selection == "protoman" then
+            texture = "/server/assets/demo/protoman-bn5.png"
+            animation = "/server/assets/demo/protoman-bn5.animation"
+        elseif event.selection == "roll" then
+            texture = "/server/assets/demo/roll.png"
+            animation = "/server/assets/demo/roll.animation"
+        elseif event.selection == "megaman" then
+            texture = "/server/assets/demo/megaman.png"
+            animation = "/server/assets/demo/megaman.animation"    
+        end 
+        Net.provide_asset_for_player(event.player_id, texture)
+        Net.provide_asset_for_player(event.player_id, animation)
+
+        Net.set_bot_avatar("changer",texture,animation)
+        local keyframes = {{properties={{property="Animation",value="IDLE_DL"}},duration=0}}
+        Net.animate_bot_properties("changer", keyframes)
+
+    end
+end)
+
+Net:on("actor_interaction", function (event)
+    if event.actor_id == "changer" and event.button == 0 then
+        local green_cursor_texture = "/server/assets/net-games/text_cursor.png"
+        local green_cursor_anim = "/server/assets/net-games/text_cursor.animation"
+        local cursor_options
+        cursor_options = {
+            texture=green_cursor_texture,
+            animation=green_cursor_anim,
+            movement = "vertical", 
+            selections = {
+                { x=35,y=45,z=0,name='roll',state="CURSOR_RIGHT" },
+                { x=35,y=65,z=0,name='megaman',state="CURSOR_RIGHT" },
+                { x=35,y=85,z=0,name='protoman',state="CURSOR_RIGHT" }
+            }, 
+        }
+        -- games.add_ui_element("navi_changer", event.player_id, green_cursor_texture, green_cursor_anim, "CURSOR_RIGHT", cursor_options.selections[1].x, cursor_options.selections[1].y, cursor_options.selections[1].z)
+        games.spawn_cursor("navi_changer", event.player_id, cursor_options)
+        games.menu_cursor_ui_element("navi_changer", event.player_id, 20, 1.8, 1, 10, "horizontal")
+        games.color_pulse_from_current("navi_changer", event.player_id, {r = 0, g = 0, b = 255, a = 128})
+        -- games.slide_ui_element("navi_changer", event.player_id, 100, 100, 2)
+        games.draw_text(event.player_id,"roll_label","<Roll_EXE>",40, 40,100, "BATTLE", 2.0, {r = 0, g = 255, b = 0, opacity = 255, color_mode = 2})
+        games.draw_text(event.player_id,"megaman_label","Megaman_EXE",40, 60,100, "BATTLE", 2.0, {r = 0, g = 255, b = 0, opacity = 255, color_mode = 2})
+        games.draw_text(event.player_id,"protoman_label","<PROTOMAN_EXE>",40, 80,100, "BATTLE", 2.0, {r = 0, g = 255, b = 0, opacity = 255, color_mode = 2})
+    end 
+
+end)
