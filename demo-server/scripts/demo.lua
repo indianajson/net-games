@@ -9,6 +9,7 @@
 --the below line is required to access net-games functions
 local games = require("scripts/net-games/framework")
 local NetHelpers = require("scripts/net-games/helpers/net-helpers")
+local AnimationEngine = require("scripts/net-games/animation-engine/animation-engine")
 NetHelpers.patch_net()
 
 NetHelpers.safe_require("scripts/net-games/dialogue/startup")
@@ -71,7 +72,6 @@ end)
 ----------------------------------------------------------
 -- DEMO CODE FOR BASIC MARQUEE EXAMPLE [IN DEVELOPMENT] --
 ----------------------------------------------------------
-local holoshine = require("scripts/net-games/animation-engine/holoshine")
 local marquee_active = {}
 
 Net.create_bot("marquee_demo", { 
@@ -200,6 +200,7 @@ Net:on("actor_interaction", function (event)
         -- await(Async.sleep(3))        
         ---- complex summon test
         games.complex_summon_ui_element(spr_id,pid, 110, 50, 2.0, 4, 141, 2.0)
+        games.set_ui_animation(spr_id, pid, "17POINT")
         await(Async.sleep(2))
 
         ---- bob test:

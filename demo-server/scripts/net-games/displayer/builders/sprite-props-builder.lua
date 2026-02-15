@@ -1,4 +1,5 @@
--- New file: sprite-props-builder.lua
+local boom = require("scripts/boom/main")
+
 local SpritePropsBuilder = {}
 SpritePropsBuilder.__index = SpritePropsBuilder
 
@@ -8,6 +9,21 @@ function SpritePropsBuilder:new()
     }
     setmetatable(o, self)
     return o
+end
+
+function SpritePropsBuilder:build_sprite_atlas(texture_path, anim_path)
+    if texture_path ~= nil then 
+        self.props.texture_path = texture_path 
+    end
+    if anim_path ~= nil then 
+        self.props.anim_path = anim_path
+        -- Parse Animation File
+        local parsedAnim = boom.load(anim_path)
+        if parsedAnim ~= nil then 
+            self.props.animation_states = parsedAnim.states
+        end
+    end
+    return self
 end
 
 function SpritePropsBuilder:build_position(x, y, z)

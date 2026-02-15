@@ -11,6 +11,7 @@
 local Displayer = require("scripts/net-games/displayer/displayer")
 local AnimationEngine = require("scripts/net-games/animation-engine/animation-engine")
 local AnimationSequences = require("scripts/net-games/animation-engine/animation-sequences")
+local boom = require("scripts/boom/main")
 
 -- ===========================================================
 -- INITIALIZATION
@@ -443,8 +444,8 @@ end
 function frame.add_ui_element(sprite_id, player_id, texture_path, animation_path, animation_state, x, y, z, sx, sy)
     sx = (sx and sx >= 0.0) and sx or 2.0
     sy = (sy and sy >= 0.0) and sy or 2.0
-    animation_path = animation_path or ""
-    animation_state = animation_state or ""
+    animation_path = animation_path or nil
+    animation_state = animation_state or nil
     
     if not ui_cache[player_id] then
         ui_cache[player_id] = {}
@@ -466,6 +467,7 @@ function frame.add_ui_element(sprite_id, player_id, texture_path, animation_path
         if animation_path ~= "" then
             Net.provide_asset_for_player(player_id, animation_path)
         end
+
         Net.provide_asset_for_player(player_id, texture_path)
         Net.player_alloc_sprite(player_id, new_sprite_id, {
             texture_path = texture_path,
@@ -493,8 +495,15 @@ function frame.add_ui_element(sprite_id, player_id, texture_path, animation_path
         opacity = 255
     })
     
+    local animation_path = animation_path
+    local toRemove = "/server/"
+    local results = animation_path:gsub(toRemove, "",1)
+    
+    local animation_data = boom.load(results).states
+    
     ui_cache[player_id][sprite_id] = {
         texture_path = texture_path,
+        animation_path = animation_path,
         sprite_id = new_sprite_id,
         x = x,
         y = y,
@@ -513,7 +522,8 @@ function frame.add_ui_element(sprite_id, player_id, texture_path, animation_path
         opacity = 255,
         animations = {},
         has_children = false,
-        children = {}
+        children = {},
+        animation_data = animation_data
     }
 end
 
@@ -573,6 +583,18 @@ end
 -- Purpose: Change the animation state of existing UI element
 function frame.set_ui_animation(sprite_id, player_id, animation_state)
     if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        return
+    end
+    local possible_anims = ui_cache[player_id][sprite_id].animation_data
+    local animation_match = false
+    for name, _ in pairs(possible_anims) do
+        if name == animation_state then
+            animation_match = true
+        end
+    end
+    
+    if animation_match == false then
+        print("No animation state named: " .. animation_state .. " found...")
         return
     end
     
