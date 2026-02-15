@@ -453,7 +453,7 @@ function frame.add_ui_element(sprite_id, player_id, texture_path, animation_path
         animation_data = boom.load(stripped_path).states
         -- Determine max width/height for the initial animation state
         if animation_data and animation_data[animation_state] then
-            local frames = animation_data[animation_state]
+            local frames = animation_data[animation_state].framelist
             local max_w, max_h = 0, 0
             for _, frame in ipairs(frames) do
                 if frame.w and frame.w > max_w then max_w = frame.w end
