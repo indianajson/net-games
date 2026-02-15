@@ -199,8 +199,8 @@ Net:on("actor_interaction", function (event)
 
         -- await(Async.sleep(3))        
         ---- complex summon test
-        games.complex_summon_ui_element(spr_id,pid, 110, 50, 2.0, 4, 141, 2.0)
-        games.set_ui_animation(spr_id, pid, "17POINT")
+        games.complex_summon_ui_element_relative(spr_id,pid, 110, 50, 2.0, 4, 1, 2.0)
+        games.set_ui_animation((spr_id.."b"), pid, "7POINT")
         await(Async.sleep(2))
 
         ---- bob test:

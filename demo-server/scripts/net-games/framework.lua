@@ -444,8 +444,8 @@ end
 function frame.add_ui_element(sprite_id, player_id, texture_path, animation_path, animation_state, x, y, z, sx, sy)
     sx = (sx and sx >= 0.0) and sx or 2.0
     sy = (sy and sy >= 0.0) and sy or 2.0
-    animation_path = animation_path or nil
-    animation_state = animation_state or nil
+    animation_path = animation_path or ""
+    animation_state = animation_state or ""
     
     if not ui_cache[player_id] then
         ui_cache[player_id] = {}
@@ -454,7 +454,7 @@ function frame.add_ui_element(sprite_id, player_id, texture_path, animation_path
     -- Check if sprite already allocated
     local new_sprite_id = sprite_id
     local already_allocated = false
-    
+
     for existing_id, sprite_data in pairs(ui_cache[player_id]) do
         if sprite_data["texture_path"] == texture_path then 
             already_allocated = true
@@ -462,6 +462,12 @@ function frame.add_ui_element(sprite_id, player_id, texture_path, animation_path
             break
         end
     end 
+
+    local animation_path = animation_path
+    local toRemove = "/server/"
+    local results = animation_path:gsub(toRemove, "",1)
+    
+    local animation_data = boom.load(results).states
     
     if not already_allocated then 
         if animation_path ~= "" then
@@ -491,15 +497,9 @@ function frame.add_ui_element(sprite_id, player_id, texture_path, animation_path
         g = 255,
         b = 255,
         color_mode = 0,
-        animation_state = animation_state,
+        anim_state = animation_state,
         opacity = 255
     })
-    
-    local animation_path = animation_path
-    local toRemove = "/server/"
-    local results = animation_path:gsub(toRemove, "",1)
-    
-    local animation_data = boom.load(results).states
     
     ui_cache[player_id][sprite_id] = {
         texture_path = texture_path,
@@ -1312,6 +1312,51 @@ function frame.complex_summon_ui_element(sprite_id, player_id, start_x, start_y,
     
     AnimationEngine.start_sequence(seq_id)
     return seq_id
+end
+
+-- Purpose: Relative variant of summon_ui_element (uses current position/scale as start)
+function frame.summon_ui_element_relative(sprite_id, player_id, end_x, end_y, end_scale, duration, arc_height, peak_scale_mul, wobble_deg, easing, on_complete)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+
+    local element = ui_cache[player_id][sprite_id]
+    local start_x = element.x
+    local start_y = element.y
+    local start_scale = element.sx  -- using sx as reference (assuming uniform scale)
+
+    return frame.summon_ui_element(
+        sprite_id, player_id,
+        start_x, start_y, start_scale,
+        end_x, end_y, end_scale,
+        duration, arc_height, peak_scale_mul, wobble_deg, easing, on_complete
+    )
+end
+
+-- Purpose: Relative variant of complex_summon_ui_element (uses current position/scale as start)
+function frame.complex_summon_ui_element_relative(sprite_id, player_id, end_x, end_y, end_scale,
+                                                  arc_duration, wobble_duration, settle_duration,
+                                                  arc_height, peak_scale_mul, wobble_deg, easing,
+                                                  on_complete, on_update_step1, on_update_step2, on_update_step3)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+
+    local element = ui_cache[player_id][sprite_id]
+    local start_x = element.x
+    local start_y = element.y
+    local start_scale = element.sx
+
+    return frame.complex_summon_ui_element(
+        sprite_id, player_id,
+        start_x, start_y, start_scale,
+        end_x, end_y, end_scale,
+        arc_duration, wobble_duration, settle_duration,
+        arc_height, peak_scale_mul, wobble_deg, easing,
+        on_complete, on_update_step1, on_update_step2, on_update_step3
+    )
 end
 
 -- Purpose: Apply fade animation to UI element
