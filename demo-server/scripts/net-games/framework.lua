@@ -47,48 +47,6 @@ local function round_fraction(value, denominator)
     return int_part, n / denominator
 end
 
--- Purpose: Checks if a string follows a valid x,y,z pattern
--- local function validateCords(str)
---     str = str:gsub("%s+", "")
---     
---     local commaCount = 0
---     for i = 1, #str do
---         if str:sub(i, i) == "," then
---             commaCount = commaCount + 1
---         end
---     end
---     if commaCount ~= 2 then return false end
---     
---     local parts = {}
---     for part in str:gmatch("([^,]+)") do
---         table.insert(parts, part)
---     end
---     if #parts ~= 3 then return false end
---     
---     for _, part in ipairs(parts) do
---         if not part:match("^%d+$") then
---             return false
---         end
---     end
---     
---     return str:match("^%d+,%d+,%d+$") ~= nil
--- end
-
--- Purpose: Converts Net.get_bot_direction() from name to initials
--- local function simple_direction(direction)
---     local directions = {
---         ["Up Left"] = "UL",
---         ["Up Right"] = "UR",
---         ["Down Left"] = "DL",
---         ["Down Right"] = "DR",
---         ["Up"] = "U",
---         ["Down"] = "D",
---         ["Left"] = "L",
---         ["Right"] = "R"
---     }
---     return directions[direction] or direction
--- end
-
 -- Purpose: Converts h/v offsets to x/y offsets for UIs
 local function convertOffsets(horizontalOffset, verticalOffset, Z)
     local xoffset = ((2 * -verticalOffset + horizontalOffset) / 64) + (Z / 2)
@@ -440,40 +398,100 @@ end
 -- UI ELEMENT FUNCTIONS
 -- ===========================================================
 
--- Purpose: Add a UI element to the screen
-function frame.add_ui_element(sprite_id, player_id, texture_path, animation_path, animation_state, x, y, z, sx, sy)
+-- Helper to compute actual draw position when bounding box is used
+local function compute_aligned_position(element)
+    local x, y = element.x, element.y
+    if element.box_width and element.box_height then
+        local effective_w = (element.sprite_width or 0) * element.sx
+        local effective_h = (element.sprite_height or 0) * element.sy
+
+        if element.halign == "center" then
+            x = x + (element.box_width - effective_w) / 2
+        elseif element.halign == "right" then
+            x = x + element.box_width - effective_w
+        end
+
+        if element.valign == "middle" then
+            y = y + (element.box_height - effective_h) / 2
+        elseif element.valign == "bottom" then
+            y = y + element.box_height - effective_h
+        end
+    end
+    return x, y
+end
+
+-- Purpose: Add a UI element to the screen, optionally with a bounding box and alignment.
+function frame.add_ui_element(sprite_id, player_id, texture_path, animation_path, animation_state,
+                               x, y, z, sx, sy, box_width, box_height, halign, valign)
     sx = (sx and sx >= 0.0) and sx or 2.0
     sy = (sy and sy >= 0.0) and sy or 2.0
     animation_path = animation_path or ""
     animation_state = animation_state or ""
-    
+    halign = halign or "left"
+    valign = valign or "top"
+
     if not ui_cache[player_id] then
         ui_cache[player_id] = {}
-    end 
-    
+    end
+
     -- Check if sprite already allocated
     local new_sprite_id = sprite_id
     local already_allocated = false
-
     for existing_id, sprite_data in pairs(ui_cache[player_id]) do
-        if sprite_data["texture_path"] == texture_path then 
+        if sprite_data["texture_path"] == texture_path then
             already_allocated = true
             new_sprite_id = sprite_data["sprite_id"]
             break
         end
-    end 
+    end
 
-    local animation_path = animation_path
-    local toRemove = "/server/"
-    local results = animation_path:gsub(toRemove, "",1)
-    
-    local animation_data = boom.load(results).states
-    
-    if not already_allocated then 
+    -- Load animation data to get frame sizes
+    local animation_data = nil
+    local sprite_width, sprite_height = nil, nil
+    if animation_path ~= "" then
+        local stripped_path = animation_path:gsub("/server/", "", 1)
+        animation_data = boom.load(stripped_path).states
+        -- Determine max width/height for the initial animation state
+        if animation_data and animation_data[animation_state] then
+            local frames = animation_data[animation_state]
+            local max_w, max_h = 0, 0
+            for _, frame in ipairs(frames) do
+                if frame.w and frame.w > max_w then max_w = frame.w end
+                if frame.h and frame.h > max_h then max_h = frame.h end
+            end
+            sprite_width = max_w
+            sprite_height = max_h
+        else
+            sprite_width, sprite_height = 0, 0
+        end
+    else
+        sprite_width, sprite_height = 0, 0
+    end
+
+    -- Compute actual draw position if bounding box is given
+    local draw_x, draw_y = x, y
+    if box_width and box_height then
+        local effective_width = sprite_width * sx
+        local effective_height = sprite_height * sy
+
+        if halign == "center" then
+            draw_x = x + (box_width - effective_width) / 2
+        elseif halign == "right" then
+            draw_x = x + box_width - effective_width
+        end -- left: draw_x = x
+
+        if valign == "middle" then
+            draw_y = y + (box_height - effective_height) / 2
+        elseif valign == "bottom" then
+            draw_y = y + box_height - effective_height
+        end -- top: draw_y = y
+    end
+
+    -- Allocate sprite if needed
+    if not already_allocated then
         if animation_path ~= "" then
             Net.provide_asset_for_player(player_id, animation_path)
         end
-
         Net.provide_asset_for_player(player_id, texture_path)
         Net.player_alloc_sprite(player_id, new_sprite_id, {
             texture_path = texture_path,
@@ -481,12 +499,13 @@ function frame.add_ui_element(sprite_id, player_id, texture_path, animation_path
             anim_state = animation_state
         })
     end
-    
+
+    -- Draw using computed draw_x, draw_y (multiply by 2 as before)
     Net.player_draw_sprite(player_id, new_sprite_id, {
         id = sprite_id .. "_obj",
-        x = (x or 0) * 2,
-        y = (y or 0) * 2,
-        z = (z or 0),
+        x = draw_x * 2,
+        y = draw_y * 2,
+        z = z or 0,
         sx = sx,
         sy = sy,
         ro = 0,
@@ -500,12 +519,13 @@ function frame.add_ui_element(sprite_id, player_id, texture_path, animation_path
         anim_state = animation_state,
         opacity = 255
     })
-    
+
+    -- Store everything in cache
     ui_cache[player_id][sprite_id] = {
         texture_path = texture_path,
         animation_path = animation_path,
         sprite_id = new_sprite_id,
-        x = x,
+        x = x,                     -- bounding box top‑left (or sprite top‑left if no box)
         y = y,
         z = z or 0,
         sx = sx,
@@ -523,7 +543,14 @@ function frame.add_ui_element(sprite_id, player_id, texture_path, animation_path
         animations = {},
         has_children = false,
         children = {},
-        animation_data = animation_data
+        animation_data = animation_data,
+        -- new fields
+        box_width = box_width,
+        box_height = box_height,
+        halign = halign,
+        valign = valign,
+        sprite_width = sprite_width,
+        sprite_height = sprite_height
     }
 end
 
@@ -532,51 +559,60 @@ function frame.update_ui_element(sprite_id, player_id, properties)
     if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
         return
     end
-    
-    local sprite_data = {id = sprite_id .. "_obj"}
+
     local element = ui_cache[player_id][sprite_id]
-    
-    local property_mappings = {
-        x = function(val) return val * 2 end,
-        y = function(val) return val * 2 end,
-        z = function(val) return val end,
-        ox = function(val) return val end,
-        oy = function(val) return val end,
-        scale = function(val) 
-            element.sx = val
-            element.sy = val
-            return val, val
-        end,
-        sx = function(val) return val end,
-        sy = function(val) return val end,
-        ro = function(val) return val end,
-        opacity = function(val) return val end,
-        a = function(val) return val end,
-        r = function(val) return val end,
-        g = function(val) return val end,
-        b = function(val) return val end,
-        color_mode = function(val) return val end,
-        animation_state = function(val) return val end
-    }
-    
-    for prop, transform in pairs(property_mappings) do
-        if properties[prop] ~= nil then
-            local transformed = transform(properties[prop])
-            if prop == "scale" then
-                sprite_data.sx = transformed
-                sprite_data.sy = transformed
-                element.sx = properties[prop]
-                element.sy = properties[prop]
-            elseif prop == "x" or prop == "y" then
-                sprite_data[prop] = transformed
-                element[prop] = properties[prop]
-            else
-                sprite_data[prop] = transformed
-                element[prop] = properties[prop]
-            end
+    local sprite_data = {id = sprite_id .. "_obj"}
+
+    -- Update element properties first
+    for prop, value in pairs(properties) do
+        if prop == "x" or prop == "y" or prop == "z" or prop == "sx" or prop == "sy" or
+           prop == "ro" or prop == "ox" or prop == "oy" or prop == "opacity" or
+           prop == "a" or prop == "r" or prop == "g" or prop == "b" or
+           prop == "color_mode" or prop == "animation_state" then
+            element[prop] = value
+        elseif prop == "scale" then
+            element.sx = value
+            element.sy = value
         end
     end
-    
+
+    -- If animation state changed, reload dimensions
+    if properties.animation_state and element.animation_data then
+        local new_state = properties.animation_state
+        if element.animation_data[new_state] then
+            local frames = element.animation_data[new_state]
+            local max_w, max_h = 0, 0
+            for _, frame in ipairs(frames) do
+                if frame.w and frame.w > max_w then max_w = frame.w end
+                if frame.h and frame.h > max_h then max_h = frame.h end
+            end
+            element.sprite_width = max_w
+            element.sprite_height = max_h
+        end
+    end
+
+    -- Compute the actual position if bounding box exists
+    local draw_x, draw_y = compute_aligned_position(element)
+
+    -- Build sprite_data with transformed values (multiply x,y by 2)
+    if properties.x ~= nil or properties.y ~= nil or properties.sx ~= nil or properties.sy ~= nil or properties.animation_state ~= nil then
+        sprite_data.x = draw_x * 2
+        sprite_data.y = draw_y * 2
+    end
+    if properties.sx ~= nil then sprite_data.sx = element.sx end
+    if properties.sy ~= nil then sprite_data.sy = element.sy end
+    if properties.z ~= nil then sprite_data.z = element.z end
+    if properties.ro ~= nil then sprite_data.ro = element.ro end
+    if properties.ox ~= nil then sprite_data.ox = element.ox end
+    if properties.oy ~= nil then sprite_data.oy = element.oy end
+    if properties.opacity ~= nil then sprite_data.opacity = element.opacity end
+    if properties.a ~= nil then sprite_data.a = element.a end
+    if properties.r ~= nil then sprite_data.r = element.r end
+    if properties.g ~= nil then sprite_data.g = element.g end
+    if properties.b ~= nil then sprite_data.b = element.b end
+    if properties.color_mode ~= nil then sprite_data.color_mode = element.color_mode end
+    if properties.animation_state ~= nil then sprite_data.anim_state = element.animation_state end
+
     Net.player_draw_sprite(player_id, element.sprite_id, sprite_data)
 end
 
@@ -585,21 +621,33 @@ function frame.set_ui_animation(sprite_id, player_id, animation_state)
     if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
         return
     end
-    local possible_anims = ui_cache[player_id][sprite_id].animation_data
-    local animation_match = false
-    for name, _ in pairs(possible_anims) do
-        if name == animation_state then
-            animation_match = true
-        end
-    end
-    
-    if animation_match == false then
+    local element = ui_cache[player_id][sprite_id]
+    local possible_anims = element.animation_data
+    if not possible_anims or not possible_anims[animation_state] then
         print("No animation state named: " .. animation_state .. " found...")
         return
     end
-    
-    Net.player_draw_sprite(player_id, ui_cache[player_id][sprite_id]["sprite_id"], {
+
+    -- Update state
+    element.animation_state = animation_state
+
+    -- Refresh intrinsic dimensions from the new state
+    local frames = possible_anims[animation_state]
+    local max_w, max_h = 0, 0
+    for _, frame in ipairs(frames) do
+        if frame.w and frame.w > max_w then max_w = frame.w end
+        if frame.h and frame.h > max_h then max_h = frame.h end
+    end
+    element.sprite_width = max_w
+    element.sprite_height = max_h
+
+    -- Compute new position if bounding box is used
+    local draw_x, draw_y = compute_aligned_position(element)
+
+    Net.player_draw_sprite(player_id, element.sprite_id, {
         id = sprite_id .. "_obj",
+        x = draw_x * 2,
+        y = draw_y * 2,
         anim_state = animation_state
     })
 end
@@ -731,6 +779,18 @@ function frame.slide_ui_element(sprite_id, player_id, target_x, target_y, durati
     element.animations[anim_id] = true
     
     return anim_id
+end
+
+-- Purpose: Relative version of slide_ui_element (move by offset)
+function frame.relative_slide_ui_element(sprite_id, player_id, offset_x, offset_y, duration, easing, on_complete)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    local element = ui_cache[player_id][sprite_id]
+    local target_x = (element.x or 0) + offset_x
+    local target_y = (element.y or 0) + offset_y
+    return frame.slide_ui_element(sprite_id, player_id, target_x, target_y, duration, easing, on_complete)
 end
 
 -- Purpose: Smoothly slide/move a UI element from specified start to target position
@@ -873,6 +933,17 @@ function frame.scale_ui_element(sprite_id, player_id, target_scale, duration, ea
     return anim_id
 end
 
+-- Purpose: Relative version of scale_ui_element (scale by additive offset)
+function frame.relative_scale_ui_element(sprite_id, player_id, offset_scale, duration, easing, on_complete)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    local element = ui_cache[player_id][sprite_id]
+    local target_scale = (element.sx or 2.0) + offset_scale
+    return frame.scale_ui_element(sprite_id, player_id, target_scale, duration, easing, on_complete)
+end
+
 -- Purpose: Smoothly rotate a UI element (consistent with slide pattern)
 function frame.rotate_ui_element(sprite_id, player_id, target_rotation, duration, easing, on_complete)
     if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
@@ -930,6 +1001,17 @@ function frame.rotate_ui_element(sprite_id, player_id, target_rotation, duration
     return anim_id
 end
 
+-- Purpose: Relative version of rotate_ui_element (rotate by offset)
+function frame.relative_rotate_ui_element(sprite_id, player_id, offset_rotation, duration, easing, on_complete)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    local element = ui_cache[player_id][sprite_id]
+    local target_rotation = (element.ro or 0) + offset_rotation
+    return frame.rotate_ui_element(sprite_id, player_id, target_rotation, duration, easing, on_complete)
+end
+
 -- Purpose: Complex animation that combines slide, scale, and rotation
 function frame.transform_ui_element(sprite_id, player_id, properties, duration, easing, on_complete)
     if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
@@ -943,12 +1025,12 @@ function frame.transform_ui_element(sprite_id, player_id, properties, duration, 
     
     -- Get current properties
     local current_props = {
-        x = element.x or 0,
-        y = element.y or 0,
-        sx = element.sx or 2.0,
-        sy = element.sy or 2.0,
-        ro = element.ro or 0,
-        opacity = element.opacity or 255
+        x = element.x,
+        y = element.y,
+        sx = element.sx,
+        sy = element.sy,
+        ro = element.ro,
+        opacity = element.opacity
     }
     
     -- Merge with target properties
@@ -1001,6 +1083,28 @@ function frame.transform_ui_element(sprite_id, player_id, properties, duration, 
     element.animations[anim_id] = true
     
     return anim_id
+end
+
+-- Purpose: Relative version of transform_ui_element (add offsets to current properties)
+function frame.relative_transform_ui_element(sprite_id, player_id, offset_properties, duration, easing, on_complete)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    local element = ui_cache[player_id][sprite_id]
+    local target_props = {}
+    if offset_properties.x ~= nil then target_props.x = (element.x or 0) + offset_properties.x end
+    if offset_properties.y ~= nil then target_props.y = (element.y or 0) + offset_properties.y end
+    if offset_properties.sx ~= nil then target_props.sx = (element.sx or 2.0) + offset_properties.sx end
+    if offset_properties.sy ~= nil then target_props.sy = (element.sy or 2.0) + offset_properties.sy end
+    if offset_properties.ro ~= nil then target_props.ro = (element.ro or 0) + offset_properties.ro end
+    if offset_properties.opacity ~= nil then target_props.opacity = (element.opacity or 255) + offset_properties.opacity end
+    -- also allow scale as a shortcut for both sx and sy
+    if offset_properties.scale ~= nil then
+        target_props.sx = (element.sx or 2.0) + offset_properties.scale
+        target_props.sy = (element.sy or 2.0) + offset_properties.scale
+    end
+    return frame.transform_ui_element(sprite_id, player_id, target_props, duration, easing, on_complete)
 end
 
 -- Purpose: Apply Bob animation to a UI element
@@ -1411,6 +1515,17 @@ function frame.set_opacity_ui_element(sprite_id, player_id, target_opacity, dura
     return anim_id
 end
 
+-- Purpose: Relative version of set_opacity_ui_element (change opacity by offset)
+function frame.relative_set_opacity_ui_element(sprite_id, player_id, offset_opacity, duration, easing, on_complete)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    local element = ui_cache[player_id][sprite_id]
+    local target_opacity = (element.opacity or 255) + offset_opacity
+    return frame.set_opacity_ui_element(sprite_id, player_id, target_opacity, duration, easing, on_complete)
+end
+
 -- Purpose: Apply tint animation to UI element
 function frame.set_ui_element_color(sprite_id, player_id, r, g, b, duration, easing, on_complete)
     if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
@@ -1470,6 +1585,19 @@ function frame.set_ui_element_color(sprite_id, player_id, r, g, b, duration, eas
     element.animations[anim_id] = true
     
     return anim_id
+end
+
+-- Purpose: Relative version of set_ui_element_color (add offsets to each color component)
+function frame.relative_set_ui_element_color(sprite_id, player_id, offset_r, offset_g, offset_b, duration, easing, on_complete)
+    if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
+        print("[games] UI element not found: " .. sprite_id)
+        return nil
+    end
+    local element = ui_cache[player_id][sprite_id]
+    local target_r = math.max(0, math.min(255, (element.r or 255) + (offset_r or 0)))
+    local target_g = math.max(0, math.min(255, (element.g or 255) + (offset_g or 0)))
+    local target_b = math.max(0, math.min(255, (element.b or 255) + (offset_b or 0)))
+    return frame.set_ui_element_color(sprite_id, player_id, target_r, target_g, target_b, duration, easing, on_complete)
 end
 
 -- Purpose: Apply color pulse animation to UI element
@@ -1559,17 +1687,13 @@ function frame.menu_cursor_ui_element(sprite_id, player_id, bob_distance, pulse_
     easing = easing or "smootherstep"
     back_easing = back_easing or "smootherstep"
     
-    local orientation = orientation or "vertical"
+    orientation = orientation or "vertical"
     
-    local axis = nil
-        if orientation == "vertical" then
-            axis = "y"
-        else
-            axis = "x"
-        end
-
+    local axis = (orientation == "vertical") and "y" or "x"
     local start_scale = element.sy or 2.0
-    
+    local proxy = frame.get_ui_element_proxy(sprite_id, player_id)
+    if not proxy then return nil end
+    -- Bob animation (relative to current position)
     local bob_id = AnimationEngine.animate(
         {axis = element[axis]},
         {axis = element[axis] - bob_distance},
@@ -1578,13 +1702,15 @@ function frame.menu_cursor_ui_element(sprite_id, player_id, bob_distance, pulse_
             easing = easing,
             easing_back = back_easing,
             on_update = function(values)
-                frame.update_ui_element(sprite_id,player_id,{axis = values[axis]})
+                -- Use computed key to update the correct axis
+                frame.update_ui_element(sprite_id, player_id, {[axis] = values.axis})
             end,
             loop = true,
             ping_pong = true
         }
     )
     
+    -- Pulse animation (scale)
     local pulse_id = AnimationEngine.animate(
         {scale = 1.0},
         {scale = pulse_scale},
@@ -1772,7 +1898,7 @@ function frame.is_animation_running(sprite_id, player_id, anim_id)
     return element.animations and element.animations[anim_id] == true
 end
 
--- Purpose: Get UI element properties
+-- Purpose: Get UI element properties (including bounding box and alignment)
 function frame.get_ui_element_properties(sprite_id, player_id)
     if not ui_cache[player_id] or not ui_cache[player_id][sprite_id] then
         return nil
@@ -1793,7 +1919,14 @@ function frame.get_ui_element_properties(sprite_id, player_id)
         b = element.b,
         color_mode = element.color_mode,
         animation_state = element.animation_state,
-        has_animations = element.animations and next(element.animations) ~= nil
+        has_animations = element.animations and next(element.animations) ~= nil,
+        -- new fields
+        box_width = element.box_width,
+        box_height = element.box_height,
+        halign = element.halign,
+        valign = element.valign,
+        sprite_width = element.sprite_width,
+        sprite_height = element.sprite_height
     }
 end
 
@@ -1808,7 +1941,7 @@ function frame.spawn_cursor(sprite_id, player_id, options)
         -- Get initial selection
         local initial_selection = options.selections[1]
         
-        -- Create cursor as a UI element
+        -- Create cursor as a UI element, passing nil for box dimensions and default alignment
         frame.add_ui_element(sprite_id, player_id, 
             options.texture, 
             options.animation or "", 
@@ -1816,7 +1949,8 @@ function frame.spawn_cursor(sprite_id, player_id, options)
             initial_selection.x, 
             initial_selection.y, 
             initial_selection.z or 0,
-            2, 2  -- Default scale
+            2, 2,   -- default scale
+            nil, nil, "left", "top"   -- no bounding box, default alignment
         )
         
         -- Store cursor options in UI element's cursor_options

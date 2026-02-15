@@ -182,8 +182,8 @@ Net:on("actor_interaction", function (event)
     ------------------------------------------------------------------------
     ---- TESTED AND WORKING FRAMEWORK API CALLS FOR {X_NAME}_UI_ELEMENT ----
     ------------------------------------------------------------------------
-    games.add_ui_element(spr_id,pid,"/server/assets/demo/order_points.png","/server/assets/demo/order_points.animation","8POINT",161,2,0, 2,2)
-    games.add_ui_element(spr_id.."a",pid,"/server/assets/demo/order_points.png","/server/assets/demo/order_points.animation","8POINT",4,4,0, 2,2)
+    games.add_ui_element(spr_id,pid,"/server/assets/demo/order_points.png","/server/assets/demo/order_points.animation","8POINT",0,0,0, 2,2, 240, 160)
+    games.add_ui_element(spr_id.."a",pid,"/server/assets/demo/order_points.png","/server/assets/demo/order_points.animation","8POINT",0,0,0, 2,2, 240, 160, "center", "middle")
     games.add_ui_element(spr_id.."b",pid,"/server/assets/demo/order_points.png","/server/assets/demo/order_points.animation","8POINT",4,4,0, 2,2)
     async(function()
         ------------------------------------------------------------------------
@@ -201,6 +201,7 @@ Net:on("actor_interaction", function (event)
         ---- complex summon test
         games.complex_summon_ui_element_relative(spr_id,pid, 110, 50, 2.0, 4, 1, 2.0)
         games.set_ui_animation((spr_id.."b"), pid, "7POINT")
+        games.set_ui_animation((spr_id.."a"), pid, "6POINT")
         await(Async.sleep(2))
 
         ---- bob test:
@@ -222,21 +223,23 @@ Net:on("actor_interaction", function (event)
         -- games.color_pulse_rgb(spr_id, pid, 122, 0, 127, 255, 125,127,155,255)
 
         ---- slide test
-        games.slide_ui_element(spr_id, pid, 4, 141, 2, AnimationEngine.AnimEnums.EasingFns.cubic)
+        games.relative_slide_ui_element(spr_id, pid, 4, 141, 2, AnimationEngine.AnimEnums.EasingFns.cubic)
 
         ---- cursor bob test
         games.menu_cursor_ui_element(spr_id, pid, 10, 1.1, 2,1, "horizontal")
 
         ---- set color test
-        -- games.set_ui_element_color(spr_id, pid, 214, 124, 111, 1, AnimationEngine.AnimEnums.EasingFns.bounce_in)
+        games.set_ui_element_color(spr_id, pid, 214, 124, 111, 1, AnimationEngine.AnimEnums.EasingFns.bounce_in)
 
         ---- second slide test
-        games.slide_ui_element(spr_id.."a",pid,161, 4, 3, AnimationEngine.AnimEnums.EasingFns.linear)
+        -- games.relative_slide_ui_element(spr_id.."a",pid,161, 4, 3, AnimationEngine.AnimEnums.EasingFns.linear)
     
         games.bob_ui_element(spr_id.."a",pid, 5, 2)
 
                 ---- second slide test
-        games.summon_ui_element(spr_id.."b",pid,161, 151, 0.0, 161, 141, 2.0,3,20,1.1,30, AnimationEngine.AnimEnums.EasingFns.linear)
+        games.summon_ui_element_relative(spr_id.."b",pid,161, 151, 2.0,3,20,1.1, 2, AnimationEngine.AnimEnums.EasingFns.cubic, function ()
+            
+        end)
     
         games.color_pulse_from_current(spr_id.."b",pid, {r = 10, g = 122, b = 125, a = 255})
 
