@@ -53,6 +53,7 @@ function SpritePropsBuilder:build_tint(a, r, g, b, color_mode)
         if color_mode == 0 or color_mode == 1 or color_mode == 2 then
             self.props.color_mode = color_mode
         else
+            self.props.color_mode = 0
             print("Warning: color_mode must be 0, 1, or 2. Got: " .. tostring(color_mode))
         end
     end
@@ -67,6 +68,11 @@ end
 
 function SpritePropsBuilder:build_rotation(ro)
     if ro ~= nil then self.props.ro = ro end
+    return self
+end
+
+function SpritePropsBuilder:build_opacity(opacity)
+    if opacity ~= nil then self.props.opacity = opacity end
     return self
 end
 

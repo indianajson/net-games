@@ -37,12 +37,13 @@ end
 --=====================================================
 -- Input/Indicator mapping (virtual_input -> indicator anim state)
 --=====================================================
-local INPUT_CHOICES = { "Interact", "Shoulder L", "Move Down", "Move Left", "Move Right", "Move Up" }
+local INPUT_CHOICES = { "Interact", "Shoulder L","Shoulder R", "Move Down", "Move Left", "Move Right", "Move Up" }
 
 local INDICATOR_STATE = {
   ["Interact"]   = "A",
   ["Confirm"]    = "A",
   ["Shoulder L"] = "LS",
+  ["Shoulder R"] = "RS",
   ["Move Down"]  = "D",
   ["Move Left"]  = "L",
   ["Move Right"] = "R",
@@ -50,7 +51,7 @@ local INDICATOR_STATE = {
 }
 
 local function is_simon_button(name)
-  return name == "Interact" or name == "Confirm" or name == "Shoulder L"
+  return name == "Interact" or name == "Confirm" or name == "Shoulder L" or name == "Shoulder R"
       or name == "Move Up" or name == "Move Down" or name == "Move Left" or name == "Move Right"
 end
 
