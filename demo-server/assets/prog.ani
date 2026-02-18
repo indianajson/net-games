@@ -1,0 +1,54 @@
+!frame_rate 60
+!image_path "C:\Users\aaron\Documents\Code\net-games\demo-server\assets\prog.png"
+
+anim WALK_DR
+frame dur=6f x=5 y=1 w=16 h=34 originx=8 originy=31
+point TEST x=8 y=33
+frame dur=6f x=27 y=1 w=16 h=34 originx=8 originy=31
+point TEST x=0 y=0
+frame dur=6f x=49 y=0 w=16 h=35 originx=8 originy=32
+point TEST x=0 y=0
+frame dur=6f x=27 y=1 w=16 h=34 originx=8 originy=31
+point TEST x=0 y=0
+
+anim WALK_UL
+frame dur=6f x=4 y=115 w=16 h=35 originx=8 originy=32
+frame dur=6f x=27 y=116 w=16 h=34 originx=8 originy=31
+frame dur=6f x=49 y=115 w=16 h=35 originx=8 originy=32
+frame dur=6f x=27 y=116 w=16 h=34 originx=8 originy=31
+
+anim WALK_DL
+frame dur=6f x=5 y=76 w=16 h=35 originx=8 originy=32
+frame dur=6f x=27 y=77 w=16 h=34 originx=8 originy=31
+frame dur=6f x=49 y=76 w=16 h=35 originx=8 originy=32
+frame dur=6f x=27 y=77 w=16 h=34 originx=8 originy=31
+
+anim WALK_UR
+frame dur=6f x=4 y=40 w=16 h=34 originx=8 originy=31
+frame dur=6f x=26 y=40 w=16 h=34 originx=8 originy=31
+frame dur=6f x=49 y=39 w=16 h=35 originx=8 originy=32
+frame dur=6f x=26 y=40 w=16 h=34 originx=8 originy=31
+
+anim IDLE_DR
+frame dur=6f x=5 y=1 w=16 h=34 originx=8 originy=31
+frame dur=6f x=27 y=1 w=16 h=34 originx=8 originy=31
+frame dur=6f x=49 y=0 w=16 h=35 originx=8 originy=32
+frame dur=6f x=27 y=1 w=16 h=34 originx=8 originy=31
+
+anim IDLE_UL
+frame dur=6f x=4 y=115 w=16 h=35 originx=8 originy=32
+frame dur=6f x=27 y=116 w=16 h=34 originx=8 originy=31
+frame dur=6f x=49 y=115 w=16 h=35 originx=8 originy=32
+frame dur=6f x=27 y=116 w=16 h=34 originx=8 originy=31
+
+anim IDLE_DL
+frame dur=6f x=5 y=76 w=16 h=35 originx=8 originy=32
+frame dur=6f x=27 y=77 w=16 h=34 originx=8 originy=31
+frame dur=6f x=49 y=76 w=16 h=35 originx=8 originy=32
+frame dur=6f x=27 y=77 w=16 h=34 originx=8 originy=31
+
+anim IDLE_UR
+frame dur=6f x=4 y=40 w=16 h=34 originx=8 originy=31
+frame dur=6f x=26 y=40 w=16 h=34 originx=8 originy=31
+frame dur=6f x=49 y=39 w=16 h=35 originx=8 originy=32
+frame dur=6f x=26 y=40 w=16 h=34 originx=8 originy=31

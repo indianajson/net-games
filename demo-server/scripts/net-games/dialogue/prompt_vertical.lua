@@ -28,7 +28,7 @@ local DEFAULT_ASSET = {
   menu_bg_anim  = "/server/assets/net-games/ui/prompt_vert_menu_an.animation",
   menu_bg_frame = "/server/assets/net-games/ui/prompt_vert_menu_an_frame.png",
   highlight     = "/server/assets/net-games/ui/highlight_default.png",
-  cursor        = "/server/assets/net-games/ui/green_cursor.png",
+  cursor        = "/server/assets/net-games/cursors/green_cursor.png",
   scrollbar     = "/server/assets/net-games/ui/scrollbar.png",
 
   shop_item     = "/server/assets/net-games/ui/card_shop_item.png",
@@ -1281,7 +1281,7 @@ function PromptMenuInstance:become_ready()
     -- IMPORTANT:
     -- Do NOT restart the intro here.
     -- In your Pink flow, the menu opens while textbox types, so the intro already ran
-    -- when OPEN finished. become_ready() is just “unlock control / show overlays”.
+    -- when OPEN finished. become_ready() is just ï¿½unlock control / show overlaysï¿½.
     self:update_scroll_for_selection(true)
 
     -- Only redraw overlays; avoid forcing a full text redraw
@@ -1660,7 +1660,7 @@ function PromptVertical.menu(player_id, opts)
 
   set_input_locked(player_id, true)
 
-  -- swallow interaction press so we don’t insta-confirm/select
+  -- swallow interaction press so we donï¿½t insta-confirm/select
   Input.consume(player_id)
 
   local inst = PromptMenuInstance:new(player_id, opts or {})

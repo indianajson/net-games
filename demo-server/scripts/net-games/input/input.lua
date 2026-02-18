@@ -86,20 +86,20 @@ local function ensure(player_id)
 end
 
 local function state_word(s)
-  if s == 0 then return "Pressed" end
-  if s == 1 then return "Held" end
-  if s == 2 then return "Released" end
+  if s == 1 then return "Pressed" end
+  if s == 2 then return "Held" end
+  if s == 3 then return "Released" end
   if s == 4 then return "Scroll" end
   return "INVALID"
 end
 
 local function normalize_state(s)
-  if s == 0 or s == 1 or s == 2 or s == 4 then return s end
+  if s == 1 or s == 2 or s == 3 or s == 4 then return s end
   if type(s) == "string" then
     local t = s:lower()
-    if t == "pressed" then return 0 end
-    if t == "held" then return 1 end
-    if t == "released" then return 2 end
+    if t == "pressed" then return 1 end
+    if t == "held" then return 2 end
+    if t == "released" then return 3 end
     if t == "scroll" then return 4 end
   end
   return nil

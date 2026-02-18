@@ -171,9 +171,9 @@ local function normalize_glyph(raw)
   if raw == " " then return " " end
 
   -- smart punctuation -> ascii
-  if raw == "’" then raw = "'" end
-  if raw == "“" or raw == "”" then raw = '"' end
-  if raw == "–" or raw == "—" then raw = "-" end
+  if raw == "ï¿½" then raw = "'" end
+  if raw == "ï¿½" or raw == "ï¿½" then raw = '"' end
+  if raw == "ï¿½" or raw == "ï¿½" then raw = "-" end
 
   return raw
 end
@@ -312,7 +312,7 @@ function TextDisplay:init()
     -- Put the asset here for now: /server/assets/net-games/textbox_next.png
     self.cursor_sprite = {
         sprite_id = 5100,
-        texture_path = "/server/assets/net-games/textbox_next.png",
+        texture_path = "/server/assets/net-games/cursors/textbox_next.png",
     }
 
     -- Text box settings
@@ -644,7 +644,7 @@ end
         padding_y = padding_y
     }
 
-    -- Debug identity + lifetime (restores the “lived” usefulness)
+    -- Debug identity + lifetime (restores the ï¿½livedï¿½ usefulness)
     text_box_data._dbg_created_at = _ng_now()
     text_box_data._dbg_token = tostring(box_id) .. "#" .. tostring(math.floor(text_box_data._dbg_created_at * 1000))
 
@@ -1535,7 +1535,7 @@ function TextDisplay:updateTextBoxes(delta)
     local to_remove = nil
 
     for box_id, box_data in pairs(player_data.active_text_boxes) do
-      -- DEBUG: log state transitions (this is the “truth meter”)
+      -- DEBUG: log state transitions (this is the ï¿½truth meterï¿½)
       if _ng_dbg_enabled() then
         box_data._dbg_last_state = box_data._dbg_last_state or box_data.state
         if box_data.state ~= box_data._dbg_last_state then
@@ -1616,7 +1616,7 @@ function TextDisplay:updateTextBoxPrinting(player_id, box_id, box_data, delta)
     box_data.pause_remaining = 0
     box_data._in_pause = false
 
-    -- resume: restore talk pose once (if we’re still in printing)
+    -- resume: restore talk pose once (if weï¿½re still in printing)
     if box_data.mugshot and box_data.mugshot.enabled then
       self:drawTextBoxMugshot(player_id, box_id, box_data)
     end

@@ -37,12 +37,13 @@ end
 --=====================================================
 -- Input/Indicator mapping (virtual_input -> indicator anim state)
 --=====================================================
-local INPUT_CHOICES = { "Interact", "Shoulder L", "Move Down", "Move Left", "Move Right", "Move Up" }
+local INPUT_CHOICES = { "Interact", "Shoulder L","Shoulder R", "Move Down", "Move Left", "Move Right", "Move Up" }
 
 local INDICATOR_STATE = {
   ["Interact"]   = "A",
   ["Confirm"]    = "A",
   ["Shoulder L"] = "LS",
+  ["Shoulder R"] = "RS",
   ["Move Down"]  = "D",
   ["Move Left"]  = "L",
   ["Move Right"] = "R",
@@ -50,7 +51,7 @@ local INDICATOR_STATE = {
 }
 
 local function is_simon_button(name)
-  return name == "Interact" or name == "Confirm" or name == "Shoulder L"
+  return name == "Interact" or name == "Confirm" or name == "Shoulder L" or name == "Shoulder R"
       or name == "Move Up" or name == "Move Down" or name == "Move Left" or name == "Move Right"
 end
 
@@ -269,11 +270,13 @@ local function greet_simon(actor_id, player_id)
       2, 2, 100
     )
 
-    games.spawn_countdown("simon_says", player_id, 22, 15, simon.custom_properties["Time"] + 1, false)
+    -- FIXED: Updated to match new framework API (removed +1 from duration)
+    games.spawn_countdown("simon_says", player_id, 22, 15, tonumber(simon.custom_properties["Time"]), false)
     await(Async.sleep(0.1))
     games.pause_countdown("simon_says", player_id)
 
-    games.draw_text("simon_says_answers", player_id, "00", 32, 39, 100, "THICK")
+    -- FIXED: Added scale parameter (2.0) to match new framework API
+    games.draw_text("simon_says_answers", player_id, "00", 32, 39, 100, "THICK", 2.0)
 
     Net.fade_player_camera(player_id, {r=0,g=0,b=0,a=0}, 0.5)
     await(Async.sleep(0.75))
@@ -334,7 +337,7 @@ Net:on("virtual_input", function(event)
     if not p or p.active ~= true then return end
 
     -- Only process one valid press per prompt.
-    -- We treat state==1 (pressed) and state==4 (held repeat) as “a press”.
+    -- We treat state==1 (pressed) and state==4 (held repeat) as "a press".
     for _, btn in next, event.events do
       local pressed = (btn.state == 1 or btn.state == 4)
       if pressed and is_simon_button(btn.name) then
