@@ -300,8 +300,8 @@ end)
 
 Net:on("actor_interaction", function (event)
     if event.actor_id == "changer" and event.button == 0 then
-        local green_cursor_texture = "/server/assets/net-games/text_cursor.png"
-        local green_cursor_anim = "/server/assets/net-games/text_cursor.animation"
+        local green_cursor_texture = "/server/assets/net-games/cursors/text_cursor.png"
+        local green_cursor_anim = "/server/assets/net-games/cursors/text_cursor.animation"
         local cursor_options
         cursor_options = {
             texture=green_cursor_texture,

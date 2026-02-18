@@ -65,7 +65,7 @@ end
 local function show(player_id)
   -- Safety: ensure THICK_BLACK texture is present (even if framework preload was missed)
   pcall(function()
-    Net.provide_asset_for_player(player_id, "/server/assets/net-games/fonts_dark_compressed.png")
+    Net.provide_asset_for_player(player_id, "/server/assets/net-games/fonts/fonts_dark_compressed.png")
   end)
 
   local x = 12

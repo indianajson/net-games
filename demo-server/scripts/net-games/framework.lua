@@ -127,15 +127,15 @@ end
 -- ===========================================================
 Net:on("player_join", function(event)
     local assets = {
-        "/server/assets/net-games/fonts_compressed.png",
-        "/server/assets/net-games/fonts_wide.animation",
-        "/server/assets/net-games/fonts_gradient.animation",
-        "/server/assets/net-games/fonts_thick.animation",
-        "/server/assets/net-games/fonts_battle.animation",
-        "/server/assets/net-games/fonts_thin.animation",
-        "/server/assets/net-games/fonts_tiny.animation",
-        "/server/assets/net-games/fonts_compressed.animation",
-        "/server/assets/net-games/fonts_dark_compressed.png"
+        "/server/assets/net-games/fonts/fonts_compressed.png",
+        "/server/assets/net-games/fonts/fonts_wide.animation",
+        "/server/assets/net-games/fonts/fonts_gradient.animation",
+        "/server/assets/net-games/fonts/fonts_thick.animation",
+        "/server/assets/net-games/fonts/fonts_battle.animation",
+        "/server/assets/net-games/fonts/fonts_thin.animation",
+        "/server/assets/net-games/fonts/fonts_tiny.animation",
+        "/server/assets/net-games/fonts/fonts_compressed.animation",
+        "/server/assets/net-games/fonts/fonts_dark_compressed.png"
     }
     
     for _, asset in ipairs(assets) do
@@ -676,6 +676,8 @@ function frame.get_ui_element_proxy(sprite_id, player_id)
         z = element.z,
         sx = element.sx,
         sy = element.sy,
+        ox = element.ox,
+        oy = element.oy,
         ro = element.ro,
         opacity = element.opacity,
         r = element.r,
@@ -1767,7 +1769,7 @@ function frame.shake_ui_element(sprite_id, player_id, intensity, duration, frequ
     local shake_object = {
         x = proxy.x,
         y = proxy.y,
-        rotation = 0,
+        rotation = proxy.ro,
         setPosition = function(self, x, y)
             proxy:setPosition(x, y)
         end,
@@ -1837,11 +1839,15 @@ function frame.reset_ui_element(sprite_id, player_id, initial_values)
         y = element.y or 0,
         sx = element.sx or 2.0,
         sy = element.sy or 2.0,
+        ox = element.ox or 0,
+        oy = element.oy or 0,
         ro = element.ro or 0,
         opacity = element.opacity or 255,
         r = element.r or 255,
         g = element.g or 255,
         b = element.b or 255,
+        a = element.a or 255,
+        color_mode = element.color_mode or 0,
         animation_state = element.animation_state or ""
     }
     
@@ -1909,6 +1915,8 @@ function frame.get_ui_element_properties(sprite_id, player_id)
         x = element.x,
         y = element.y,
         z = element.z,
+        ox = element.ox,
+        oy = element.oy,
         sx = element.sx,
         sy = element.sy,
         ro = element.ro,
@@ -2506,7 +2514,7 @@ Net:on("player_move", function(event)
                 {
                     properties = {
                         {property = "Animation", value = cosmetic_data["state"]},
-                        {property = "x", ease = "Linear", value = bot_position.x},
+                        {property = "X", ease = "Linear", value = bot_position.x},
                         {property = "Y", ease = "Linear", value = bot_position.y},
                         {property = "Z", ease = "Linear", value = bot_position.z}
                     },
@@ -2515,7 +2523,7 @@ Net:on("player_move", function(event)
                 {
                     properties = {
                         {property = "Animation", value = cosmetic_data["state"]},
-                        {property = "x", ease = "Linear", value = event.x + cosmetic_data["x"]},
+                        {property = "X", ease = "Linear", value = event.x + cosmetic_data["x"]},
                         {property = "Y", ease = "Linear", value = event.y + cosmetic_data["y"]},
                         {property = "Z", ease = "Linear", value = event.z + 3}
                     },

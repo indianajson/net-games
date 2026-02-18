@@ -65,12 +65,12 @@ end
 -- Selector cursor drawing
 --========================
 local function ensure_selector_cursor_allocated(player_id)
-  Net.provide_asset_for_player(player_id, "/server/assets/net-games/text_cursor.png")
-  Net.provide_asset_for_player(player_id, "/server/assets/net-games/text_cursor.animation")
+  Net.provide_asset_for_player(player_id, "/server/assets/net-games/cursors/text_cursor.png")
+  Net.provide_asset_for_player(player_id, "/server/assets/net-games/cursors/text_cursor.animation")
 
   Net.player_alloc_sprite(player_id, SELECTOR_SPRITE_ID, {
-    texture_path = "/server/assets/net-games/text_cursor.png",
-    anim_path    = "/server/assets/net-games/text_cursor.animation",
+    texture_path = "/server/assets/net-games/cursors/text_cursor.png",
+    anim_path    = "/server/assets/net-games/cursors/text_cursor.animation",
     anim_state   = "CURSOR_RIGHT",
   })
 end
@@ -140,7 +140,7 @@ local function join_lines(lines)
 end
 
 local function build_yesno_text_from_wrapped(question_lines, _max_lines_per_page)
-  -- Locked “official” layout:
+  -- Locked ï¿½officialï¿½ layout:
   -- line 1-2 = question text
   -- line 3   = "Yes    No"
   local MAX_LINES_PER_PAGE = 3

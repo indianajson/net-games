@@ -4,7 +4,7 @@ NET-GAMES NPC AUTHORING GUIDE
 ============================================================
 
 This guide explains how to author NPCs in net-games using the
-Talk system — from the most basic dialogue NPC to fully featured
+Talk system ï¿½ from the most basic dialogue NPC to fully featured
 vertical menu NPCs.
 
 This is written as a HOW-TO, not engine documentation.
@@ -18,7 +18,7 @@ You do NOT write everything from scratch.
 
 You choose a level of complexity and stop when it fits your NPC.
 
-There is no “wrong” level.
+There is no ï¿½wrongï¿½ level.
 More complex layers only exist to save time and prevent bugs.
 
 ------------------------------------------------------------
@@ -264,7 +264,7 @@ FINAL NOTE
 If an NPC script feels hard to read,
 the structure is wrong.
 
-If you’re writing boilerplate,
+If youï¿½re writing boilerplate,
 a higher-level layer already exists.
 
 Keep scripts boring.

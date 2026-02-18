@@ -3,10 +3,10 @@ FontSystem = {}
 FontSystem.__index = FontSystem
 
 function FontSystem:init()
-    local COMP_TEX  = "/server/assets/net-games/fonts_compressed.png"
-    local COMP_ANIM = "/server/assets/net-games/fonts_compressed.animation"
-    local DARK_TEX  = "/server/assets/net-games/fonts_dark_compressed.png"
-    local DARK_ANIM = "/server/assets/net-games/fonts_dark_compressed.animation"
+    local COMP_TEX  = "/server/assets/net-games/fonts/fonts_compressed.png"
+    local COMP_ANIM = "/server/assets/net-games/fonts/fonts_compressed.animation"
+    local DARK_TEX  = "/server/assets/net-games/fonts/fonts_dark_compressed.png"
+    local DARK_ANIM = "/server/assets/net-games/fonts/fonts_dark_compressed.animation"
 
     self.font_sprites = {
         -- Light
@@ -310,13 +310,13 @@ local function normalize_glyph(raw)
     if raw == " " then return " " end
 
     -- single quotes
-    if raw == "’" or raw == "‘" then raw = "'" end
+    if raw == "ï¿½" or raw == "ï¿½" then raw = "'" end
 
     -- double quotes
-    if raw == "“" or raw == "”" then raw = '"' end
+    if raw == "ï¿½" or raw == "ï¿½" then raw = '"' end
 
     -- dashes
-    if raw == "–" or raw == "—" then raw = "-" end
+    if raw == "ï¿½" or raw == "ï¿½" then raw = "-" end
 
     return raw
 end
@@ -332,13 +332,13 @@ local function normalize_text(text)
     text = text:gsub("\194\160", " ")    -- NBSP
 
     -- UTF-8 smart punctuation
-    text = text:gsub("’", "'"):gsub("‘", "'")
-    text = text:gsub("“", '"'):gsub("”", '"')
-    text = text:gsub("–", "-"):gsub("—", "-")
-    text = text:gsub("…", "...")
+    text = text:gsub("ï¿½", "'"):gsub("ï¿½", "'")
+    text = text:gsub("ï¿½", '"'):gsub("ï¿½", '"')
+    text = text:gsub("ï¿½", "-"):gsub("ï¿½", "-")
+    text = text:gsub("ï¿½", "...")
 
     -- CP1252 smart punctuation bytes (Windows-1252)
-    -- 0x91 ‘  0x92 ’  0x93 “  0x94 ”  0x96 –  0x97 —  0x85 …
+    -- 0x91 ï¿½  0x92 ï¿½  0x93 ï¿½  0x94 ï¿½  0x96 ï¿½  0x97 ï¿½  0x85 ï¿½
     local b = string.char
     text = text:gsub(b(0x91), "'"):gsub(b(0x92), "'")
     text = text:gsub(b(0x93), '"'):gsub(b(0x94), '"')
