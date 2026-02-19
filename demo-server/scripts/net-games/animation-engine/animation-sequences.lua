@@ -989,6 +989,130 @@ end
 -- Utility Functions
 -- ---------------------------------------------------------------------------
 
+-- Apply an animation to many objects in series (one after another).
+-- 
+-- objects: array-like table of objects (sprite instances)
+-- animator can be:
+--   1) function(object, anim_options) -> id
+--   2) function(object, done, index, total, anim_options) -> id
+-- If animator is a string, it resolves to AnimationSequences[animator].
+--
+-- options:
+--   delay_between / delay: seconds between each object (optional)
+--   loop: repeat the full series forever (true/false)
+--   on_complete: called when the series finishes (only when loop == false)
+--   anim_options: base options table passed to animator per object (copied)
+--   per_object_options: table or function(obj, index, total) -> table (merged into anim_options)
+--   fallback_duration: if provided, auto-advance after this many seconds even if animator never completes
+--   skip_nil: default true (skip nil entries in objects array)
+--   delay_after_last: if true, also delays after the last object before looping
+function AnimationSequences.series(objects, animator, options)
+    options = options or {}
+
+    if type(objects) ~= "table" then
+        error("AnimationSequences.series: objects must be an array/table")
+    end
+
+    -- Resolve animator by name (optional convenience)
+    if type(animator) == "string" then
+        animator = AnimationSequences[animator]
+    end
+    if type(animator) ~= "function" then
+        error("AnimationSequences.series: animator must be a function or name of an AnimationSequences function")
+    end
+
+    local delay_between = options.delay_between or options.delay or 0
+    local loop = options.loop or false
+    local on_complete = options.on_complete
+
+    local base_anim_opts = options.anim_options or {}
+    local per_obj_opts = options.per_object_options
+
+    -- Build list (skip nil entries unless skip_nil == false)
+    local list = {}
+    for _, obj in ipairs(objects) do
+        if obj ~= nil or options.skip_nil == false then
+            table.insert(list, obj)
+        end
+    end
+
+    if #list == 0 then
+        if on_complete then on_complete() end
+        return nil
+    end
+
+    local total = #list
+    local steps = {}
+
+    for i, obj in ipairs(list) do
+        local this_obj = obj
+        local this_i = i
+
+        table.insert(steps, {
+            type = "run",
+            run = function(done)
+                local done_called = false
+                local function safe_done()
+                    if done_called then return end
+                    done_called = true
+                    done()
+                end
+
+                local anim_opts = MathUtils.deep_copy(base_anim_opts)
+
+                if type(per_obj_opts) == "function" then
+                    local extra = per_obj_opts(this_obj, this_i, total)
+                    if type(extra) == "table" then
+                        anim_opts = MathUtils.merge_tables(anim_opts, extra)
+                    end
+                elseif type(per_obj_opts) == "table" then
+                    anim_opts = MathUtils.merge_tables(anim_opts, per_obj_opts)
+                end
+
+                -- Wrap on_complete to advance the series
+                local user_on_complete = anim_opts.on_complete
+                anim_opts.on_complete = function(...)
+                    if user_on_complete then user_on_complete(...) end
+                    safe_done()
+                end
+
+                -- Optional fallback timer (ONLY if provided)
+                if options.fallback_duration and options.fallback_duration > 0 then
+                    AnimationEngine.delay(options.fallback_duration, safe_done)
+                end
+
+                -- Try options-based signature first, then done-based signature.
+                local ok, child_id = pcall(animator, this_obj, anim_opts)
+                if ok then
+                    return child_id
+                end
+
+                local ok2, child_id2 = pcall(animator, this_obj, safe_done, this_i, total, anim_opts)
+                if ok2 then
+                    return child_id2
+                end
+
+                print("[AnimationSequences.series] animator error: " .. tostring(child_id))
+                safe_done()
+                return nil
+            end
+        })
+
+        if delay_between and delay_between > 0 and (this_i < total or options.delay_after_last) then
+            table.insert(steps, { type = "delay", duration = delay_between })
+        end
+    end
+
+    local sequence_id = AnimationEngine.create_sequence(steps, {
+        loop = loop,
+        on_complete = on_complete
+    })
+
+    AnimationEngine.start_sequence(sequence_id)
+    return sequence_id
+end
+
+
 -- Stop all animations for an object
 function AnimationSequences.stopAll(object_id_prefix)
     -- This would need to track animations by object

@@ -490,6 +490,18 @@ function Displayer:_setupSubAPIs()
     end
 
     -- =====================================================
+    -- NEW: Advanced text drawing with per‑character control and wrapping
+    -- =====================================================
+    self.Text.drawTextAdvanced = function(player_id, text, opts)
+        local subsystem = mainInstance:_getSubsystem("FontSystem", "drawTextEx")
+        if not subsystem or not player_id or not text then
+            print("Error: player_id and text are required")
+            return nil
+        end
+        return subsystem:drawTextEx(player_id, text, opts or {})
+    end
+
+    -- =====================================================
     -- Compatibility + documentation-friendly snake_case API
     -- (Additive: does not change existing methods)
     -- =====================================================

@@ -32,7 +32,8 @@ AnimationEnums.animation_types = {
     SHAKE = "shake",
     FADE = "fade",
     TINT = "tint",
-    COLOR_PULSE = "color_pulse"
+    COLOR_PULSE = "color_pulse",
+    SERIES = "series"
 }
 
 -- Animation property enums

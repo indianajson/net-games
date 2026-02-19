@@ -381,6 +381,7 @@ function AnimationEngine.create_sequence(steps, options)
         loop = loop,
         on_complete = on_complete,
         active_animation = nil,
+        active_sequence = nil,
         step_data = {}
     }
     
@@ -398,6 +399,7 @@ function AnimationEngine.start_sequence(id)
     seq.start_time = os.clock()
     seq.current_step = 1
     seq.active_animation = nil
+    seq.active_sequence = nil
     
     -- Start first step
     AnimationEngine._execute_sequence_step(id)
@@ -485,6 +487,42 @@ function AnimationEngine._execute_sequence_step(seq_id)
             end
         })
         
+
+    elseif step.type == "run" then
+        -- Custom step that controls when the sequence advances.
+        -- step.run(done) should call done() when finished.
+        -- If step.run returns an animation/sequence id, it will be tracked for cancellation.
+        local done_called = false
+        local function done()
+            if done_called then return end
+            done_called = true
+            AnimationEngine._sequence_step_complete(seq_id)
+        end
+
+        seq.active_animation = nil
+        seq.active_sequence = nil
+
+        if step.run then
+            local ok, child_id = pcall(step.run, done)
+            if ok then
+                if type(child_id) == "string" then
+                    if animations[child_id] ~= nil then
+                        seq.active_animation = child_id
+                    elseif sequences[child_id] ~= nil and child_id ~= seq_id then
+                        seq.active_sequence = child_id
+                    else
+                        -- Unknown id; store best-effort as animation id
+                        seq.active_animation = child_id
+                    end
+                end
+            else
+                log("Run step error: " .. tostring(child_id))
+                -- Fail open: advance so sequences don't deadlock
+                done()
+            end
+        else
+            done()
+        end
     elseif step.type == "callback" then
         if step.callback then
             step.callback()
@@ -501,6 +539,7 @@ function AnimationEngine._sequence_step_complete(seq_id)
     
     seq.current_step = seq.current_step + 1
     seq.active_animation = nil
+    seq.active_sequence = nil
     
     if seq.current_step > #seq.steps then
         -- Sequence complete
@@ -538,6 +577,11 @@ function AnimationEngine.stop_sequence(id)
     -- Stop any active animation
     if seq.active_animation then
         AnimationEngine.stop_animation(seq.active_animation)
+    end
+
+    -- Stop any active child sequence (from run steps)
+    if seq.active_sequence and seq.active_sequence ~= id then
+        AnimationEngine.stop_sequence(seq.active_sequence)
     end
     
     sequences[id] = nil

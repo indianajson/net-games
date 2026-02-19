@@ -519,4 +519,3 @@ function Nameplate:update(player_id, player_data, box_data, dt)
 end
 
 return Nameplate
-

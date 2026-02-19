@@ -12,7 +12,18 @@ local Displayer = require("scripts/net-games/displayer/displayer")
 local AnimationEngine = require("scripts/net-games/animation-engine/animation-engine")
 local AnimationSequences = require("scripts/net-games/animation-engine/animation-sequences")
 local boom = require("scripts/boom/main")
-
+local assets = {
+        "/server/assets/net-games/fonts/fonts_compressed.png",
+        "/server/assets/net-games/fonts/fonts_wide.animation",
+        "/server/assets/net-games/fonts/fonts_gradient.animation",
+        "/server/assets/net-games/fonts/fonts_thick.animation",
+        "/server/assets/net-games/fonts/fonts_battle.animation",
+        "/server/assets/net-games/fonts/fonts_thin.animation",
+        "/server/assets/net-games/fonts/fonts_tiny.animation",
+        "/server/assets/net-games/fonts/fonts_compressed.animation",
+        "/server/assets/net-games/fonts/fonts_dark_compressed.png",
+        "/server/assets/net-games/fonts/fonts_dark_compressed.animation"
+    }
 -- ===========================================================
 -- INITIALIZATION
 -- ===========================================================
@@ -126,17 +137,7 @@ end
 -- ASSET PROVISION
 -- ===========================================================
 Net:on("player_join", function(event)
-    local assets = {
-        "/server/assets/net-games/fonts/fonts_compressed.png",
-        "/server/assets/net-games/fonts/fonts_wide.animation",
-        "/server/assets/net-games/fonts/fonts_gradient.animation",
-        "/server/assets/net-games/fonts/fonts_thick.animation",
-        "/server/assets/net-games/fonts/fonts_battle.animation",
-        "/server/assets/net-games/fonts/fonts_thin.animation",
-        "/server/assets/net-games/fonts/fonts_tiny.animation",
-        "/server/assets/net-games/fonts/fonts_compressed.animation",
-        "/server/assets/net-games/fonts/fonts_dark_compressed.png"
-    }
+    
     
     for _, asset in ipairs(assets) do
         Net.provide_asset_for_player(event.player_id, asset)
