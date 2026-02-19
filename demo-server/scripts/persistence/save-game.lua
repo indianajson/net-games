@@ -10,7 +10,7 @@
 -- The secret is sanitized to be filesystem‑safe across platforms.
 
 local persistence = require('scripts/persistence/persistence')
-local Utility = require("scripts/tests/utility")
+local Utility = require("scripts/utils/utility")
 
 -- CONFIGURATION --------------------------------------------------------------
 local MAX_SAVE_INSTANCES = 3                     -- maximum number of save slots per player

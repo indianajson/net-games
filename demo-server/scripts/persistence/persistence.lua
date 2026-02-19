@@ -4,7 +4,7 @@
 -- Automatically creates missing directories when saving.
 
 local json = require('scripts/libs/json')
-local Utility = require('scripts/tests/utility')
+local Utility = require('scripts/utils/utility')
 
 local update_interval = 2          -- seconds to wait after last change before saving
 local instances = {}                -- cache of active instances by file path
