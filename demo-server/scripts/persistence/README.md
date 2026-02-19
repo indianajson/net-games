@@ -1,172 +1,266 @@
-Persistence Module Documentation
+Documentation for persistence.lua and save-game.lua
+Table of Contents
 Overview
-The persistence module provides a simple, promise‑based interface for storing Lua tables as JSON files. It features automatic debounced saving, manual save control, and support for nested data access via dot‑notation paths. Each file path gets its own singleton instance, ensuring that multiple requires for the same file share the same state and save timer.
 
-Installation
-lua
-local get_persistence = require('scripts/persistence/persistence')
-Usage
-Create an instance for a specific JSON file:
+persistence.lua
 
-lua
-local store = get_persistence('path/to/your/file.json')
-All operations assume the data has been loaded. You must call :load() (or :ready()) before reading or writing.
+Purpose
 
-Loading Data
-lua
-store:load():and_then(function(data)
-    -- data is the loaded table (empty if file missing/invalid)
-end)
-Or use the convenience :ready():
-
-lua
-store:ready(function()
-    print("Data is ready")
-end)
-Reading Data
-After loading, obtain a shallow copy of the current data:
-
-lua
-local data = store:getData()
-print(data.someKey)
-Modifying Data
-Top‑Level Keys
-Update with a function (most flexible):
-
-lua
-store:update(function(d)
-    d.counter = (d.counter or 0) + 1
-    d.user = { name = "Alice" }
-end)
-Set a key:
-
-lua
-store:setKey("highScore", 1000)
-Remove a key:
-
-lua
-store:removeKey("tempData")
-Replace entire data:
-
-lua
-store:setData({ new = "data" })
-Clear all data:
-
-lua
-store:clear()
-Nested Keys (Dot Notation)
-Work with deep paths without manually checking intermediate tables:
-
-Set a nested value (creates missing tables):
-
-lua
-store:setPath("user.profile.email", "user@example.com")
-Remove a nested key:
-
-lua
-store:removePath("user.profile.phone")
-Paths can also be given as a table of keys:
-
-lua
-store:setPath({"user", "profile", "name"}, "Bob")
-Saving
-The module automatically schedules a save 2 seconds after the last modification (debounced). You can also force an immediate save:
-
-lua
-store:save():and_then(function()
-    print("Data written to disk")
-end)
-:save() returns a promise that resolves when the write completes (or immediately if no changes are pending). If a save is already in progress, the new save is queued and its promise resolves after that queued save finishes.
-
-Checking Dirty State
-lua
-if store.dirty then
-    print("There are unsaved changes")
-end
-Full Example
-lua
-local store = get_persistence('data.json')
-
-store:load()
-    :and_then(function()
-        store:update(function(d)
-            d.visits = (d.visits or 0) + 1
-        end)
-        store:setPath("user.last_login", os.time())
-        return store:save()   -- force immediate save
-    end)
-    :and_then(function()
-        print("Saved. Current data:", store:getData())
-    end)
 API Reference
-get_persistence(filePath) -> store
-Returns the singleton instance for the given file path. Creates a new instance if none exists.
 
-Instance Methods
-store:load() -> promise
-Reads the file and parses JSON into store.data. If already loaded, returns a resolved promise immediately. The promise resolves with the loaded data table.
+Usage Example
 
-store:ready(callback) -> promise
-Convenience method: calls :load() and then invokes the callback. Returns the same promise as :load().
+Important Notes
 
-store:getData() -> table
-Returns a shallow copy of the current data. Must be called after load.
+save-game.lua
 
-store:setData(newData)
-Replaces the entire data table with newData. Marks the store as dirty.
+Purpose
 
-store:update(func)
-Applies func to the internal data table. func receives the data table as its only argument and should modify it in place. Marks the store as dirty.
+Configuration
 
-store:setKey(key, value)
-Sets a top‑level key to value. Equivalent to update(function(d) d[key] = value end).
+API Reference
 
-store:removeKey(key)
-Removes a top‑level key. Equivalent to update(function(d) d[key] = nil end).
+Usage Examples
 
-store:clear()
-Resets the data to an empty table {}. Marks dirty.
+File Structure & Safety
 
-store:setPath(path, value)
-Sets a value at a nested location. path can be a dot‑separated string (e.g., "a.b.c") or a table of keys (e.g., {"a","b","c"}). Creates any missing intermediate tables.
+Important Notes
 
-store:removePath(path)
-Removes a nested key. Does nothing if the path does not exist.
+Overview
+This pair of modules provides a robust, asynchronous save/load system for game data, with support for staging changes (edit, commit, revert) and per‑player isolated save files. persistence.lua handles low‑level file I/O and promise‑based operations, while save-game.lua builds on top of it to offer a workspace‑style interface where changes can be made to a working copy and then either saved to disk or discarded.
 
-store:save() -> promise
-Immediately writes the current data to disk, bypassing the debounce timer. Returns a promise that resolves when the write completes. If a save is already in progress, the new save is queued and its promise resolves after that save finishes.
+persistence.lua
+Purpose
+persistence.lua is a low‑level module responsible for reading from and writing to JSON files on disk. It abstracts the filesystem operations and provides a promise‑based API, allowing asynchronous file I/O without blocking the main thread. Each instance is bound to a specific file path and maintains an in‑memory copy of the data.
 
-store:updateAndSave(func)
-Identical to :update(func) – included for semantic clarity (auto‑save is always active).
+API Reference
+persistence(filePath)
+Constructor
+Creates a new persistence instance for the given file path. The file is not immediately read; you must call :load() to read its contents.
 
-Properties (read‑only, but inspectable)
-store.dirty – true if there are unsaved changes.
+Parameters:
+filePath (string) – Path to the JSON file (relative to the game’s working directory).
 
-store.loaded – true after :load() has completed.
+Returns:
+A new persistence object with the methods below.
 
-store.filePath – the file path associated with this instance.
+:load()
+Reads the JSON file from disk and parses its contents. If the file does not exist or is invalid, an appropriate error is propagated through the promise.
 
-How Auto‑Save Works
-After any modification (update, setKey, etc.), the instance is marked dirty.
+Returns:
+A promise that resolves with the parsed Lua table (the data from the file) or rejects with an error.
 
-A timer (save_delay) is set to update_interval (2 seconds).
+:setData(data)
+Replaces the in‑memory data of this persistence instance with a new table. This does not write to disk; it only updates the internal cache. Subsequent calls to :save() will write this data.
 
-On each game tick, the timer is decremented. When it reaches zero, an automatic save is triggered.
+Parameters:
+data (table) – The new data to store.
 
-Calling :save() manually cancels the timer and writes immediately.
+Returns:
+Nothing.
 
-If a manual save is requested while another save is in progress, the new save is queued (pending = true) and will start after the current one finishes. Any promises returned for the queued save resolve after that queued save completes.
+:save()
+Writes the current in‑memory data to the JSON file on disk. The file is overwritten with the new content.
 
-Error Handling
-File read/write errors are printed but do not throw. The promise returned by :save() will still resolve (to avoid hanging chains). Check logs for "Failed to decode JSON" or "Write failed".
+Returns:
+A promise that resolves when the write completes successfully, or rejects on error.
 
-Calling read/write methods before :load() raises an error.
+:getData() (optional, assumed)
+Returns the current in‑memory data table. This is the same table that was loaded or last set via :setData(). Modifying the returned table will affect the in‑memory copy, but will not be written to disk until :save() is called.
 
-Notes
-The module uses a global Net:on("tick") handler to manage save timers for all instances. Ensure Net is available in your environment.
+Returns:
+The in‑memory data table.
 
-JSON encoding/decoding relies on the json module (assumed to be compatible with typical json.encode/json.decode).
+Usage Example
+lua
+local persistence = require('scripts/persistence/persistence')
 
-The Utility.create_promise function is expected to return a promise with an :and_then method (similar to typical promise implementations).
+local save = persistence('saves/player.json')
 
-This documentation should help you use the persistence module effectively. For a working example, refer to the provided test-persistence.lua file.
+-- Load existing data
+save:load():and_then(function(data)
+    print('Loaded:', data)
+    -- Modify data
+    data.score = 100
+    save:setData(data)
+    -- Save changes
+    return save:save()
+end):and_then(function()
+    print('Save completed')
+end):catch(function(err)
+    print('Error:', err)
+end)
+Important Notes
+All file operations are asynchronous and return promises (assumed to be compatible with the Utility.create_promise used in save-game.lua).
+
+The module does not create directories automatically; the path’s parent directories must exist before calling :save().
+
+File content must be valid JSON. On load, the JSON is parsed into a Lua table; on save, the table is serialised to JSON.
+
+save-game.lua
+Purpose
+save-game.lua extends persistence.lua to provide a staging area for changes. Each player has their own isolated set of save slots (up to a configurable maximum). The module maintains a working copy of the data that can be modified freely, and a saved snapshot representing the last committed state. You can:
+
+Make multiple edits via :edit().
+
+Commit changes to disk with :save().
+
+Discard unsaved changes with :revert().
+
+Read a shallow copy of the working data via :getData().
+
+All operations are per‑player, using the player’s secret (obtained from Net.get_player_secret) to create a unique folder, ensuring that one player cannot access another’s saves.
+
+Configuration
+At the top of the file, you can adjust:
+
+lua
+local MAX_SAVE_INSTANCES = 3   -- number of save slots per player (1..n)
+local SAVE_PATH_PATTERN = "scripts/save-files/%s/save%d.json"  -- secret, index
+MAX_SAVE_INSTANCES defines how many separate save files each player can have.
+
+SAVE_PATH_PATTERN determines where files are stored. %s is replaced with the sanitized player secret, %d with the slot index.
+
+API Reference
+get_game_save(player_id, index)
+Factory function – Returns the singleton game_save instance for a given player and save slot. If the instance does not exist yet, it is created, and the underlying JSON file is automatically initialised with an empty object {} if missing.
+
+Parameters:
+player_id (string) – The player’s identifier.
+index (number) – Save slot number, from 1 to MAX_SAVE_INSTANCES.
+
+Returns:
+A game_save object with the methods below.
+
+Throws:
+
+If player_id is not a string.
+
+If index is not an integer in the valid range.
+
+If the player secret cannot be retrieved (empty or not a string).
+
+If file/directory creation fails (e.g., permission denied).
+
+:load()
+Reads the save file from disk and initialises both the saved snapshot and the working copy with the file’s contents. This must be called before any other operations (except the factory function).
+
+Returns:
+A promise that resolves with the working data table after loading completes. The promise is the one returned by the underlying persistence:load().
+
+:edit(func)
+Applies a modification to the working copy. The function func receives the working data table and should modify it in place. After the call, the instance is marked as dirty (unsaved changes).
+
+Parameters:
+func (function) – A function that takes the working data table and modifies it.
+
+Throws:
+If :load() has not been called yet.
+
+Example:
+
+lua
+save:edit(function(data)
+    data.playerName = "New Name"
+    data.inventory.gold = data.inventory.gold + 50
+end)
+:save()
+Commits the current working copy to disk. If the instance is not dirty (no changes since last load or save), the returned promise resolves immediately without writing.
+
+Returns:
+A promise that resolves when the write completes successfully. On success, the saved snapshot is updated to match the working copy, and the dirty flag is cleared.
+
+Throws:
+If :load() has not been called.
+
+:revert()
+Discards all unsaved changes by resetting the working copy to a deep copy of the last saved snapshot. The dirty flag is cleared.
+
+Throws:
+If :load() has not been called.
+
+:getData()
+Returns a shallow copy of the current working data. This is safe for reading; modifications to the returned table will not affect the working copy (and thus will not be considered for saving). For direct manipulation, use :edit() or :getWorkingTable() with caution.
+
+Returns:
+A new table containing key‑value pairs from the working data.
+
+Throws:
+If :load() has not been called.
+
+:isModified()
+Returns true if there are unsaved changes in the working copy, false otherwise.
+
+Returns:
+Boolean.
+
+:getWorkingTable() (use with caution)
+Returns the actual working data table. Modifications to this table will directly affect the working copy and will automatically mark the instance as dirty. This method is provided for advanced use cases where you need to pass the table to external functions that expect to modify it directly. In most cases, prefer :edit().
+
+Returns:
+The mutable working data table.
+
+Throws:
+If :load() has not been called.
+
+Usage Examples
+Basic flow: load, edit, save
+lua
+local game_save = require('scripts/save-game/save-game')
+
+-- Get player's first save slot
+local save = game_save("player123", 1)
+
+save:load():and_then(function(data)
+    print("Current gold:", data.gold)
+    -- Edit the working copy
+    save:edit(function(d)
+        d.gold = (d.gold or 0) + 100
+        d.lastPlayed = os.time()
+    end)
+    -- Save changes
+    return save:save()
+end):and_then(function()
+    print("Save successful")
+end):catch(function(err)
+    print("Error:", err)
+end)
+Discarding changes
+lua
+save:load():and_then(function()
+    -- Make some changes
+    save:edit(function(d) d.experiment = "test" end)
+    -- Oops, discard them
+    save:revert()
+    -- Now working copy is back to the saved state
+    print(save:isModified())  -- false
+end)
+Reading data without modifying
+lua
+save:load():and_then(function()
+    local data = save:getData()  -- safe read‑only copy
+    print("Player name:", data.name)
+end)
+File Structure & Safety
+Each player’s saves are stored in scripts/save-files/<sanitized_secret>/.
+
+The secret obtained from Net.get_player_secret(player_id) is sanitised to be filesystem‑safe: any character that is not alphanumeric, dot, dash, or underscore is replaced with an underscore. This prevents invalid filenames on Windows (which disallows \ / : * ? " < > |) and Unix (which disallows / and null).
+
+The module attempts to create directories using Garry’s Mod’s file.CreateDir if available; otherwise, it falls back to os.execute with platform‑appropriate commands and proper shell escaping.
+
+Empty save files are initialised with the content {} to ensure valid JSON from the start.
+
+The cache (instances) is keyed by the sanitized secret and slot index, so each player/slot pair is a singleton.
+
+Important Notes
+load() must be called first – Before using edit, save, revert, or any data access methods, you must await the promise returned by :load(). Failure to do so will result in errors.
+
+Asynchronous operations – Both :load() and :save() return promises. Use .and_then() / .catch() (or your preferred promise chaining) to handle completion.
+
+Deep copies – The module uses a simple recursive deep copy for snapshots and data isolation. It assumes tables contain no cycles. If your data has cycles or complex metatables, you may need a more robust copy routine.
+
+Per‑player isolation – The secret ensures that even if two players have the same player_id string (unlikely), their files are stored in separate directories. This also prevents one player from accessing another’s saves by guessing file paths.
+
+Maximum instances – The limit is enforced per player. You cannot have more than MAX_SAVE_INSTANCES slots per player. Requesting an index outside this range throws an error.
+
+This documentation should give you a complete understanding of both modules and how to use them effectively in your game.
