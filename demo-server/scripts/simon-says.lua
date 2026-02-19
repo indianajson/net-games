@@ -10,12 +10,7 @@ local games = require("scripts/net-games/main")
 local simon_cache = {}
 local simon_players = {}
 local simon_optional_properties = { "NPC", "NPC Mug", "Time", "Limit" }
-local Logger = require("scripts/persistence/persistence")("scripts/_DEBUGGING/Simon-Says.json")
-
-Logger:load():and_then(function ()
-      Logger:setKey("TEST", {"TESTING"})
-      Logger:save()  
-end)
+local Logger = require("scripts/persistence/persistence")("scripts/_DEBUGGING/Simon-Says/_DEV_Simon-Says.json")
 
 local defaults = {
   time_limit = 60,
@@ -124,6 +119,10 @@ local function spawn_simon()
           solid=true,
           warp_in=false
         })
+      Logger:load():and_then(function ()
+      Logger:setKey("Simon_".. area_id .. "_" .. simon_obj.id, {Spawned = true})
+      Logger:save()  
+      end)
       end
     end
   end

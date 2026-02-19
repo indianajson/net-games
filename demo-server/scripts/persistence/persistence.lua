@@ -9,6 +9,15 @@ local Utility = require('scripts/tests/utility')
 local update_interval = 2          -- seconds to wait after last change before saving
 local instances = {}                -- cache of active instances by file path
 
+-- ========================================================================= --
+-- Pretty‑print control                                                      --
+-- ========================================================================= --
+-- Set this to true to save JSON with 2‑space indentation, or to a custom   --
+-- indent string (e.g. "\t" or "    "). When false or nil, compact JSON is  --
+-- written.                                                                  --
+-- ========================================================================= --
+local PrettyPrint = true   -- change to true for pretty output
+
 -- Simple split function (splits string on a delimiter)
 local function split(str, delim)
     local result = {}
@@ -29,14 +38,14 @@ local function get_os()
 end
 
 -- Synchronously create a directory (and all parents) if it does not exist.
--- Returns true (errors are ignored, but printed for debugging).
+-- Returns true on success, false on failure (errors are printed).
 local function mkdir_p(dir)
     if dir == "" then return true end
     local os_type = get_os()
     local cmd
     if os_type == "windows" then
         -- mkdir on Windows creates intermediate directories by default.
-        -- 2>nul suppresses error if directory already exists.
+        -- 2>nul suppresses error output.
         cmd = 'mkdir "' .. dir .. '" 2>nul'
     else
         -- Unix: mkdir -p creates parents and ignores existing.
@@ -45,10 +54,21 @@ local function mkdir_p(dir)
     local result = os.execute(cmd)
     if result then
         print("Created directory: " .. dir)
+        return true
     else
-        print("Failed to create directory (may already exist): " .. dir)
+        -- Command failed. On Windows this may be because the directory already exists.
+        if os_type == "windows" then
+            -- Check if the directory actually exists now
+            local test_cmd = 'if exist "' .. dir .. '\\" (exit 0) else (exit 1)'
+            local exists = os.execute(test_cmd)
+            if exists then
+                -- Directory already existed – that's fine, no error
+                return true
+            end
+        end
+        print("Failed to create directory: " .. dir)
+        return false
     end
-    return true
 end
 
 -- Promise‑based directory creation: extracts directory part from file path,
@@ -238,7 +258,15 @@ local function new(filePath)
         end
         self.saving = true
 
-        local ok, content = pcall(json.encode, self.data)
+        -- Encode data to JSON, optionally with pretty‑print formatting
+        local ok, content
+        if PrettyPrint then
+            -- Pass PrettyPrint (which may be true or a custom indent string) to json.encode
+            ok, content = pcall(json.encode, self.data, PrettyPrint)
+        else
+            ok, content = pcall(json.encode, self.data)
+        end
+
         if not ok then
             print("Failed to encode data to JSON: " .. tostring(content))
             self.saving = false
