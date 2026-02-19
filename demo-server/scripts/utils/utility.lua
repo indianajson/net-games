@@ -4,8 +4,8 @@
 local Utility = {}
 
 -- Load sub-modules
-Utility.EventEmitter = require("scripts/tests/event-emitter")
-Utility.Async = require("scripts/tests/async")
+Utility.EventEmitter = require("scripts/utils/event-emitter")
+Utility.Async = require("scripts/utils/async")
 
 -- Shortcut methods
 Utility.create_promise = Utility.Async.create_promise
