@@ -119,9 +119,9 @@ local function spawn_simon()
           solid=true,
           warp_in=false
         })
-      Logger:load():and_then(function ()
-      Logger:setKey("Simon_".. area_id .. "_" .. simon_obj.id, {Spawned = true})
-      Logger:save()  
+        Logger:load():and_then(function ()
+        Logger:setKey(area_id .. "_simon", {Spawned = true, PlayersWhoPlayed = {}})
+        Logger:save()  
       end)
       end
     end
@@ -331,6 +331,7 @@ end
 Net:on("actor_interaction", function(event)
   if event.button == 0 and string.find(event.actor_id, "-simon-") then
     greet_simon(event.actor_id, event.player_id)
+  
   end
 end)
 

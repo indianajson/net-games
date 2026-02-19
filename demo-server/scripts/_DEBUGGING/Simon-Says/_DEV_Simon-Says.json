@@ -1,5 +1,6 @@
 {
-  "Simon_default_74": {
+  "default_simon": {
+    "PlayersWhoPlayed": [],
     "Spawned": true
   }
 }
