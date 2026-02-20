@@ -4,7 +4,7 @@
 -- Uses NEW Talk.npc + presets + purple frame dye
 --=====================================================
 
-require("scripts/net-games/framework")
+require("scripts/net-games/main")
 
 local Talk = require("scripts/net-games/npcs/talk")
 

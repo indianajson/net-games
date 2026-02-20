@@ -54,7 +54,7 @@ function SpritePropsBuilder:build_tint(a, r, g, b, color_mode)
             self.props.color_mode = color_mode
         else
             self.props.color_mode = 0
-            print("Warning: color_mode must be 0, 1, or 2. Got: " .. tostring(color_mode))
+            print("Warning: color_mode must be 0, 1, or 2. Got: " .. tostring(color_mode) .. ". Defaulting the color mode to 0")
         end
     end
     return self

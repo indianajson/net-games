@@ -5,11 +5,12 @@
 * ---------------------------------------------------------- *
 ]]--
 
-local games = require("scripts/net-games/framework")
+local games = require("scripts/net-games/main")
 
 local simon_cache = {}
 local simon_players = {}
 local simon_optional_properties = { "NPC", "NPC Mug", "Time", "Limit" }
+local Logger = require("scripts/persistence/persistence")("scripts/_DEBUGGING/Simon-Says/_DEV_Simon-Says.json")
 
 local defaults = {
   time_limit = 60,
@@ -118,6 +119,10 @@ local function spawn_simon()
           solid=true,
           warp_in=false
         })
+        Logger:load():and_then(function ()
+        Logger:setKey(area_id .. "_simon", {Spawned = true, PlayersWhoPlayed = {}})
+        Logger:save()  
+      end)
       end
     end
   end
@@ -326,6 +331,7 @@ end
 Net:on("actor_interaction", function(event)
   if event.button == 0 and string.find(event.actor_id, "-simon-") then
     greet_simon(event.actor_id, event.player_id)
+  
   end
 end)
 

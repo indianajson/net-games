@@ -4,7 +4,7 @@
 -- Tiled object names must be: prog_{color}
 --=====================================================
 
-require("scripts/net-games/framework")
+require("scripts/net-games/main")
 
 local Talk = require("scripts/net-games/npcs/talk")
 

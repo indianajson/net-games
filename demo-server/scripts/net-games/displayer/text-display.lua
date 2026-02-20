@@ -2347,7 +2347,16 @@ function TextDisplay:drawText(player_id, text_id, text, x, y, z_order, font_name
         character_objects = {}
     }
 
-    text_data.display_id = self.font_system:drawText(player_id, actual_id, text, x, y, z_order, font_name, scale)
+    -- Use the new unified drawTextEx method
+    text_data.display_id = self.font_system:drawTextEx(player_id, text, {
+        x = x,
+        y = y,
+        font = font_name,
+        scale = scale,
+        z = z_order,
+        display_id = actual_id
+    })
+
     player_data.active_texts[actual_id] = text_data
     return actual_id
 end
@@ -2712,16 +2721,15 @@ function TextDisplay:updateText(player_id, text_id, new_text)
     if text_data.type == "marquee" then
         self:drawMarqueeCharacters(player_id, text_id, text_data)
     else
-        text_data.display_id = self.font_system:drawText(
-            player_id,
-            text_id,
-            new_text,
-            text_data.x,
-            text_data.y,
-            text_data.z_order,
-            text_data.font,
-            text_data.scale
-        )
+        -- Use the new unified drawTextEx method
+        text_data.display_id = self.font_system:drawTextEx(player_id, new_text, {
+            x = text_data.x,
+            y = text_data.y,
+            font = text_data.font,
+            scale = text_data.scale,
+            z = text_data.z_order,
+            display_id = text_id
+        })
     end
 end
 
@@ -2757,16 +2765,15 @@ function TextDisplay:setTextPosition(player_id, text_id, x, y)
             self:drawBackdrop(player_id, text_id, text_data, text_data.backdrop)
         end
 
-        text_data.display_id = self.font_system:drawText(
-            player_id,
-            nil,
-            text_data.text,
-            x,
-            y,
-            text_data.z_order,
-            text_data.font,
-            text_data.scale
-        )
+        -- Use the new unified drawTextEx method
+        text_data.display_id = self.font_system:drawTextEx(player_id, text_data.text, {
+            x = x,
+            y = y,
+            font = text_data.font,
+            scale = text_data.scale,
+            z = text_data.z_order,
+            display_id = text_id
+        })
     end
 end
 

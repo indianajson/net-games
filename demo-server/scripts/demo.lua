@@ -7,9 +7,11 @@
 ]]--
 
 --the below line is required to access net-games functions
-local games = require("scripts/net-games/framework")
+local games = require("scripts/net-games/main")
 local NetHelpers = require("scripts/net-games/helpers/net-helpers")
 local AnimationEngine = require("scripts/net-games/animation-engine/animation-engine")
+local AnimationSequences = require("scripts/net-games/animation-engine/animation-sequences")
+
 NetHelpers.patch_net()
 
 NetHelpers.safe_require("scripts/net-games/dialogue/startup")
@@ -189,8 +191,11 @@ Net:on("actor_interaction", function (event)
         ------------------------------------------------------------------------
         ---------------- DEBUGGING REMOVE WHEN NO LONGER NEEDED ----------------
         ------------------------------------------------------------------------
-        local eprops = games.get_ui_element_properties(spr_id,pid)
-        print(eprops)
+        local eprops1 = games.get_ui_element_properties(spr_id,pid)
+        local eprops2 = games.get_ui_element_properties(spr_id.."a",pid)
+        local eprops3 = games.get_ui_element_properties(spr_id.."b",pid)
+        
+        print(eprops1)
         ------------------------------------------------------------------------
     
         -- summon test
@@ -202,6 +207,16 @@ Net:on("actor_interaction", function (event)
         games.complex_summon_ui_element_relative(spr_id,pid, 110, 50, 2.0, 4, 1, 2.0)
         games.set_ui_animation((spr_id.."b"), pid, "7POINT")
         games.set_ui_animation((spr_id.."a"), pid, "6POINT")
+
+AnimationSequences.series(
+    {spr1 = eprops1,spr2 = eprops2,spr3 = eprops3},
+  function(obj, opts)
+    opts.loop = 1         -- force a single pulse per sprite
+    opts.ping_pong = true
+    return AnimationSequences.pulse(obj, opts)
+  end,
+  { delay_between = 0.05, loop = true, anim_options = { duration = 0.18, scale_to = 1.15 } }
+)
         await(Async.sleep(2))
 
         ---- bob test:

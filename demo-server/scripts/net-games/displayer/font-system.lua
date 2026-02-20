@@ -2,11 +2,53 @@
 FontSystem = {}
 FontSystem.__index = FontSystem
 
+function FontSystem:setupPlayerFonts(player_id)
+    self.player_fonts[player_id] = {
+        active_displays = {},
+        next_obj_id = 10000  -- Start with high ID to avoid conflicts
+    }
+    
+    -- Provide assets and allocate sprites for each font type
+    for font_name, sprite_data in pairs(self.font_sprites) do
+        Net.provide_asset_for_player(player_id, sprite_data.texture_path)
+        if sprite_data.anim_path then
+            Net.provide_asset_for_player(player_id, sprite_data.anim_path)
+        end
+        
+        Net.player_alloc_sprite(player_id, font_name, sprite_data)
+    end
+end
+
+function FontSystem:cleanupPlayerFonts(player_id)
+    local player_data = self.player_fonts[player_id]
+    if player_data then
+        -- Erase all active displays
+        for display_id, display in pairs(player_data.active_displays) do
+            self:eraseTextDisplay(player_id, display_id)
+        end
+        
+        -- Deallocate all font sprites
+        for font_name, _ in pairs(self.font_sprites) do
+            Net.player_dealloc_sprite(player_id, font_name)
+        end
+        
+        self.player_fonts[player_id] = nil
+    end
+end
+
 function FontSystem:init()
     local COMP_TEX  = "/server/assets/net-games/fonts/fonts_compressed.png"
     local COMP_ANIM = "/server/assets/net-games/fonts/fonts_compressed.animation"
     local DARK_TEX  = "/server/assets/net-games/fonts/fonts_dark_compressed.png"
     local DARK_ANIM = "/server/assets/net-games/fonts/fonts_dark_compressed.animation"
+
+    local WIDE_ANIM = "/server/assets/net-games/fonts/fonts_wide.animation"
+    local GRADIENT_ANIM = "/server/assets/net-games/fonts/fonts_gradient.animation"
+    local THICK_ANIM = "/server/assets/net-games/fonts/fonts_thick.animation"
+    local BATTLE_ANIM = "/server/assets/net-games/fonts/fonts_battle.animation"
+    local THIN_ANIM = "/server/assets/net-games/fonts/fonts_thin.animation"
+    local TINY_ANIM = "/server/assets/net-games/fonts/fonts_tiny.animation"
+
 
     self.font_sprites = {
         -- Light
@@ -262,39 +304,6 @@ function FontSystem:init()
     return self
 end
 
-function FontSystem:setupPlayerFonts(player_id)
-    self.player_fonts[player_id] = {
-        active_displays = {},
-        next_obj_id = 10000  -- Start with high ID to avoid conflicts
-    }
-    
-    -- Provide assets and allocate sprites for each font type
-    for font_name, sprite_data in pairs(self.font_sprites) do
-        Net.provide_asset_for_player(player_id, sprite_data.texture_path)
-        if sprite_data.anim_path then
-            Net.provide_asset_for_player(player_id, sprite_data.anim_path)
-        end
-        
-        Net.player_alloc_sprite(player_id, font_name, sprite_data)
-    end
-end
-
-function FontSystem:cleanupPlayerFonts(player_id)
-    local player_data = self.player_fonts[player_id]
-    if player_data then
-        -- Erase all active displays
-        for display_id, display in pairs(player_data.active_displays) do
-            self:eraseTextDisplay(player_id, display_id)
-        end
-        
-        -- Deallocate all font sprites
-        for font_name, _ in pairs(self.font_sprites) do
-            Net.player_dealloc_sprite(player_id, font_name)
-        end
-        
-        self.player_fonts[player_id] = nil
-    end
-end
 
 -- Returns the animation prefix for a font.
 -- Dark fonts reuse the SAME animation state names as their base font.
@@ -377,169 +386,303 @@ function isInAlphabet(str)
     return false
 end
 
-function FontSystem:drawTextWithId(player_id, text, x, y, font_name, scale, z_order, display_id, tint)
-    font_name = font_name or "THICK"
-    scale = scale or 2.0
-    z_order = z_order or 100
+-- =====================================================
+-- NEW: Glyph existence and fallback helpers
+-- =====================================================
+function FontSystem:glyph_exists(font_name, glyph)
+    local widths = self.char_widths[font_name] or self.char_widths.THICK
+    return widths and widths[glyph] ~= nil
+end
+
+function FontSystem:choose_glyph(font_name, glyph)
+    if self:glyph_exists(font_name, glyph) then
+        return glyph
+    end
+    if glyph:match("%a") then
+        local up = glyph:upper()
+        if self:glyph_exists(font_name, up) then
+            return up
+        end
+    end
+    if self:glyph_exists(font_name, "?") then
+        return "?"
+    end
+    return nil
+end
+
+-- =====================================================
+-- NEW: Word wrapping to lines (pixel‑based)
+-- =====================================================
+function FontSystem:wrapTextToLines(text, font_name, scale, max_width)
+    local char_widths = self.char_widths[font_name] or self.char_widths.THICK
+    local base_spacing = 1
+    local scaled_spacing = base_spacing * scale
+
+    local function string_width(str)
+        local w = 0
+        for i = 1, #str do
+            local ch = str:sub(i, i)
+            if ch == " " then
+                w = w + (char_widths[" "] or char_widths["A"] or 6) * scale + scaled_spacing
+            else
+                local glyph = self:choose_glyph(font_name, ch) or "?"
+                local cw = char_widths[glyph] or char_widths["A"] or 6
+                w = w + cw * scale + scaled_spacing
+            end
+        end
+        if #str > 0 then
+            w = w - scaled_spacing
+        end
+        return w
+    end
+
+    local lines = {}
+    local current_line = ""
+    local current_width = 0
+
+    local words = {}
+    for word in text:gmatch("%S+") do
+        table.insert(words, word)
+    end
+
+    -- Simple approach: treat all whitespace as word boundaries, collapse multiple spaces
+    -- This matches typical text display; for exact space preservation we'd need a tokenizer.
+    -- We'll use a tokenizer similar to text-display.lua's for accuracy.
+
+    -- Tokenizer for words, spaces, newlines
+    local tokens = {}
+    local i = 1
+    while i <= #text do
+        local c = text:sub(i, i)
+        if c == "\n" then
+            table.insert(tokens, { t = "newline" })
+            i = i + 1
+        elseif c == " " then
+            local j = i
+            while j <= #text and text:sub(j, j) == " " do
+                j = j + 1
+            end
+            table.insert(tokens, { t = "spaces", n = j - i })
+            i = j
+        elseif c:match("%s") then
+            table.insert(tokens, { t = "spaces", n = 1 })
+            i = i + 1
+        else
+            local j = i
+            while j <= #text do
+                local cj = text:sub(j, j)
+                if cj == "\n" or cj:match("%s") then break end
+                j = j + 1
+            end
+            table.insert(tokens, { t = "word", v = text:sub(i, j - 1) })
+            i = j
+        end
+    end
+
+    local idx = 1
+    while idx <= #tokens do
+        local tok = tokens[idx]
+
+        if tok.t == "newline" then
+            table.insert(lines, current_line)
+            current_line = ""
+            current_width = 0
+            idx = idx + 1
+
+        elseif tok.t == "spaces" then
+            local space_str = string.rep(" ", tok.n)
+            local space_width = string_width(space_str)
+            if current_width + space_width <= max_width then
+                current_line = current_line .. space_str
+                current_width = current_width + space_width
+                idx = idx + 1
+            else
+                -- spaces at start of line? if current_line empty, ignore spaces
+                if current_line == "" then
+                    idx = idx + 1
+                else
+                    table.insert(lines, current_line)
+                    current_line = ""
+                    current_width = 0
+                    -- do not advance idx, reprocess spaces on new line
+                end
+            end
+
+        else -- word
+            local word = tok.v
+            local word_width = string_width(word)
+
+            if current_width + word_width <= max_width then
+                current_line = current_line .. word
+                current_width = current_width + word_width
+                idx = idx + 1
+            else
+                if current_line == "" then
+                    -- word longer than line: split it (fallback: use as much as fits)
+                    -- For simplicity, we just put the whole word and hope it's rare
+                    table.insert(lines, word)
+                    idx = idx + 1
+                else
+                    table.insert(lines, current_line)
+                    current_line = ""
+                    current_width = 0
+                    -- try the word again on the new line
+                end
+            end
+        end
+    end
+
+    if current_line ~= "" then
+        table.insert(lines, current_line)
+    end
+
+    return lines
+end
+
+-- =====================================================
+-- NEW: Unified text drawing function
+-- =====================================================
+function FontSystem:drawTextEx(player_id, text, opts)
+    opts = opts or {}
+    local x = opts.x or 0
+    local y = opts.y or 0
+    local font_name = opts.font or "THICK"
+    local scale = opts.scale or 2.0
+    local z = opts.z or 100
+    local width = opts.width          -- nil = no wrapping
+    local height = opts.height        -- reserved for future
+    local per_char_cb = opts.per_char_cb   -- function(line_idx, char_idx, raw_char, props) → overrides
+    local display_id = opts.display_id
+    local tint = opts.tint
+    local align = opts.align or "left"      -- left, center, right (horizontal)
+    local valign = opts.valign or "top"      -- top, center, bottom (vertical)
+
     text = normalize_text(text)
 
     local player_data = self.player_fonts[player_id]
     if not player_data then return nil end
 
-    local existing = player_data.active_displays[display_id]
-
+    -- Get font metrics
     local char_widths = self.char_widths[font_name] or self.char_widths.THICK
     local base_spacing = 1
     local scaled_spacing = base_spacing * scale
+    local line_height = 12 * scale   -- can be made configurable later
 
-    -- Normalize tint values once (fonts should use opacity, not `a`)
-    local tint_r, tint_g, tint_b, tint_opacity, tint_color_mode
-    if type(tint) == "table" then
-        tint_r = tint.r
-        tint_g = tint.g
-        tint_b = tint.b
-        tint_opacity = tint.opacity or tint.a -- accept old callers, but we will APPLY via opacity only
-        tint_color_mode = tint.color_mode
+    -- Wrap text if width given
+    local lines
+    if width then
+        lines = self:wrapTextToLines(text, font_name, scale, width)
+    else
+        lines = { text }
     end
 
-    local function build_and_draw(start_x, start_y)
-        local current_x = start_x
-        local obj_i = 0
-
-        -- ensure table exists
-        if not existing then
-            existing = {
-                font = font_name,
-                x = start_x, y = start_y,
-                scale = scale,
-                z_order = z_order,
-                character_objects = {},
-                text = "",
-                tint_r = tint_r,
-                tint_g = tint_g,
-                tint_b = tint_b,
-                tint_opacity = tint_opacity,
-                tint_color_mode = tint_color_mode
-            }
+    -- Manage display entry
+    local existing
+    if display_id then
+        existing = player_data.active_displays[display_id]
+        if existing then
+            -- Optional: early exit if nothing changed (skip per_char_cb for simplicity)
+            -- We'll redraw fully each time to keep it simple.
+        else
+            existing = { character_objects = {} }
             player_data.active_displays[display_id] = existing
         end
+    else
+        display_id = "tmp_" .. tostring(math.random(1000000))
+        existing = { character_objects = {} }
+        player_data.active_displays[display_id] = existing
+    end
 
+    -- Erase all old objects
+    for _, obj in ipairs(existing.character_objects) do
+        Net.player_erase_sprite(player_id, obj.obj_id)
+    end
 
-        local prefix = anim_prefix_for_font(font_name)
+    local new_objects = {}
+    local line_y = y
 
-        -- Draw/update glyph sprites in place using stable obj ids
-        for i = 1, #text do
-            local raw = text:sub(i, i)
-            local char = normalize_glyph(raw) or raw
+    for line_idx, line in ipairs(lines) do
+        local current_x = x
+        for char_idx = 1, #line do
+            local raw = line:sub(char_idx, char_idx)
 
-            if (font_name == "BATTLE" or font_name == "WIDE") and char:match("%a") then
-                char = char:upper()
-            end
-
-            local char_width = char_widths[char] or char_widths["A"] or 6
-            local scaled_width = char_width * scale
-
-            -- Space: advance only (no sprite)
-            if char == " " then
-                current_x = current_x + scaled_width + scaled_spacing
+            if raw == " " then
+                -- Space: advance only
+                local space_width = (char_widths[" "] or char_widths["A"] or 6) * scale
+                current_x = current_x + space_width + scaled_spacing
             else
-                obj_i = obj_i + 1
-                local obj_id = display_id .. "_char_" .. (10000 + obj_i)
+                local glyph = self:choose_glyph(font_name, raw)
+                if glyph then
+                    local char_width = char_widths[glyph] or char_widths["A"] or 6
+                    local scaled_width = char_width * scale
 
-                local state
-                if char == char:lower() and isInAlphabet(char) then
-                    state = prefix .. "_LOWER_" .. char:upper()
+                    -- Determine default anim state
+                    local prefix = anim_prefix_for_font(font_name)
+                    local state
+                    if glyph:match("%l") then
+                        state = prefix .. "_LOWER_" .. glyph:upper()
+                    else
+                        state = prefix .. "_" .. glyph
+                    end
+
+                    -- Default sprite properties
+                    local props = {
+                        id = display_id .. "_" .. line_idx .. "_" .. char_idx,
+                        x = current_x,
+                        y = line_y,
+                        z = z,
+                        sx = scale,
+                        sy = scale,
+                        anim_state = state,
+                        opacity = 255,
+                    }
+
+                    -- Apply global tint
+                    if tint then
+                        if tint.r then props.r = tint.r end
+                        if tint.g then props.g = tint.g end
+                        if tint.b then props.b = tint.b end
+                        if tint.opacity then props.opacity = tint.opacity end
+                        if tint.color_mode then props.color_mode = tint.color_mode end
+                    end
+
+                    -- Per‑character callback
+                    if per_char_cb then
+                        local overrides = per_char_cb(line_idx, char_idx, raw, props)
+                        if overrides then
+                            for k, v in pairs(overrides) do
+                                props[k] = v
+                            end
+                        end
+                    end
+
+                    Net.player_draw_sprite(player_id, font_name, props)
+
+                    table.insert(new_objects, { obj_id = props.id })
+                    current_x = current_x + scaled_width + scaled_spacing
                 else
-                    state = prefix .. "_" .. char
+                    -- No glyph available: advance using default width
+                    current_x = current_x + (char_widths["A"] or 6) * scale + scaled_spacing
                 end
-
-                local spr_opts = {
-                    id = obj_id,
-                    x = current_x,
-                    y = start_y,
-                    z = z_order,
-                    sx = scale,
-                    sy = scale,
-                    anim_state = state,
-
-                    -- IMPORTANT: always reset sprite opacity so "dim" doesn't stick
-                    opacity = 255
-                }
-
-
--- Optional tint (used for dimming menu items, etc.)
-if type(tint) == "table" then
-    if tint.r then spr_opts.r = tint.r end
-    if tint.g then spr_opts.g = tint.g end
-    if tint.b then spr_opts.b = tint.b end
-    if tint.a then spr_opts.a = tint.a end
-    if tint.color_mode then spr_opts.color_mode = tint.color_mode end
-
-    -- IMPORTANT: accept "opacity" from callers (PromptVertical uses tint.opacity)
-    -- Use ~= nil so opacity=0 still works.
-    if tint.opacity ~= nil then
-        spr_opts.opacity = tint.opacity
-    end
-end
-
-
-                Net.player_draw_sprite(player_id, font_name, spr_opts)
-
-
-                existing.character_objects[obj_i] = { obj_id = obj_id, width = scaled_width }
-                current_x = current_x + scaled_width + scaled_spacing
             end
         end
-
-        -- Erase any leftover glyph sprites from the previous longer string
-        for j = obj_i + 1, #existing.character_objects do
-            local tail = existing.character_objects[j]
-            if tail and tail.obj_id then
-                Net.player_erase_sprite(player_id, tail.obj_id)
-            end
-            existing.character_objects[j] = nil
-        end
-
-        existing.font = font_name
-        existing.x = start_x
-        existing.y = start_y
-        existing.scale = scale
-        existing.z_order = z_order
-        existing.text = text
-
-        existing.tint_r = tint_r
-        existing.tint_g = tint_g
-        existing.tint_b = tint_b
-        existing.tint_opacity = tint_opacity
-        existing.tint_color_mode = tint_color_mode
-
-
-        return display_id
+        line_y = line_y + line_height
     end
 
-    -- If same text/style and same position (and same tint): no-op
-    if existing
-        and existing.text == text
-        and existing.font == font_name
-        and existing.scale == scale
-        and existing.z_order == z_order
-        and existing.x == x
-        and existing.y == y
-        and existing.tint_r == tint_r
-        and existing.tint_g == tint_g
-        and existing.tint_b == tint_b
-        and existing.tint_opacity == tint_opacity
-        and existing.tint_color_mode == tint_color_mode
-    then
-        return display_id
-    end
-
-
-    -- If same text/style but moved: just redraw positions (still no erase)
-    -- If text/style changed: update in place + trim tail
-    return build_and_draw(x, y)
+    existing.character_objects = new_objects
+    return display_id
 end
 
+function FontSystem:drawTextWithId(player_id, text, x, y, font_name, scale, z_order, display_id, tint)
+    return self:drawTextEx(player_id, text, {
+        x = x, y = y,
+        font = font_name,
+        scale = scale,
+        z = z_order,
+        display_id = display_id,
+        tint = tint,
+    })
+end
 
 function FontSystem:drawText(player_id, text_id, text, x, y, z_order, font_name, scale)
     font_name = font_name or "THICK"
@@ -547,76 +690,19 @@ function FontSystem:drawText(player_id, text_id, text, x, y, z_order, font_name,
     z_order = z_order or 100
     text = normalize_text(text)
 
-
     local player_data = self.player_fonts[player_id]
     if not player_data then return nil end
 
     local display_id = text_id or ("text_" .. player_data.next_obj_id)
     player_data.next_obj_id = player_data.next_obj_id + 1
 
-    local display_data = {
-        font = font_name,
+    return self:drawTextEx(player_id, text, {
         x = x, y = y,
+        font = font_name,
         scale = scale,
-        z_order = z_order,
-        character_objects = {},
-        text = text
-    }
-
-    local current_x = x
-    local char_widths = self.char_widths[font_name] or self.char_widths.THICK
-    local base_spacing = 1
-    local scaled_spacing = base_spacing * scale
-
-    for i = 1, #text do
-        local raw = text:sub(i, i)
-        local char = normalize_glyph(raw) or raw
-
-        if (font_name == "BATTLE" or font_name == "WIDE") and char:match("%a") then
-            char = char:upper()
-        end
-
-        local char_width = char_widths[char] or char_widths["A"] or 6
-        local scaled_width = char_width * scale
-
-        local obj_id = display_id .. "_char_" .. (10000 + i)
-
-        local prefix = anim_prefix_for_font(font_name)
-        local state
-        if char == char:lower() and isInAlphabet(char) then
-            state = prefix .. "_LOWER_" .. char:upper()
-        else
-            state = prefix .. "_" .. char
-        end
-
-        -- DEBUG: log any glyph that is not in the width table
-        if char ~= " " and not char_widths[char] then
-            dbg_unknown(font_name, raw, state, text, i)
-        end
-
-
-        -- Space: advance only (no sprite)
-        if char == " " then
-            current_x = current_x + scaled_width + scaled_spacing
-            goto continue
-        end
-
-        Net.player_draw_sprite(player_id, font_name, {
-            id = obj_id,
-            x = current_x, y = y, z = z_order,
-            sx = scale, sy = scale,
-            anim_state = state
-        })
-
-        table.insert(display_data.character_objects, { obj_id = obj_id, width = scaled_width })
-        current_x = current_x + scaled_width + scaled_spacing
-
-        ::continue::
-    end
-
-
-    player_data.active_displays[display_id] = display_data
-    return display_id
+        z = z_order,
+        display_id = display_id,
+    })
 end
 
 
@@ -638,7 +724,6 @@ function FontSystem:getTextWidth(text, font_name, scale)
     scale = scale or 2.0
     text = normalize_text(text)
 
-    
     local char_widths = self.char_widths[font_name] or self.char_widths.THICK
     local total_width = 0
     

@@ -1,5 +1,5 @@
 -- scripts/net-games/dialogue/dialogue.lua
-require("scripts/net-games/framework")
+require("scripts/net-games/main")
 
 local Displayer = require("scripts/net-games/displayer/displayer")
 local Input     = require("scripts/net-games/input/input")

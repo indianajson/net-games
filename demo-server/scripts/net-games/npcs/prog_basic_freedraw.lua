@@ -8,7 +8,7 @@ local Direction  = require("scripts/libs/direction")
 local NetHelpers = require("scripts/net-games/helpers/net-helpers")
 NetHelpers.patch_net()
 
-local games = require("scripts/net-games/framework")
+local games = require("scripts/net-games/main")
 assert(type(games) == "table", "[prog_basic_freedraw] framework failed to load (got " .. tostring(type(games)) .. ")")
 
 local DEBUG = true

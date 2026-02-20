@@ -117,7 +117,6 @@ local function provide_ui_assets(player_id, assets)
   Net.provide_asset_for_player(player_id, assets.scrollbar)
   Net.provide_asset_for_player(player_id, assets.shop_item)
   Net.provide_asset_for_player(player_id, assets.shop_exit)
-
 end
 
 local function alloc_ui_sprites(inst)
