@@ -1,3 +1,4 @@
+local function run()
 -- simple_test.lua
 local LockableTable = require("scripts/net-games/utilities/lockable-table")
 
@@ -52,3 +53,6 @@ for k, v in pairs(MainDataTable) do
 end
 
 print("=== Test Complete ===")
+end
+
+return run
