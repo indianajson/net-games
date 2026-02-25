@@ -3,25 +3,35 @@
 -- Net Games Input Helper (sticky-state)
 -- - Listens to Net:on("virtual_input") once
 -- - Tracks per-player edge presses (confirm/cancel/dpad)
+-- - **Now also tracks release edges** (transition from down to up)
 -- - IMPORTANT: missing keys in event.events do NOT imply released
 --
 -- Input states (per docs):
---   0 = Pressed
---   1 = Held
---   2 = Released
+--   1 = Pressed
+--   2 = Held
+--   3 = Released
 -- Some forks also emit:
 --   4 = Scroll (repeat pulse)
 --
 -- Supports BOTH event.events formats:
---   A) array: { {name="Confirm", state=0}, {name="UI Left", state=1} }
---   B) map:   { ["Confirm"]=0, ["UI Left"]=1 }
+--   A) array: { {name="Confirm", state=1}, {name="UI Left", state=3} }
+--   B) map:   { ["Confirm"]=1, ["UI Left"]=2 }
 --
 -- Key behavior:
 -- - confirm/cancel: POP once per down. (Never repeat on hold. Scroll ignored.)
 -- - directions: POP on down + repeat on Scroll pulses while held.
+-- - All other non‑directional keys (shoulderl, shoulderr, start, minimap, options, custommenu)
+--   behave exactly like confirm/cancel.
+-- - Release events are generated whenever a key transitions from down to up
+--   (including timeout‑based release for non‑dir keys).
+--
+-- DIRECTION COMBOS (new):
+--   - get_active_direction() returns combined directions like "upleft", "downright", etc.
+--   - Stateful memory prevents flickering when one axis is briefly released.
+--   - Falls back to a single direction when multiple non‑combo directions are held.
 --
 -- Also supports:
--- - swallow(player_id, seconds): ignore input briefly + clear edges
+-- - swallow(player_id, seconds): ignore input briefly + clear edges and releases
 -- - require_release(player_id, {"confirm"}): ignore edges until a release is observed
 
 local Input = {}
@@ -39,38 +49,79 @@ Input.DEBUG_DUMP_PACKET = false    -- if true, prints interpreted map each packe
 
 local function now() return os.clock() end
 
--- How long we wait without seeing confirm/cancel before treating it as "up".
+-- How long we wait without seeing a non‑directional key before treating it as "up".
 -- Missing keys in event.events do NOT imply released.
 local NON_DIR_UP_TIMEOUT = 0.06
 
+-- Default bindings: map internal keys to lists of possible event names.
+-- Extended with missing bindings from buttons.lua.
+local DEFAULT_BINDINGS = {
+  -- confirm & cancel with extra aliases from buttons.lua
+  confirm = { "Confirm", "A", "OK", "Accept", "Interact", "Use Card" },
+  cancel  = { "Cancel", "Back", "B", "Shoot", "Run" },
+  -- new non‑directional keys from buttons.lua
+  shoulderl = { "Shoulder L" },
+  shoulderr = { "Shoulder R" },
+  start     = { "Pause" },
+  minimap   = { "Minimap" },
+  options   = { "Option", "Special" },
+  custommenu= { "Cust" },
+  -- directions (unchanged)
+  left    = { "UI Left", "Move Left", "Left" },
+  right   = { "UI Right", "Move Right", "Right" },
+  up      = { "UI Up", "Move Up", "Up" },
+  down    = { "UI Down", "Move Down", "Down" },
+}
+
+-- Direction combos (diagonals) for combined direction detection
+local DIRECTION_COMBOS = {
+    upleft    = { "up", "left" },
+    upright   = { "up", "right" },
+    downleft  = { "down", "left" },
+    downright = { "down", "right" },
+}
+
+-- Build lists of all keys and non‑directional keys for dynamic iteration
+local ALL_KEYS = {}
+local NON_DIR_KEYS = {}
+for k, _ in pairs(DEFAULT_BINDINGS) do
+  table.insert(ALL_KEYS, k)
+  if k ~= "left" and k ~= "right" and k ~= "up" and k ~= "down" then
+    table.insert(NON_DIR_KEYS, k)
+  end
+end
+
 local function refresh_non_dir_timeout(s)
   local t = now()
-
-  -- Only for confirm/cancel (non-dir)
-  for _, k in ipairs({ "confirm", "cancel" }) do
+  for _, k in ipairs(NON_DIR_KEYS) do
     if s.down[k] and t >= (s.non_dir_down_until[k] or 0) then
+      -- Key timed out -> generate release event
+      s.released[k] = true
       s.down[k] = false
       s.non_dir_armed[k] = true
     end
   end
 end
 
-
 local function ensure(player_id)
   if not st[player_id] then
-    st[player_id] = {
-      edge = {}, -- buffered edges until consumed/popped
+    local s = {
+      edge = {},
+      released = {},          -- release flags (true if key was just released)
       swallow_until = 0,
       require_release = {},
 
-      -- non-dir latch: we synthesize an "up" if we stop seeing the key for a bit
-      non_dir_down_until = { confirm = 0, cancel = 0 },
-      non_dir_armed      = { confirm = true, cancel = true },
+      -- non‑dir latch: we synthesize an "up" if we stop seeing the key for a bit
+      non_dir_down_until = {},
+      non_dir_armed      = {},
 
-      down = {
-        confirm=false, cancel=false,
-        left=false, right=false,
-        up=false, down=false,
+      down = {},
+
+      -- combo state for direction memory
+      combo = {
+        last = nil,
+        last_keys = {},
+        active = false,
       },
 
       last_print = 0,
@@ -81,6 +132,17 @@ local function ensure(player_id)
       last_map = {},
       last_raw_count = 0,
     }
+    -- Initialise tables for all keys
+    for _, k in ipairs(ALL_KEYS) do
+      s.down[k] = false
+      s.edge[k] = nil
+      s.released[k] = nil
+      if k ~= "left" and k ~= "right" and k ~= "up" and k ~= "down" then
+        s.non_dir_down_until[k] = 0
+        s.non_dir_armed[k] = true
+      end
+    end
+    st[player_id] = s
   end
   return st[player_id]
 end
@@ -105,26 +167,14 @@ local function normalize_state(s)
   return nil
 end
 
-local function is_pressed(s)  return s == 0 end
-local function is_held(s)     return s == 1 end
-local function is_released(s) return s == 2 end
+local function is_pressed(s)  return s == 1 end
+local function is_held(s)     return s == 2 end
+local function is_released(s) return s == 3 end
 local function is_scroll(s)   return s == 4 end
 
 local function is_dir_key(k)
   return k == "left" or k == "right" or k == "up" or k == "down"
 end
-
--- Default bindings: keep confirm/cancel *pure* so Scroll-y gameplay actions
--- can't masquerade as UI confirm/cancel.
-local DEFAULT_BINDINGS = {
-  confirm = { "Confirm", "A", "OK", "Accept" },
-  cancel  = { "Cancel", "Back", "B" },
-
-  left    = { "UI Left", "Move Left", "Left" },
-  right   = { "UI Right", "Move Right", "Right" },
-  up      = { "UI Up", "Move Up", "Up" },
-  down    = { "UI Down", "Move Down", "Down" },
-}
 
 -- Detect payload shape and build map of ONLY events present this packet (name -> normalized state)
 local function build_event_map(events)
@@ -233,6 +283,7 @@ end
 function Input.consume(player_id)
   local s = ensure(player_id)
   s.edge = {}
+  s.released = {}   -- also clear release flags
 end
 
 function Input.pop(player_id, key)
@@ -245,10 +296,27 @@ function Input.pop(player_id, key)
   return false
 end
 
-
 function Input.pressed(player_id, key)
   local s = ensure(player_id)
   return s.edge[key] == true
+end
+
+-- Returns true if the key was released (edge) without consuming
+function Input.released(player_id, key)
+  local s = ensure(player_id)
+  refresh_non_dir_timeout(s)
+  return s.released[key] == true
+end
+
+-- Returns true and clears the release flag (consumes it)
+function Input.pop_released(player_id, key)
+  local s = ensure(player_id)
+  refresh_non_dir_timeout(s)
+  if s.released[key] then
+    s.released[key] = nil
+    return true
+  end
+  return false
 end
 
 function Input.is_down(player_id, key)
@@ -257,11 +325,11 @@ function Input.is_down(player_id, key)
   return s.down[key] == true
 end
 
-
 function Input.swallow(player_id, seconds)
   local s = ensure(player_id)
   s.swallow_until = math.max(s.swallow_until or 0, now() + (seconds or 0))
   s.edge = {}
+  s.released = {}   -- also clear releases
 end
 
 function Input.require_release(player_id, keys)
@@ -285,6 +353,112 @@ function Input.clear_require_release(player_id, keys)
   end
 end
 
+--[[
+  Returns the current active direction or diagonal combo for the player.
+  Possible return values:
+    "left", "right", "up", "down",
+    "upleft", "upright", "downleft", "downright",
+    or nil if no direction is held.
+
+  Uses stateful memory: if a combo was active and one axis is briefly released,
+  the combo persists until both are released or a new valid direction appears.
+]]
+function Input.get_active_direction(player_id)
+    local s = ensure(player_id)
+
+    -- Get current down directions
+    local down_dirs = {}
+    for _, dir in ipairs({"left","right","up","down"}) do
+        if s.down[dir] then
+            down_dirs[dir] = true
+        end
+    end
+
+    -- Convert to list
+    local dir_list = {}
+    for dir, _ in pairs(down_dirs) do
+        table.insert(dir_list, dir)
+    end
+    local num_down = #dir_list
+
+    -- No directions
+    if num_down == 0 then
+        s.combo.active = false
+        s.combo.last = nil
+        s.combo.last_keys = {}
+        return nil
+    end
+
+    -- Single direction
+    if num_down == 1 then
+        s.combo.active = false
+        s.combo.last = nil
+        s.combo.last_keys = {}
+        return dir_list[1]
+    end
+
+    -- Check for valid combos
+    local current_combo = nil
+    for combo_name, required in pairs(DIRECTION_COMBOS) do
+        local all_pressed = true
+        for _, dir in ipairs(required) do
+            if not down_dirs[dir] then
+                all_pressed = false
+                break
+            end
+        end
+        if all_pressed then
+            current_combo = combo_name
+            break
+        end
+    end
+
+    if current_combo then
+        -- Valid combo found
+        s.combo.active = true
+        s.combo.last = current_combo
+        s.combo.last_keys = {}
+        for _, dir in ipairs(DIRECTION_COMBOS[current_combo]) do
+            s.combo.last_keys[dir] = true
+        end
+        return current_combo
+    end
+
+    -- No valid combo, but multiple directions pressed.
+    -- Use memory: if we were in a combo and some of those keys are still pressed,
+    -- keep returning that combo to avoid flickering.
+    if s.combo.active and s.combo.last then
+        local still_pressed = 0
+        for dir, _ in pairs(s.combo.last_keys) do
+            if down_dirs[dir] then
+                still_pressed = still_pressed + 1
+            end
+        end
+        if still_pressed >= 2 and num_down >= 2 then
+            -- At least two of the original combo keys are still down
+            return s.combo.last
+        else
+            -- Combo broken
+            s.combo.active = false
+            s.combo.last = nil
+            s.combo.last_keys = {}
+        end
+    end
+
+    -- Fallback: return the first direction (alphabetical order)
+    table.sort(dir_list)
+    return dir_list[1]
+end
+
+-- Resets the direction combo memory for a player (useful when changing levels or game states)
+function Input.reset_direction_state(player_id)
+    local s = ensure(player_id)
+    s.combo = {
+        last = nil,
+        last_keys = {},
+        active = false,
+    }
+end
 
 function Input.debug_dump_last_packet(player_id)
   local s = ensure(player_id)
@@ -293,18 +467,24 @@ function Input.debug_dump_last_packet(player_id)
     " raw_count=" .. tostring(s.last_raw_count) ..
     " map=" .. map_to_string(s.last_map))
   local function b(x) return x and "true" or "false" end
-  print("[InputDBG] down: confirm=" .. b(s.down.confirm) ..
-    " cancel=" .. b(s.down.cancel) ..
-    " left=" .. b(s.down.left) ..
-    " right=" .. b(s.down.right) ..
-    " up=" .. b(s.down.up) ..
-    " down=" .. b(s.down.down))
-  print("[InputDBG] edge: confirm=" .. b(s.edge.confirm) ..
-    " cancel=" .. b(s.edge.cancel) ..
-    " left=" .. b(s.edge.left) ..
-    " right=" .. b(s.edge.right) ..
-    " up=" .. b(s.edge.up) ..
-    " down=" .. b(s.edge.down))
+  -- dump down state for all keys
+  local down_parts = {}
+  for _, k in ipairs(ALL_KEYS) do
+    table.insert(down_parts, k .. "=" .. b(s.down[k]))
+  end
+  print("[InputDBG] down: " .. table.concat(down_parts, " "))
+  -- dump edge state for all keys
+  local edge_parts = {}
+  for _, k in ipairs(ALL_KEYS) do
+    table.insert(edge_parts, k .. "=" .. b(s.edge[k]))
+  end
+  print("[InputDBG] edge: " .. table.concat(edge_parts, " "))
+  -- dump release state for all keys
+  local release_parts = {}
+  for _, k in ipairs(ALL_KEYS) do
+    table.insert(release_parts, k .. "=" .. b(s.released[k]))
+  end
+  print("[InputDBG] release: " .. table.concat(release_parts, " "))
 end
 
 function Input.attach_virtual_input_listener(bindings)
@@ -341,15 +521,14 @@ function Input.attach_virtual_input_listener(bindings)
       s.seen_states[stv] = true
     end
 
-    -- Apply group logic
-    local keys = { "confirm","cancel","left","right","up","down" }
-    for _, k in ipairs(keys) do
+    -- Apply group logic for every key in our binding set
+    for _, k in ipairs(ALL_KEYS) do
       local down_change, saw_pressed, saw_held, saw_scroll =
         resolve_group(map, bindings[k], is_dir_key(k))
 
       --=====================================================
       -- NON-DIRECTION KEYS: POP once per down.
-      -- IMPORTANT: IGNORE Scroll completely for confirm/cancel.
+      -- IMPORTANT: IGNORE Scroll completely for non‑dir keys.
       -- Some clients never emit Pressed; they jump straight to Held.
       -- So: allow Held to create an edge ONLY if we were previously up.
       --=====================================================
@@ -361,6 +540,10 @@ function Input.attach_virtual_input_listener(bindings)
             s.non_dir_down_until[k] = t + NON_DIR_UP_TIMEOUT
             s.down[k] = true
           elseif t >= (s.non_dir_down_until[k] or 0) then
+            -- Release due to timeout
+            if s.down[k] then
+              s.released[k] = true
+            end
             s.down[k] = false
             s.non_dir_armed[k] = true
             s.require_release[k] = nil
@@ -378,6 +561,10 @@ function Input.attach_virtual_input_listener(bindings)
             s.down[k] = true
 
           elseif t >= (s.non_dir_down_until[k] or 0) then
+            -- Release due to timeout
+            if s.down[k] then
+              s.released[k] = true
+            end
             s.down[k] = false
             s.non_dir_armed[k] = true
           end
@@ -389,11 +576,21 @@ function Input.attach_virtual_input_listener(bindings)
       else
         if s.require_release[k] then
           if down_change == false then
+            if s.down[k] then
+              s.released[k] = true
+            end
             s.require_release[k] = nil
             s.down[k] = false
           else
             if down_change ~= nil then
+              local was = s.down[k]
               s.down[k] = down_change
+              if down_change == true and not was then
+                s.edge[k] = true
+              end
+              if down_change == false and was then
+                s.released[k] = true
+              end
             end
           end
 
@@ -403,6 +600,9 @@ function Input.attach_virtual_input_listener(bindings)
             s.down[k] = down_change
             if down_change == true and not was then
               s.edge[k] = true
+            end
+            if down_change == false and was then
+              s.released[k] = true
             end
           end
 
@@ -418,17 +618,19 @@ function Input.attach_virtual_input_listener(bindings)
       local confirm_present = any_binding_present(map, bindings.confirm)
       if (not Input.DEBUG_CONFIRM_ONLY) or confirm_present then
         local function b(x) return x and "true" or "false" end
+
+        -- Build edge string for all keys
+        local edge_parts = {}
+        for _, k in ipairs(ALL_KEYS) do
+          table.insert(edge_parts, k .. "=" .. b(s.edge[k]))
+        end
+
         print("[InputDBG] player=" .. tostring(player_id) ..
           " shape=" .. tostring(shape) ..
           " raw_count=" .. tostring(raw_count) ..
           " confirm_present=" .. tostring(confirm_present))
 
-        print("[InputDBG] edges: confirm=" .. b(s.edge.confirm) ..
-          " cancel=" .. b(s.edge.cancel) ..
-          " left=" .. b(s.edge.left) ..
-          " right=" .. b(s.edge.right) ..
-          " up=" .. b(s.edge.up) ..
-          " down=" .. b(s.edge.down))
+        print("[InputDBG] edges: " .. table.concat(edge_parts, " "))
 
         if Input.DEBUG_DUMP_PACKET then
           print("[InputDBG] packet_map=" .. map_to_string(map))

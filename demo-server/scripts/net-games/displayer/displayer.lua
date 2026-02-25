@@ -40,6 +40,10 @@ function Displayer:init()
         -- Don't return nil, just continue with limited functionality
     end
     
+    Net:on("player_join", function (event)
+        self._subsystems.FontSystem:setupPlayerFonts(event.player_id)
+    end)
+
     -- Set up sub-APIs with proper access to main instance
     self:_setupSubAPIs()
     
@@ -595,6 +599,15 @@ function Displayer:_setupSubAPIs()
             return nil 
         end
         return subsystem:removeBackdrop(player_id, text_id)
+    end
+
+    self.Font.setupPlayerFonts = function (player_id)
+        local subsystem = mainInstance:_getSubsystem("FontSystem", "setupPlayerFonts")
+        if not subsystem or not player_id then 
+            print("Error: failed to setup player fonts")
+            return nil 
+        end
+        return subsystem:setupPlayerFonts(player_id)
     end
 
     -- Font System API

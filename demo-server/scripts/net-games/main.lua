@@ -136,12 +136,13 @@ end
 -- ===========================================================
 -- ASSET PROVISION
 -- ===========================================================
-Net:on("player_join", function(event)
-    
-    
+Net:on("player_request", function(event)
+
     for _, asset in ipairs(assets) do
         Net.provide_asset_for_player(event.player_id, asset)
-    end
+    end    
+    --Displayer.Font:init()
+    --Displayer.Font:setupPlayerFonts(event.player_id)
 end)
 
 -- ===========================================================
